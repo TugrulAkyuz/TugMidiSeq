@@ -57,6 +57,10 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p)
     tmp_s.clear();
     tmp_s << "Dur"<<line;
     comBoxDurationAtaachment =  std::make_unique <AudioProcessorValueTreeState::ComboBoxAttachment>(audioProcessor.valueTreeState, tmp_s, gridDurationCombo);
+    tmp_s.clear();
+    tmp_s << "GridNum"<<line;
+    gridNumberSliderAttachment = std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, gridNumberSlider);
+    
     gridNumberSlider.onValueChange = [this]()
     {
         resized();

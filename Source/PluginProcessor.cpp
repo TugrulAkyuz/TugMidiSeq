@@ -42,9 +42,13 @@ valueTreeState(*this, &undoManager)
         tmp_s << "Dur" << j;
         valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,1,32,12));
         gridsDurationAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
+        tmp_s.clear();
+        tmp_s << "GridNum" << j;
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,1,32,16));
+        numOfGrid[j] = valueTreeState.getRawParameterValue(tmp_s);
+                        
     }
-    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>("GridNum", "GridNum",1,32,8));
-   
+
     
     valueTreeState.state = juce::ValueTree("midiSeq"); // do not forget for valuetree
 }
@@ -235,7 +239,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     {
         double mBpm =  positionInfo.bpm;
         double mBps = (float)mBpm/60;
-         
+        myBpm = mBpm;
         //  std::cout << mBps << " " ;
  
         ppq = positionInfo .ppqPosition;
@@ -259,6 +263,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
             stepResetInterval[i] = first / pow(2,index);
+            stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
             
              first = 1.5*4*(60*mySampleRate/ mBpm);
             index = gridsDuration[i] -1 ;
@@ -275,13 +280,19 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
  
         for(int s = 0 ; s < buffer.getNumSamples();  s++)
         {
+            measureSample++;
+            measureSample %= (int)(4*mySampleRate/mBps);
+            
             for(int i =  0; i  < 5 ; i++)
             {
+                sampleNumber[i]++;
                 stpSample[i]++;
                 stpSample[i] %=stepResetInterval[i];
                 if(stepmidStopSampleCounter[i] != -1)
+                {
                     stepmidStopSampleCounter[i]++;
-                stepmidStopSampleCounter[i] %= stepmidStopSampleInterval[i];
+                    stepmidStopSampleCounter[i] %= stepmidStopSampleInterval[i]; // byrada uçuyor bir bak
+                }
                if( stepmidStopSampleCounter[i]== 0)
                {
                    auto it1 = std::next(inMidiNoteList.begin(), i);
@@ -289,13 +300,15 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                    it.setVelocity(0.0f);
                    midiMessages.addEvent(it, 0);
                    stepmidStopSampleCounter[i] = -1;
+                   midiState[i] = false;
                }
                 if(stpSample[i] == 0)
                 {
                     int prevstep = steps[i];
                     steps[i]++;
-                    steps[i] %= 8;
-                    
+                    steps[i] %= (int)(*numOfGrid[i]);
+                    if(steps[i] == 0)
+                     sampleNumber[i] = 0;
 
                     
                     if(*gridsArr[i][steps[i]] == 1)
@@ -314,6 +327,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                         midiMessages.addEvent(it, 0);
                         stepmidStopSampleCounter[i] = 1;
                         DBG(" Line: "  << i << " strep: " << steps[i]);
+                        midiState[i] = true;
                     }
 
                  

@@ -11,12 +11,12 @@
 
 //==============================================================================
 TugMidiSeqAudioProcessorEditor::TugMidiSeqAudioProcessorEditor (TugMidiSeqAudioProcessor& p)
-    : AudioProcessorEditor (&p), audioProcessor (p)
+    : AudioProcessorEditor (&p), audioProcessor (p) ,  satellite(p)
 {
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
     //setResizable (true, true);
- 
+    addAndMakeVisible(satellite);
     for(auto i =  0; i < 5 ; i++ )
     {
         auto g = new Grids(audioProcessor,i);
@@ -39,7 +39,7 @@ TugMidiSeqAudioProcessorEditor::TugMidiSeqAudioProcessorEditor (TugMidiSeqAudioP
 //        resized();
 //    };
     
-    setSize (800, 200);
+    setSize (600, 400);
 }
 
 TugMidiSeqAudioProcessorEditor::~TugMidiSeqAudioProcessorEditor()
@@ -114,12 +114,16 @@ void TugMidiSeqAudioProcessorEditor::resized()
 ////        buttons[i]->setVisible(true);
 ////    }
     //gridSlider.setBounds(0,0,100,100);
-    auto area = getLocalBounds();
+    auto allarea = getLocalBounds();
+    auto area = allarea.removeFromTop(200);
+    auto h = area.getHeight()/5;
     for(auto g :grids )
     {
-        g->setBounds(area.removeFromTop (getLocalBounds().getHeight()/5));
+        g->setBounds(area.removeFromTop (h));
         
     }
+    area = allarea.removeFromRight(allarea.getHeight());
+    satellite.setBounds(area);
    
 }
 

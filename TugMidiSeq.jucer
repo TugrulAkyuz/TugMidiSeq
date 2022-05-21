@@ -6,6 +6,8 @@
   <MAINGROUP id="soeMpr" name="TugMidiSeq">
     <GROUP id="{8DE839C0-F477-F119-F4B1-66A417831F51}" name="PNGs"/>
     <GROUP id="{7C9F9E45-D71A-212B-2F03-0F6C14A6D85C}" name="Source">
+      <FILE id="IXXCZ0" name="Satellite.cpp" compile="1" resource="0" file="Source/Satellite.cpp"/>
+      <FILE id="cuiLDS" name="Satellite.h" compile="0" resource="0" file="Source/Satellite.h"/>
       <FILE id="UIPv5n" name="MyLookanAndFeels.h" compile="0" resource="0"
             file="Source/MyLookanAndFeels.h"/>
       <FILE id="hY8DMs" name="Grids.cpp" compile="1" resource="0" file="Source/Grids.cpp"/>

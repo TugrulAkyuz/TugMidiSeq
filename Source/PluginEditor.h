@@ -11,6 +11,7 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 #include "Grids.h"
+#include "Satellite.h"
 
 
 
@@ -37,6 +38,7 @@ private:
     juce::OwnedArray<juce::TextButton> buttons;
  
     juce::OwnedArray< Grids> grids;
+    Satellite satellite;
  
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TugMidiSeqAudioProcessorEditor)
 };
