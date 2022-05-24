@@ -33,7 +33,7 @@ TugMidiSeqAudioProcessorEditor::TugMidiSeqAudioProcessorEditor (TugMidiSeqAudioP
         topInLabel.getLast()->setJustificationType(juce::Justification::centred);
         addAndMakeVisible(topInLabel.getLast());
     }
-    topInLabel[0]->setJustificationType(juce::Justification::left);
+    
     
     setSize (1000, 270);
 }
@@ -46,7 +46,7 @@ TugMidiSeqAudioProcessorEditor::~TugMidiSeqAudioProcessorEditor()
 void TugMidiSeqAudioProcessorEditor::paint (juce::Graphics& g)
 {
     // (Our component is opaque, so we must completely fill the background with a solid colour)
-    g.fillAll (  Colour(0xff404040));
+    g.fillAll (  Colour(0xff303030));
 
  
 }
@@ -56,15 +56,16 @@ void TugMidiSeqAudioProcessorEditor::resized()
 
     auto allarea = getLocalBounds();
     auto label_area = allarea.removeFromTop(20);
- 
+    label_area.removeFromLeft(20);
     //topInLabel[1]->setBounds(label_area.removeFromRight(400));
     topInLabel[0]->setBounds(label_area.removeFromLeft(50));
-    topInLabel[1]->setBounds(label_area.removeFromLeft(505));
-    topInLabel[2]->setBounds(label_area.removeFromLeft(50));
-    topInLabel[3]->setBounds(label_area.removeFromLeft(70));
+    topInLabel[1]->setBounds(label_area.removeFromLeft(60));
+    topInLabel[2]->setBounds(label_area.removeFromLeft(425));
+    topInLabel[3]->setBounds(label_area.removeFromLeft(50));
     topInLabel[4]->setBounds(label_area.removeFromLeft(70));
-    topInLabel[5]->setBounds(label_area.removeFromLeft(60));
-    topInLabel[6]->setBounds(label_area);
+    topInLabel[5]->setBounds(label_area.removeFromLeft(70));
+    topInLabel[6]->setBounds(label_area.removeFromLeft(60));
+    topInLabel[7]->setBounds(label_area);
  
 
     auto area = allarea.removeFromTop(200);

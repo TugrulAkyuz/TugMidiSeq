@@ -10,13 +10,7 @@
 
 #include "Satellite.h"
 
-juce::Colour colourarray [5] = {
-    juce::Colours::red,
-    juce::Colours::lightgreen,
-    juce::Colours::lightblue,
-    juce::Colours::yellow,
-    juce::Colours::magenta
-};
+
 
 Satellite::Satellite(TugMidiSeqAudioProcessor& p): audioProcessor (p)
 {

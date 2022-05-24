@@ -11,6 +11,14 @@
 #include "PluginProcessor.h"
 #pragma once
 
+const juce::Colour colourarray [5] = {
+    juce::Colours::red,
+    juce::Colours::lightgreen,
+    juce::Colours::lightblue,
+    juce::Colours::yellow,
+    juce::Colours::magenta
+};
+
 class Satellite   : public juce::Component , public juce::Timer
 {
     public:

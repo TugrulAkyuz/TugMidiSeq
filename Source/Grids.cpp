@@ -10,17 +10,26 @@
 
 
 #include "Grids.h"
-
+ 
 
 
 Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p)
 {
     myLine = line;
     step = 0;
+    myLineLabel.setText(std::to_string(myLine + 1), juce::NotificationType::dontSendNotification);
+    myLineLabel.setColour(juce::Label::ColourIds::textColourId, colourarray[myLine]);
     
+    addAndMakeVisible(myLineLabel);
     addAndMakeVisible(octaveSlider);
     octaveSlider.setSliderStyle(juce::Slider::LinearVertical);
+    octaveSlider.setColour(Slider::textBoxOutlineColourId , juce::Colours::black.withAlpha(0.0f));
+    //octaveSlider.gette
+    octaveSlider.setLookAndFeel(&myLookAndFeel);
+    octaveSlider.setTextBoxStyle(juce::Slider::TextBoxRight, true, 40, 25);
+    octaveSlider.setColour(Slider::textBoxTextColourId,  Colours::orange);
     addAndMakeVisible(midiInNote);
+    midiInNote.setColour(juce::TextButton::textColourOffId, juce::Colours::black);
     addAndMakeVisible(gridNumberSlider);
     addAndMakeVisible(gridSpeedCombo);
     gridSpeedCombo.setLookAndFeel(&myLookAndFeel);
@@ -69,6 +78,9 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p)
     tmp_s.clear();
     tmp_s << "GridNum"<<line;
     gridNumberSliderAttachment = std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, gridNumberSlider);
+    tmp_s.clear();
+    tmp_s << "Octave"<<line;
+    octaveAttachment = std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, octaveSlider);
     
     gridNumberSlider.onValueChange = [this]()
     {
@@ -113,6 +125,8 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p)
         
     };
    
+    octaveSlider.setRange(-2, 2,1);
+    octaveSlider.setValue(0);
 }
 void Grids::paint (juce::Graphics& g)
 {
@@ -130,14 +144,15 @@ void Grids::resized()
     auto area = getLocalBounds();
    
     gridVelSlider.setBounds( area.removeFromRight(50));
-    gridSpeedCombo.setBounds(area.removeFromRight(70).reduced(5)/*.withHeight(area.getHeight()-10)*/);
-    gridDurationCombo.setBounds(area.removeFromRight(70).reduced(5)/*.withHeight(area.getHeight()-)*/);
+    gridDurationCombo.setBounds(area.removeFromRight(70).reduced(5)/*.withHeight(area.getHeight()-10)*/);
+    gridSpeedCombo.setBounds(area.removeFromRight(70).reduced(5)/*.withHeight(area.getHeight()-)*/);
     gridNumberSlider.setBounds( area.removeFromRight(50)/*.withHeight(area.getHeight()+5)*/);
     
     
     //auto tmp =
+    myLineLabel.setBounds(area.removeFromLeft(20));
     midiInNote.setBounds(area.removeFromLeft(60).reduced(10));
-    octaveSlider.setBounds(area.removeFromLeft(30));
+    octaveSlider.setBounds(area.removeFromLeft(50));
     
     auto griidbounds =  area.reduced(10, 2);
     juce::FlexBox fb;
@@ -164,7 +179,7 @@ void Grids::resized()
     
     fb.performLayout (griidbounds.toFloat());
 
-    buttons[step]->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::green.withAlpha(0.90f));
+    buttons[step]->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::limegreen.withAlpha(0.90f));
     buttons[step]->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::yellow.withAlpha(0.90f));
     buttons[step]->setButtonText("->");
     buttons[step]->setColour(juce::TextButton::ColourIds::textColourOnId, juce::Colours::darkgrey);

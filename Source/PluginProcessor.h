@@ -94,6 +94,7 @@ public:
     std::atomic<float> * gridsArr[numOfLine][numOfStep];
     int steps[5] = {};
     std::atomic<float> *numOfGrid[5];
+    std::atomic<float> *octave[5];
     float myBpm;
     int measureSample = 0;
     double  mySampleRate = 0;
@@ -118,6 +119,8 @@ private:
     juce::UndoManager undoManager;
     juce::MidiBuffer myInnmidiBuffer;
     std::list<juce::MidiMessage> inMidiNoteList;
+    std::list<juce::MidiMessage> inRealMidiNoteList;
+    
     double gridsSpeed[numOfLine];
     double gridsDuration[numOfLine];
     //juce::AudioProcessorValueTreeState::ParameterLayout createAllParameters();

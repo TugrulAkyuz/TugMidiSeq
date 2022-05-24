@@ -15,7 +15,7 @@
 #include "GlobalPanel.h"
 
 
-const std::vector <std::string> topLabel={"midi in","G R I D S","#Grid","Speed","Duration","Vel","Note Satelite"};
+const std::vector <std::string> topLabel={"midi in","Octave","G R I D S","#Grid","Speed","Duration","Vel","Note Satellite"};
 
 //==============================================================================
 /**

@@ -10,6 +10,7 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 #include "MyLookanAndFeels.h"
+#include "Satellite.h"
 #pragma once
 
 
@@ -38,6 +39,7 @@ private:
     
     juce::TextButton midiInNote;
     juce::Slider octaveSlider;
+    juce::Label myLineLabel;
     
     bool dirt = false;
     int step;
@@ -62,12 +64,20 @@ private:
     void setMidiName(int m)
     {
         if(m ==  -1)
+        {
           midiInNote.setButtonText("");
+            
+           // midiInNote.setColour(juce::Text);
+            auto x = getLookAndFeel().findColour(juce::TextButton::ColourIds::buttonColourId);
+            midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, x);
+        }
         else
         {
             int i = m / 12;
             m %= 12;
+            
             midiInNote.setButtonText(midiNotes[m] + std::to_string(i));
+            midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, colourarray[myLine]);
         }
     }
     
@@ -77,6 +87,7 @@ private:
     std::unique_ptr < AudioProcessorValueTreeState::ComboBoxAttachment>  comBoxDurationAtaachment;
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridNumberSliderAttachment;
 
+    std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> octaveAttachment;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Grids)
     
 };

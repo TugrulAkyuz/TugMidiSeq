@@ -48,6 +48,12 @@ valueTreeState(*this, &undoManager)
         tmp_s << "GridNum" << j;
         valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,1,32,16));
         numOfGrid[j] = valueTreeState.getRawParameterValue(tmp_s);
+       
+        tmp_s.clear();
+        tmp_s << "Octave" << j;
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,-2,2,0));
+        octave[j] = valueTreeState.getRawParameterValue(tmp_s);
+        
         *numOfGrid[j] = 0;
         gridsSpeed[j] = 0;
                         
@@ -206,11 +212,18 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         if(currentMessage.isNoteOn())
         {
             //myInnmidiBuffer.addEvent(currentMessage,samplePos );
+            
             inMidiNoteList.push_back(currentMessage);
             auto comp = [](MidiMessage &l1,MidiMessage &l2){ return l1.getNoteNumber() < l2.getNoteNumber(); };
             inMidiNoteList.sort(comp);
-            for (auto const &it: inMidiNoteList)
+            int i = 0;
+            for (auto  &it: inMidiNoteList)
+            {
+//                if(it.getNoteNumber() == currentMessage.getNoteNumber())
+//                    it.setNoteNumber(*octave[i] + currentMessage.getNoteNumber());
+//                i++;
                 DBG(it.getNoteNumber());
+            }
             
             DBG("");
         }
@@ -312,7 +325,6 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                }
                 if(stpSample[i] == 0)
                 {
-                    int prevstep = steps[i];
                     steps[i]++;
                     steps[i] %= (int)(*numOfGrid[i]);
                     if(steps[i] == 0)
@@ -332,6 +344,8 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 //                        it.setVelocity(0.0f);
 //                        midiMessages.addEvent(it, 0);
 //                        it.setVelocity(vel);
+
+                        
                         midiMessages.addEvent(it, 0);
                         stepmidStopSampleCounter[i] = 1;
                         DBG(" Line: "  << i << " strep: " << steps[i]);

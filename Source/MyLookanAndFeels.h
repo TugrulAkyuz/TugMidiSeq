@@ -17,6 +17,21 @@ using namespace juce;
 class MyLookAndFeel : public juce::LookAndFeel_V4
 {
 private:
+ 
+    Label* createSliderTextBox (Slider& slider) override
+    {
+        auto* l = LookAndFeel_V2::createSliderTextBox (slider);
+
+        if (getCurrentColourScheme() == LookAndFeel_V4::getGreyColourScheme() && (slider.getSliderStyle() == Slider::LinearBar
+                                                                                   || slider.getSliderStyle() == Slider::LinearBarVertical))
+        {
+            l->setColour (Label::textColourId, Colours::orange.withAlpha (0.7f));
+        }
+        auto f = l->getFont();
+        f.setHeight(12);
+        l->setFont(f);
+        return l;
+    }
     void drawRotarySlider(juce::Graphics & g, int x, int y, int width, int height, float sliderPos, float rotaryStartAngle, float rotaryEndAngle, juce::Slider & slider) override
     {
     
@@ -171,6 +186,8 @@ private:
         
         
     }
+    
+    
     MyLookAndFeel myLookAndFeel;
     
     

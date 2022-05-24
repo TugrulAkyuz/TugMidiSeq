@@ -42,7 +42,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p): audioProcessor (p)
 }
 void GlobalPanel::paint (juce::Graphics& g)
 {
-    g.fillAll (  Colour(0xff404040));
+    g.fillAll (  Colour(0xff303030));
  
 }
 void GlobalPanel::resized()
@@ -57,8 +57,8 @@ void GlobalPanel::resized()
     auto area = getLocalBounds();
     auto rightarea = area.removeFromRight(200);
     gridAllVelSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
-    gridAllSpeedCombo.setBounds(area.removeFromRight(70).reduced(2,10)/*.withHeight(area.getHeight()-10)*/);
-    gridAllDurationCombo.setBounds(area.removeFromRight(70).reduced(2,10)/*.withHeight(area.getHeight()-)*/);
+    gridAllDurationCombo.setBounds(area.removeFromRight(70).reduced(2,10)/*.withHeight(area.getHeight()-10)*/);
+    gridAllSpeedCombo.setBounds(area.removeFromRight(70).reduced(2,10)/*.withHeight(area.getHeight()-)*/);
     gridAllNumberSlider.setBounds( area.removeFromRight(50).reduced(3, 5)/*.withHeight(area.getHeight()+5)*/);
     
 }
