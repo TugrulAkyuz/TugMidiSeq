@@ -12,9 +12,10 @@
 #include "PluginProcessor.h"
 #include "Grids.h"
 #include "Satellite.h"
+#include "GlobalPanel.h"
 
 
-
+const std::vector <std::string> topLabel={"midi in","G R I D S","#Grid","Speed","Duration","Vel","Note Satelite"};
 
 //==============================================================================
 /**
@@ -39,6 +40,10 @@ private:
  
     juce::OwnedArray< Grids> grids;
     Satellite satellite;
+    GlobalPanel globalPanel;
+    juce::OwnedArray< juce::Label > topInLabel;
+ 
+    
  
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TugMidiSeqAudioProcessorEditor)
 };

@@ -20,7 +20,7 @@ private:
     void drawRotarySlider(juce::Graphics & g, int x, int y, int width, int height, float sliderPos, float rotaryStartAngle, float rotaryEndAngle, juce::Slider & slider) override
     {
     
-        auto outline = slider.findColour (juce::Slider::rotarySliderOutlineColourId);
+        auto outline = juce::Colours::grey;
         auto fill    = slider.findColour (juce::Slider::rotarySliderFillColourId);
         
         auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat().reduced (5);
@@ -62,8 +62,8 @@ private:
         }
         
         auto thumbWidth = lineW * 2.0f;
-        juce::Point<float> thumbPoint (bounds.getCentreX() + (arcRadius - 5) * std::cos (toAngle - juce::MathConstants<float>::halfPi),
-                                       bounds.getCentreY() + (arcRadius - 5) * std::sin (toAngle - juce::MathConstants<float>::halfPi));
+        juce::Point<float> thumbPoint (bounds.getCentreX() + (arcRadius - 1) * std::cos (toAngle - juce::MathConstants<float>::halfPi),
+                                       bounds.getCentreY() + (arcRadius - 1) * std::sin (toAngle - juce::MathConstants<float>::halfPi));
         
         g.setColour (slider.findColour (juce::Slider::thumbColourId));
         // g.fillEllipse (juce::Rectangle<float> (thumbWidth, thumbWidth).withCentre (thumbPoint));
@@ -71,19 +71,53 @@ private:
         
         
     }
-//    juce::Label*  createSliderTextBox(juce::Slider &slider) override
-//    {
-//        auto* l = LookAndFeel_V2::createSliderTextBox (slider);
-//
-//        if (getCurrentColourScheme() == LookAndFeel_V4::getGreyColourScheme() && (slider.getSliderStyle() == Slider::LinearBar
-//                                                                                   || slider.getSliderStyle() == Slider::LinearBarVertical))
-//        {
-//            l->setColour (Label::textColourId, Colours::black.withAlpha (0.7f));
-//           
-//        }
-//        l-getTypefaceForFont(<#const Font &#>)
-//        return l;
-//    }
+    Font getComboBoxFont (ComboBox& box) override
+    {
+        //return getCommonMenuFont();
+        return { jmin (12.0f, (float) box.getHeight() * 0.85f) };
+    }
+    
+    Font getPopupMenuFont() override
+    {
+        return Font (12.0f);
+        //return getCommonMenuFont();
+        //return { jmin (16.0f, (float) box.getHeight() * 0.85f) };
+    }
+    void drawComboBox (Graphics& g, int width, int height, bool,
+                                       int, int, int, int, ComboBox& box) override
+    {
+        auto cornerSize = box.findParentComponentOfClass<ChoicePropertyComponent>() != nullptr ? 0.0f : 3.0f;
+        Rectangle<int> boxBounds (0, 0, width, height);
+
+        g.setColour (box.findColour (ComboBox::backgroundColourId));
+        g.fillRoundedRectangle (boxBounds.toFloat(), cornerSize);
+
+        g.setColour (juce::Colours::orange);
+        g.drawRoundedRectangle (boxBounds.toFloat().reduced (0.5f, 0.5f), cornerSize, 1.0f);
+
+        Rectangle<int> arrowZone (width - 15, 0, 15, height);
+        Path path;
+        path.startNewSubPath ((float) arrowZone.getX() + 3.0f, (float) arrowZone.getCentreY() - 2.0f);
+        path.lineTo ((float) arrowZone.getCentreX(), (float) arrowZone.getCentreY() + 3.0f);
+        path.lineTo ((float) arrowZone.getRight() - 3.0f, (float) arrowZone.getCentreY() - 2.0f);
+
+        g.setColour (juce::Colours::orange);
+        g.strokePath (path, PathStrokeType (2.0f));
+    }
+    void  positionComboBoxText (ComboBox& box, Label& label) override
+    {
+        label.setBounds (1, 1,
+                         box.getWidth() - 20,
+                         box.getHeight() - 2);
+
+        label.setFont (getComboBoxFont (box));
+    }
+
+private:
+    Font getCommonMenuFont()
+    {
+        return Font ("Times", "Regular", 10.f);
+    }
     
 };
 class CustomRoratySlider :public juce::Slider{

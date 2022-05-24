@@ -17,9 +17,18 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p)
 {
     myLine = line;
     step = 0;
+    
+    addAndMakeVisible(octaveSlider);
+    octaveSlider.setSliderStyle(juce::Slider::LinearVertical);
+    addAndMakeVisible(midiInNote);
     addAndMakeVisible(gridNumberSlider);
     addAndMakeVisible(gridSpeedCombo);
+    gridSpeedCombo.setLookAndFeel(&myLookAndFeel);
+    gridSpeedCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::orange);
     addAndMakeVisible(gridDurationCombo);
+    gridDurationCombo.setLookAndFeel(&myLookAndFeel);
+    gridDurationCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::orange);
+
     gridNumberSlider.setSliderStyle(juce::Slider::Rotary);
     gridNumberSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridNumberSlider.setValue(16);
@@ -103,26 +112,34 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p)
         audioProcessor.setDurationofLine(x, myLine);
         
     };
+   
 }
 void Grids::paint (juce::Graphics& g)
 {
    
-    g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
-
+    g.fillAll (  Colour(0xff101010));
+    auto y = getLocalBounds().getHeight();
+    auto x = getLocalBounds().getWidth();
+    g.setColour(juce::Colours::orange);
+    g.drawLine(0, y, x, y, 1);
 }
 void Grids::resized()
 {
     int marjin =  1;
-    auto x=90;
+ 
     auto area = getLocalBounds();
    
     gridVelSlider.setBounds( area.removeFromRight(50));
-    gridSpeedCombo.setBounds(area.removeFromRight(90).reduced(5)/*.withHeight(area.getHeight()-10)*/);
-    gridDurationCombo.setBounds(area.removeFromRight(90).reduced(5)/*.withHeight(area.getHeight()-)*/);
+    gridSpeedCombo.setBounds(area.removeFromRight(70).reduced(5)/*.withHeight(area.getHeight()-10)*/);
+    gridDurationCombo.setBounds(area.removeFromRight(70).reduced(5)/*.withHeight(area.getHeight()-)*/);
     gridNumberSlider.setBounds( area.removeFromRight(50)/*.withHeight(area.getHeight()+5)*/);
- 
-
-    auto griidbounds =  area;
+    
+    
+    //auto tmp =
+    midiInNote.setBounds(area.removeFromLeft(60).reduced(10));
+    octaveSlider.setBounds(area.removeFromLeft(30));
+    
+    auto griidbounds =  area.reduced(10, 2);
     juce::FlexBox fb;
    fb.flexWrap = juce::FlexBox::Wrap::wrap;
 
@@ -138,8 +155,8 @@ void Grids::resized()
     {// [5]
         fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
         buttons[i]->setVisible(true);
-        
-        buttons[i]->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::black);
+        ;
+        buttons[i]->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::darkgrey);
         buttons[i]->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::orange);
         buttons[i]->setButtonText("");
     }
@@ -150,7 +167,7 @@ void Grids::resized()
     buttons[step]->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::green.withAlpha(0.90f));
     buttons[step]->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::yellow.withAlpha(0.90f));
     buttons[step]->setButtonText("->");
-    buttons[step]->setColour(juce::TextButton::ColourIds::textColourOnId, juce::Colours::black);
-    buttons[step]->setColour(juce::TextButton::ColourIds::textColourOffId, juce::Colours::black);
+    buttons[step]->setColour(juce::TextButton::ColourIds::textColourOnId, juce::Colours::darkgrey);
+    buttons[step]->setColour(juce::TextButton::ColourIds::textColourOffId, juce::Colours::darkgrey);
 }
 

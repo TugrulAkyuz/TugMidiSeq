@@ -9,6 +9,8 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+
+
 //==============================================================================
 TugMidiSeqAudioProcessor::TugMidiSeqAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -46,9 +48,11 @@ valueTreeState(*this, &undoManager)
         tmp_s << "GridNum" << j;
         valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,1,32,16));
         numOfGrid[j] = valueTreeState.getRawParameterValue(tmp_s);
+        *numOfGrid[j] = 0;
+        gridsSpeed[j] = 0;
                         
     }
-
+    
     
     valueTreeState.state = juce::ValueTree("midiSeq"); // do not forget for valuetree
 }
@@ -234,7 +238,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     
     midiMessages.clear();
     midiMessages.swapWith(erasedMidi);
-    
+    if (positionInfo.bpm == 0) return;
     if (positionInfo.bpm)
     {
         double mBpm =  positionInfo.bpm;
@@ -257,23 +261,27 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
  
             //int index =  valueTreeState.getParameterAsValue(tmp_s).getValue();
             int index = gridsSpeed[i] -1 ;
-            if(gridsSpeed[i] == 0) return;
+            if(gridsSpeed[i] <= 0)
+                 return;
             //index--;
             if(index%3 == 0) {  index = (index+1) / 3;}
             else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
             stepResetInterval[i] = first / pow(2,index);
+
             stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
             
              first = 1.5*4*(60*mySampleRate/ mBpm);
             index = gridsDuration[i] -1 ;
-            if(gridsDuration[i] == 0) return;
+            if(gridsDuration[i] == 0)
+                 return;
             if(index%3 == 0) {  index = (index+1) / 3;}
             else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
             
             stepmidStopSampleInterval[i] = first / pow(2,index);
          
+        
         }
        
     

@@ -20,16 +20,17 @@ juce::Colour colourarray [5] = {
 
 Satellite::Satellite(TugMidiSeqAudioProcessor& p): audioProcessor (p)
 {
-    startTimer(20);
+    startTimer(33);
 }
 void Satellite::paint (juce::Graphics& g)
 {
    
     //g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
     g.fillAll (juce::Colours::black);
-    g.setColour(juce::Colours::darkgrey);
+
     auto area = getLocalBounds();
  
+    g.setColour(juce::Colours::darkgrey);
     float center_x =  area.getHeight()/2;
     float center_y =  center_x;
     float r[5];
@@ -70,21 +71,30 @@ void Satellite::paint (juce::Graphics& g)
         float angle = audioProcessor.sampleNumber[i]*2.0*juce::double_Pi/(audioProcessor.stepLoopResetInterval[i]);
         float x =  center_x+r[i]*sin(angle);
         float y =  center_y-r[i]*cos(angle);
+        juce::String tmp = std::to_string(i+1);
         if(audioProcessor.midiState[i] == false)
         {
-             g.setColour(juce::Colours::grey);
-            g.fillEllipse(x-4, y-4, 8, 8);
+
+            g.setColour(juce::Colours::lightgrey);
+            g.fillEllipse(x-6, y-6, 12, 12);
+            g.setColour(juce::Colours::black);
+            g.drawText(tmp, x-5, y-5, 11, 11, juce::Justification::centred);
             
         }
         else {
             g.setColour(colourarray[i]);
-            juce::ColourGradient cg{colourarray[i], x, y, colourarray[i].withAlpha(0.0f), x+14, y + 14, true};
+            juce::ColourGradient cg{colourarray[i], x, y, colourarray[i].withAlpha(0.0f), x+15, y + 15, true};
             g.setGradientFill(cg);
-            g.fillEllipse(x-10, y-10, 20, 20);
+            g.fillEllipse(x-15, y-15, 30, 30);
         }
             
     }
-
+    g.setColour(juce::Colours::grey);
+    //getLocalBounds().toFloat().reduce(1, 1);
+    auto x = getLocalBounds();
+    x.reduce(2, 2);
+    
+     g.drawRoundedRectangle(x.toFloat(), 2.0f, 2.0f);
     
 //    g.setColour(juce::Colours::white.withAlpha(0.6f));
 //    auto xx = 4*audioProcessor.mySampleRate/(audioProcessor.myBpm/60);

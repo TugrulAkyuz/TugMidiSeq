@@ -82,23 +82,32 @@ public:
         gridsDuration[line] = index;
     }
 
+    int getMidi(int line)
+    {
+        std::list<juce::MidiMessage>::iterator it = inMidiNoteList.begin();
+        if(inMidiNoteList.size() <= line ) return -1;
+        std::advance(it, line);
+        //it = g.begin();
+        return it->getNoteNumber();
+    }
 
     std::atomic<float> * gridsArr[numOfLine][numOfStep];
     int steps[5] = {};
     std::atomic<float> *numOfGrid[5];
     float myBpm;
-    int measureSample;
-    double  mySampleRate;
+    int measureSample = 0;
+    double  mySampleRate = 0;
     int  sampleNumber[5];
     int stepLoopResetInterval[5];
     bool midiState[5] = {};
+    
 private:
     int stpSample[5] = {};
 
     int stepResetInterval[5] = {};
     int stepmidStopSampleInterval[5] = {-1,-1,-1,-1,-1};
     int stepmidStopSampleCounter[5] = {-1,-1,-1,-1,-1};
-    int  ppq;
+    int  ppq = 0;
     
  
     
