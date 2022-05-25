@@ -1,10 +1,10 @@
 /*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin processor.
-
-  ==============================================================================
-*/
+ ==============================================================================
+ 
+ This file contains the basic framework code for a JUCE plugin processor.
+ 
+ ==============================================================================
+ */
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
@@ -14,50 +14,68 @@
 //==============================================================================
 TugMidiSeqAudioProcessor::TugMidiSeqAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
-     : AudioProcessor (BusesProperties()
-                     #if ! JucePlugin_IsMidiEffect
-                      #if ! JucePlugin_IsSynth
-                       .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                      #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                     #endif
-                       ),
+: AudioProcessor (BusesProperties()
+#if ! JucePlugin_IsMidiEffect
+#if ! JucePlugin_IsSynth
+                  .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+#endif
+                  .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+#endif
+                  ),
 valueTreeState(*this, &undoManager)
 #endif
 {
-   // valueTreeState.createAndAddParameter(<#std::unique_ptr<RangedAudioParameter> parameter#>);
+    // valueTreeState.createAndAddParameter(<#std::unique_ptr<RangedAudioParameter> parameter#>);
+    juce::String  tmp_s;
     for(int j = 0 ; j <  numOfLine; j++)
     {
-      for(int i = 0 ; i < numOfStep ; i++)
-      {
-        juce::String  grid_block;
-        grid_block << "block" << j << i;
-         valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(grid_block, grid_block,false));
+        for(int i = 0 ; i < numOfStep ; i++)
+        {
+            juce::String  grid_block;
+            grid_block << "block" << j << i;
+            valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(grid_block, grid_block,false));
+            
+            gridsArr[j][i] = valueTreeState.getRawParameterValue(grid_block);
+            
+        }
+        tmp_s.clear();
+        tmp_s << "Speed" << j;
+        //myNotetUnitSA
         
-         gridsArr[j][i] = valueTreeState.getRawParameterValue(grid_block);
-        
-      }
-        juce::String  tmp_s; tmp_s << "Speed" << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,1,32,12));
-        //gridsSpeed[j] = valueTreeState.getRawParameterValue(tmp_s);
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterChoice>(tmp_s,tmp_s,myNotetUnitSA,13));
+        gridsSpeedAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         tmp_s.clear();
         tmp_s << "Dur" << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,1,32,12));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterChoice>(tmp_s,tmp_s,myNotetUnitSA,13));
         gridsDurationAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         tmp_s.clear();
         tmp_s << "GridNum" << j;
         valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,1,32,16));
         numOfGrid[j] = valueTreeState.getRawParameterValue(tmp_s);
-       
+        
         tmp_s.clear();
         tmp_s << "Octave" << j;
         valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,-2,2,0));
         octave[j] = valueTreeState.getRawParameterValue(tmp_s);
         
-        *numOfGrid[j] = 0;
-        gridsSpeed[j] = 0;
-                        
+        tmp_s.clear();
+        tmp_s << "Vel" << j;
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,0,127,90));
+        gridsVelAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
+        
+        *gridsVelAtomic[j] = 90;
+        
+        //*numOfGrid[j] = 16;
+        //*gridsSpeedAtomic[j] = 16;
+        //*gridsDurationAtomic[j] = 16;
+        gridsSpeed[j] = 16;
+        gridsDuration[j] = 16;
+        
     }
+    tmp_s.clear();
+    tmp_s << "GlobalRestncBar";
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,1,32,1));
+    globalResyncBar = valueTreeState.getRawParameterValue(tmp_s);
     
     
     valueTreeState.state = juce::ValueTree("midiSeq"); // do not forget for valuetree
@@ -75,29 +93,29 @@ const juce::String TugMidiSeqAudioProcessor::getName() const
 
 bool TugMidiSeqAudioProcessor::acceptsMidi() const
 {
-   #if JucePlugin_WantsMidiInput
+#if JucePlugin_WantsMidiInput
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 bool TugMidiSeqAudioProcessor::producesMidi() const
 {
-   #if JucePlugin_ProducesMidiOutput
+#if JucePlugin_ProducesMidiOutput
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 bool TugMidiSeqAudioProcessor::isMidiEffect() const
 {
-   #if JucePlugin_IsMidiEffect
+#if JucePlugin_IsMidiEffect
     return true;
-   #else
+#else
     return false;
-   #endif
+#endif
 }
 
 double TugMidiSeqAudioProcessor::getTailLengthSeconds() const
@@ -108,7 +126,7 @@ double TugMidiSeqAudioProcessor::getTailLengthSeconds() const
 int TugMidiSeqAudioProcessor::getNumPrograms()
 {
     return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-                // so this should be at least 1, even if you're not really implementing programs.
+    // so this should be at least 1, even if you're not really implementing programs.
 }
 
 int TugMidiSeqAudioProcessor::getCurrentProgram()
@@ -146,26 +164,26 @@ void TugMidiSeqAudioProcessor::releaseResources()
 #ifndef JucePlugin_PreferredChannelConfigurations
 bool TugMidiSeqAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-  #if JucePlugin_IsMidiEffect
+#if JucePlugin_IsMidiEffect
     juce::ignoreUnused (layouts);
     return true;
-  #else
+#else
     // This is the place where you check if the layout is supported.
     // In this template code we only support mono or stereo.
     // Some plugin hosts, such as certain GarageBand versions, will only
     // load plugins that support stereo bus layouts.
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-     && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+        && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
-
+    
     // This checks if the input layout matches the output layout
-   #if ! JucePlugin_IsSynth
+#if ! JucePlugin_IsSynth
     if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
         return false;
-   #endif
-
+#endif
+    
     return true;
-  #endif
+#endif
 }
 #endif
 
@@ -174,7 +192,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
-
+    
     // In case we have more outputs than inputs, this code clears any output
     // channels that didn't contain input data, (because these aren't
     // guaranteed to be empty - they may contain garbage).
@@ -182,8 +200,8 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     // when they first compile a plugin, but obviously you don't need to keep
     // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
-
+    buffer.clear (i, 0, buffer.getNumSamples());
+    
     // This is the place where you'd normally do the guts of your plugin's
     // audio processing...
     // Make sure to reset the state if your inner loop is processing
@@ -193,11 +211,11 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
-
+        
         // ..do something to the data...
     }
     juce::AudioPlayHead* playHead = getPlayHead();
-   if (playHead == nullptr) return;
+    if (playHead == nullptr) return;
     juce::AudioPlayHead::CurrentPositionInfo positionInfo;
     playHead->getCurrentPosition(positionInfo);
     
@@ -219,9 +237,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             int i = 0;
             for (auto  &it: inMidiNoteList)
             {
-//                if(it.getNoteNumber() == currentMessage.getNoteNumber())
-//                    it.setNoteNumber(*octave[i] + currentMessage.getNoteNumber());
-//                i++;
+                //                if(it.getNoteNumber() == currentMessage.getNoteNumber())
+                //                    it.setNoteNumber(*octave[i] + currentMessage.getNoteNumber());
+                //                i++;
                 DBG(it.getNoteNumber());
             }
             
@@ -230,21 +248,21 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         if(currentMessage.isNoteOff())
         {
             //myInnmidiBuffer.addEvent(currentMessage,samplePos );
-          //  DBG(currentMessage.getNoteNumber());
+            //  DBG(currentMessage.getNoteNumber());
             auto midiNote = [&](MidiMessage l){ return l.getNoteNumber() == currentMessage.getNoteNumber(); };
             auto it = std::find_if(inMidiNoteList.begin(), inMidiNoteList.end(), midiNote);
-          //  DBG(it->getNoteNumber());
+            //  DBG(it->getNoteNumber());
             inMidiNoteList.erase(it);
             for (auto const &it: inMidiNoteList)
                 DBG(it.getNoteNumber());
             DBG("");
             erasedMidi.addEvent(currentMessage, 0);
-//            for(int j = 0 ; j <  numOfLine; j++)
-//              for(int i = 0 ; i < numOfStep ; i++)
-//            DBG(*gridsArr[j][i]);
+            //            for(int j = 0 ; j <  numOfLine; j++)
+            //              for(int i = 0 ; i < numOfStep ; i++)
+            //            DBG(*gridsArr[j][i]);
         }
         
-            
+        
         
     }
     //midiMessages.swapWith(processedMidiBuffer);
@@ -258,9 +276,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         double mBps = (float)mBpm/60;
         myBpm = mBpm;
         //  std::cout << mBps << " " ;
- 
+        
         ppq = positionInfo .ppqPosition;
-
+        
         stepResetInterval[0] =  1*(60*mySampleRate/ mBpm);
         stepResetInterval[1] =  1*(60*mySampleRate/ mBpm);
         stepResetInterval[2] =  1*(60*mySampleRate/ mBpm);
@@ -271,38 +289,63 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         for(int i = 0 ; i< 5 ;i++)
         {
             double first = 1.5*4*(60*mySampleRate/ mBpm);
- 
+            
             //int index =  valueTreeState.getParameterAsValue(tmp_s).getValue();
-            int index = gridsSpeed[i] -1 ;
-            if(gridsSpeed[i] <= 0)
-                 return;
+            int index = *gridsSpeedAtomic[i] ;
+            //            if(*gridsSpeedAtomic[i] <= 0)
+            //                return;
             //index--;
             if(index%3 == 0) {  index = (index+1) / 3;}
             else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
             stepResetInterval[i] = first / pow(2,index);
-
+            
             stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
             
-             first = 1.5*4*(60*mySampleRate/ mBpm);
-            index = gridsDuration[i] -1 ;
-            if(gridsDuration[i] == 0)
-                 return;
+            first = 1.5*4*(60*mySampleRate/ mBpm);
+            index = *gridsDurationAtomic[i];
+            //            if(gridsDuration[i] == 0)
+            //                return;
             if(index%3 == 0) {  index = (index+1) / 3;}
             else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
             
             stepmidStopSampleInterval[i] = first / pow(2,index);
-         
-        
+            
+            
         }
-       
-    
- 
+        
+        
+        
         for(int s = 0 ; s < buffer.getNumSamples();  s++)
         {
             measureSample++;
             measureSample %= (int)(4*mySampleRate/mBps);
+            if(measureSample == 0)
+            {
+                measureBar++;
+                measureBar %= (int)(*globalResyncBar);
+                if(measureBar == 0)
+                {
+                    for(int i =  0; i  < 5 ; i++)
+                    {
+                        steps[i] = (int)(*numOfGrid[i]) -1;
+                        sampleNumber[i] = 0;
+                        stpSample[i] = stepResetInterval[i] -1;
+                    }
+                    
+                }
+            }
+            
+            std::list<RealMidiNoteList>::iterator it;
+            for (it = inRealMidiNoteList.begin(); it != inRealMidiNoteList.end(); )
+            {
+                if(it->durationsample != 0) { it->durationsample--; it++ ; continue;}
+                it->sentMidi.setVelocity(0.0f);
+                midiMessages.addEvent(it->sentMidi, 0);
+                it = inRealMidiNoteList.erase(it);
+            }
+            
             
             for(int i =  0; i  < 5 ; i++)
             {
@@ -314,64 +357,72 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     stepmidStopSampleCounter[i]++;
                     stepmidStopSampleCounter[i] %= stepmidStopSampleInterval[i]; // byrada uçuyor bir bak
                 }
-               if( stepmidStopSampleCounter[i]== 0)
-               {
-                   auto it1 = std::next(inMidiNoteList.begin(), i);
-                   MidiMessage it = *it1;
-                   it.setVelocity(0.0f);
-                   midiMessages.addEvent(it, 0);
-                   stepmidStopSampleCounter[i] = -1;
-                   midiState[i] = false;
-               }
+                if( stepmidStopSampleCounter[i]== 0)
+                {
+                    //                   auto it1 = std::next(inMidiNoteList.begin(), i);
+                    //                   MidiMessage it = *it1;
+                    //                   it.setVelocity(0.0f);
+                    //                   midiMessages.addEvent(it, 0);
+                    stepmidStopSampleCounter[i] = -1;
+                    midiState[i] = false;
+                }
                 if(stpSample[i] == 0)
                 {
+                    
                     steps[i]++;
                     steps[i] %= (int)(*numOfGrid[i]);
+                    
                     if(steps[i] == 0)
-                     sampleNumber[i] = 0;
-
+                        sampleNumber[i] = 0;
                     
                     if(*gridsArr[i][steps[i]] == 1)
                     {
-                        if(inMidiNoteList.size() <= i)
-                            break;;
-                        
-                           
-                        auto it1 = std::next(inMidiNoteList.begin(), i);
-                        
-                        MidiMessage it = *it1;
-//                        float vel = it.getFloatVelocity();
-//                        it.setVelocity(0.0f);
-//                        midiMessages.addEvent(it, 0);
-//                        it.setVelocity(vel);
-
-                        
-                        midiMessages.addEvent(it, 0);
-                        stepmidStopSampleCounter[i] = 1;
-                        DBG(" Line: "  << i << " strep: " << steps[i]);
-                        midiState[i] = true;
+                        if(inMidiNoteList.size() > i)
+                        {
+                            
+                            
+                            auto it1 = std::next(inMidiNoteList.begin(), i);
+                            
+                            MidiMessage it = *it1;
+                            //                        float vel = it.getFloatVelocity();
+                            //                        it.setVelocity(0.0f);
+                            //                        midiMessages.addEvent(it, 0);
+                            //                        it.setVelocity(vel);
+                            
+                            it.setNoteNumber( it.getNoteNumber() + *octave[i]*12 );
+                            
+                            std::list<RealMidiNoteList>::iterator it2;
+                            auto midiNote = [&](RealMidiNoteList l){ return l.sentMidi.getNoteNumber() == it.getNoteNumber(); };
+                            it2 = std::find_if(inRealMidiNoteList.begin(), inRealMidiNoteList.end(),midiNote);
+                            if(it2 != inRealMidiNoteList.end())
+                            {
+                                it2->sentMidi.setVelocity(0.0f);
+                                midiMessages.addEvent(it2->sentMidi, 0);
+                                it2 = inRealMidiNoteList.erase(it2);
+                            }
+                            
+                            midiMessages.addEvent(it, 0);
+                            stepmidStopSampleCounter[i] = 1;
+                            RealMidiNoteList tmp;
+                            tmp.sentMidi = it;
+                            tmp.durationsample = stepmidStopSampleInterval[i] -1;
+                            inRealMidiNoteList.push_back(tmp);
+                            
+                            DBG(" Line: "  << i << " strep: " << steps[i]);
+                            midiState[i] = true;
+                        }
                     }
-
-                 
-//                  else
-//                    {
-//                        if(*gridsArr[i][prevstep] == 1)
-//                        {
-//                            if(inMidiNoteList.size() <= i)
-//                                break;
-//                            auto it1 = std::next(inMidiNoteList.begin(), i);
-//                            MidiMessage it = *it1;
-//                            it.setVelocity(0.0f);
-//                            midiMessages.addEvent(it, 0);
-//                        }
-//                    }
-                  
+                    
+                    
+                    
+                    
                 }
+                
             }
         }
         
     }
-
+    
     
     
 }

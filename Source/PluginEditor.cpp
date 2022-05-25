@@ -17,7 +17,7 @@ TugMidiSeqAudioProcessorEditor::TugMidiSeqAudioProcessorEditor (TugMidiSeqAudioP
     // editor's size to whatever you need it to be.
     //setResizable (true, true);
     addAndMakeVisible(satellite);
-    for(auto i =  0; i < 5 ; i++ )
+    for(auto i =  4; i >= 0 ; i-- )
     {
         auto g = new Grids(audioProcessor,i);
         grids.add(g);

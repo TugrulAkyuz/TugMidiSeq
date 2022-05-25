@@ -86,6 +86,7 @@ private:
     std::unique_ptr < AudioProcessorValueTreeState::ComboBoxAttachment>  comBoxSpeedAtaachment;
     std::unique_ptr < AudioProcessorValueTreeState::ComboBoxAttachment>  comBoxDurationAtaachment;
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridNumberSliderAttachment;
+    std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridVelSliderAttachment;
 
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> octaveAttachment;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Grids)

@@ -36,13 +36,13 @@ private:
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
     TugMidiSeqAudioProcessor& audioProcessor;
-    juce::OwnedArray<juce::TextButton> buttons;
+ 
  
     juce::OwnedArray< Grids> grids;
     Satellite satellite;
     GlobalPanel globalPanel;
     juce::OwnedArray< juce::Label > topInLabel;
- 
+    
     
  
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TugMidiSeqAudioProcessorEditor)
