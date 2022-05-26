@@ -13,7 +13,14 @@
 #define numOfStep  32
 #define numOfLine  5
 
-
+const juce::StringArray valueTreeNames = 
+{
+   "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar"
+};
+ enum valueTreeNamesEnum
+{
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR
+};
 
 const std::vector <juce::String> myNotetUnit =
 { "1nd","1n", "1nt",
@@ -33,7 +40,27 @@ const juce::StringArray myNotetUnitSA  = { "1nd","1n", "1nt",
       "32nd","32n","32nt",
       "64nd","64n","64nt",
       "128nd","128n","128nt" };
-                   
+class TugMidiSeqProgram
+{
+//  MDAEPianoProgram();
+public:
+    TugMidiSeqProgram(juce::String name)
+    {
+        myProgramname = name;
+    }
+    
+    juce::String myProgramname;
+    bool grids[numOfLine][numOfStep];
+    int numOfGrid[numOfLine];
+    int octave[numOfLine];
+     int gridsSpeed[numOfLine];
+    int gridsDuration[numOfLine];
+    int gridsVel[numOfLine];;
+    
+  
+};
+
+
 //==============================================================================
 /**
 */
@@ -77,9 +104,17 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
     
+    
+    void  writePresetToFileJSON();
+ 
+
+    void  readPresetToFileJSON();
+    void createPrograms(juce::String preset_name );
+    
     juce::AudioProcessorValueTreeState valueTreeState;
     int getSteps(int i)
     {
+        if (myIsPlaying == false) return 0;
         return steps[i];
     }
     void setSpeedofLine(int index, int line)
@@ -101,6 +136,7 @@ public:
     }
     int getLoopMeasure()
     {
+        if (myIsPlaying == false) return + 1;
         return  measureBar + 1;
     }
     void setAllValue( juce::String s,int v)
@@ -122,6 +158,9 @@ public:
         }
     }
 
+    void resetAllParam();
+ 
+    
     std::atomic<float> * gridsArr[numOfLine][numOfStep];
     int steps[5] = {};
     std::atomic<float> *numOfGrid[5];
@@ -134,7 +173,7 @@ public:
     int  sampleNumber[5];
     int stepLoopResetInterval[5];
     bool midiState[5] = {};
- 
+    bool myIsPlaying  = false;
 private:
     int stpSample[5] = {};
 
@@ -150,6 +189,8 @@ private:
     std::atomic<float> * gridsDurationAtomic[numOfLine];
     
     std::atomic<float> *gridsVelAtomic[numOfLine];;
+    std::atomic<float> * GlobalInOrFixedAtomic;;
+    
     //std::atomic<float> *numOfGrid[5];
     juce::UndoManager undoManager;
     juce::MidiBuffer myInnmidiBuffer;
@@ -161,10 +202,11 @@ private:
         int durationsample;
     };
     std::list<RealMidiNoteList> inRealMidiNoteList;
+    int preset_idex = 0;
     
-
     double gridsSpeed[numOfLine];
     double gridsDuration[numOfLine];
+    std::vector <TugMidiSeqProgram >myProgram;
     //juce::AudioProcessorValueTreeState::ParameterLayout createAllParameters();
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TugMidiSeqAudioProcessor)

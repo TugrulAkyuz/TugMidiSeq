@@ -27,7 +27,10 @@ public:
     void  paint (juce::Graphics& g) override;
     void resized() override;
 
-    
+    void setEnable(bool r)
+    {
+        gridVelSlider.setEnabled(r);
+    }
 private:
     MyLookAndFeel myLookAndFeel;
     TugMidiSeqAudioProcessor& audioProcessor;

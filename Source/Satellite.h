@@ -26,11 +26,11 @@ class Satellite   : public juce::Component , public juce::Timer
     void  paint (juce::Graphics& g) override;
     void resized() override;
     void timerCallback() override;
- 
+    
 private:
     TugMidiSeqAudioProcessor& audioProcessor;
     int statellitePosition[32];
-    
+    int counter;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Satellite)
 };

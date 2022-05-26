@@ -11,9 +11,13 @@
 #include "GlobalPanel.h"
 #include "Satellite.h"
 
-GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p): audioProcessor (p)
+
+GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
 {
     startTimer(100);
+    
+    addAndMakeVisible(writeButton);
+    addAndMakeVisible(deleteButton);
     
     for(int i = 0 ; i < 5 ; i++)
     {
@@ -25,7 +29,19 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p): audioProcessor (p)
         
  
     }
-   
+    loopBarlenghtSliderLabel.setFont (juce::Font (12, juce::Font::italic));
+    globalNameLabel.setText("GLOBAL CONTROLS", juce::dontSendNotification);
+    globalNameLabel.setColour(juce::Label::ColourIds::textColourId, Colours::lightgrey);
+    
+    addAndMakeVisible(globalNameLabel);
+    loopBarlenghtSliderLabel.setText("RESYNC BAR", juce::dontSendNotification);
+    loopBarlenghtSliderLabel.setColour(juce::Label::ColourIds::textColourId, Colours::lightgrey);
+    
+  
+    addAndMakeVisible(loopBarlenghtSliderLabel);
+    
+    presetCombo.setLookAndFeel(&myLookAndFeel);
+    addAndMakeVisible(presetCombo);
     addAndMakeVisible(loopBarlenghtSlider);
     addAndMakeVisible( loopBarCounterLabel);
     addAndMakeVisible( resetButton);
@@ -44,13 +60,30 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p): audioProcessor (p)
     
     loopBarlenghtSlider.setSliderStyle (Slider::SliderStyle::LinearBarVertical);
     loopBarlenghtSlider.setColour (Slider::ColourIds::trackColourId, Colours::transparentWhite);
+    loopBarlenghtSlider.setColour(Slider::ColourIds::textBoxOutlineColourId, Colours::orange);
+    loopBarlenghtSlider.setColour(Slider::ColourIds::textBoxTextColourId, Colours::orange);
+    loopBarlenghtSlider.setColour(Slider::textBoxBackgroundColourId, Colours::orange);
+    loopBarlenghtSlider.setColour(Label::textWhenEditingColourId, Colours::orange);
+ 
     loopBarlenghtSlider.setVelocityBasedMode (true);
     loopBarlenghtSlider.setVelocityModeParameters (0.4, 1, 0.09, false);
     loopBarlenghtSlider.setRange(1, 32,1);
     velUsageButton.onClick = [this](){
-        if(velUsageButton.getToggleStateValue() == true)
+       
+        for(auto i = 0; i < 5 ;i++)
+        if(otherg[i] == 0) return;
+        if(velUsageButton.getToggleStateValue() == false)
+        {
+            for(auto i = 0; i < 5 ;i++)
+               otherg[i]->setEnable(true);
             velUsageButton.setButtonText("Fixed Vel");
-        else velUsageButton.setButtonText("In Vel");
+        }
+        else
+        {
+            for(auto i = 0; i < 5 ;i++)
+                otherg[i]->setEnable(false);
+            velUsageButton.setButtonText("In Vel");
+        }
     };
     resetButton.setLookAndFeel(&myLookAndFeel);
     velUsageButton.setLookAndFeel(&myLookAndFeel);
@@ -79,6 +112,10 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p): audioProcessor (p)
     tmp_s << "GlobalRestncBar";
     loopBarlenghtSliderAttachment = std::make_unique <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, loopBarlenghtSlider);
     
+    tmp_s.clear();
+    tmp_s << "GlobalInOrFixedVel";
+    velUsageButtonAttachment = std::make_unique <AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.valueTreeState, tmp_s, velUsageButton);
+    
     gridAllSpeedCombo.onChange = [this]
     {
         audioProcessor.setAllValue("Speed",gridAllSpeedCombo.getSelectedItemIndex());
@@ -105,8 +142,40 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p): audioProcessor (p)
             audioProcessor.randomizeGrids(4 -randomButton.indexOf(r));
         };
     };
+    resetButton.onClick = [this]
+    {
+        audioProcessor.resetAllParam();
+    };
+
+    writeButton.onClick = [this]
+    {
+        String s = "Preset";
+        s << std::to_string(preset_index_sil);
+        preset_index_sil++;
+        audioProcessor.createPrograms(s);
+    };
+    int k =  audioProcessor.getNumPrograms();
+    if(k == 1 ) return;
+    for(auto i = 0  ; i < k ; i++ )
+    {
+       String s  = audioProcessor.getProgramName(i + 1);
+        
+        presetCombo.addItem(s, i + 1);
+    }
+    presetCombo.onChange = [this]
+    {
+        auto x = presetCombo.getNumItems();
+        if(presetCombo.getNumItems() == 0) return;
+        x = presetCombo.getSelectedId();
+        if(x == 0) return;
+        audioProcessor.setCurrentProgram(x);
+        
+    };
+    deleteButton.onClick = [&]
+    {
+        new MainWindow("");
+    };
     
-   
 }
 void GlobalPanel::paint (juce::Graphics& g)
 {
@@ -125,23 +194,32 @@ void GlobalPanel::resized()
     auto area = getLocalBounds();
     auto rightarea = area.removeFromRight(200);
     gridAllVelSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
-    gridAllDurationCombo.setBounds(area.removeFromRight(70).reduced(2,10)/*.withHeight(area.getHeight()-10)*/);
-    gridAllSpeedCombo.setBounds(area.removeFromRight(70).reduced(2,10)/*.withHeight(area.getHeight()-)*/);
-    gridAllNumberSlider.setBounds( area.removeFromRight(50).reduced(3, 5)/*.withHeight(area.getHeight()+5)*/);
+    gridAllDurationCombo.setBounds(area.removeFromRight(70).reduced(2,10));
+    gridAllSpeedCombo.setBounds(area.removeFromRight(70).reduced(2,10));
+    gridAllNumberSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
     
-    loopBarCounterLabel.setBounds( area.removeFromRight(30).reduced(3, 10)/*.withHeight(area.getHeight()+5)*/);
+    auto ra = area.removeFromRight(80);
+    auto ar = ra.removeFromTop(12);
+    ra.removeFromBottom(10);
+    loopBarCounterLabel.setBounds( ra.removeFromRight(40).reduced(3, 5));
+    loopBarlenghtSlider.setBounds( ra.removeFromRight(40).reduced(3, 5));
     
-    loopBarlenghtSlider.setBounds( area.removeFromRight(30).reduced(3, 10)/*.withHeight(area.getHeight()+5)*/);
-    
+    //rightarea.reduce(5, 0);
+    loopBarlenghtSliderLabel.setBounds(ar );
 
-    resetButton.setBounds( area.removeFromRight(70).reduced(3, 10)/*.withHeight(area.getHeight()+5)*/);
-    
-    velUsageButton.setBounds( area.removeFromRight(70).reduced(3, 10)/*.withHeight(area.getHeight()+5)*/);
- 
-    
+    velUsageButton.setBounds( area.removeFromRight(70).reduced(3, 10));
+
     for(int i = 0 ; i < 5 ; i++)
     {
-        randomButton.getUnchecked(i)->setBounds( area.removeFromRight(70).reduced(3, 14));
+        randomButton.getUnchecked(i)->setBounds( area.removeFromRight(60).reduced(3, 14));
     }
+    globalNameLabel.setBounds(area.removeFromLeft(100).reduced(3, 14));
+    
+    resetButton.setBounds( rightarea.removeFromRight(60).reduced(3, 10));
+    presetCombo.setBounds( rightarea.removeFromRight(70).reduced(3, 10));
+ 
+    writeButton.setBounds( rightarea.removeFromTop(25).reduced(3, 5));
+    deleteButton.setBounds( rightarea.reduced(3, 5));
+
     
 }

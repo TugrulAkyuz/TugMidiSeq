@@ -19,7 +19,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p)
     step = 0;
     myLineLabel.setText(std::to_string(myLine + 1), juce::NotificationType::dontSendNotification);
     myLineLabel.setColour(juce::Label::ColourIds::textColourId, colourarray[myLine]);
-    
+    myLineLabel.setJustificationType(Justification::right);
     addAndMakeVisible(myLineLabel);
     addAndMakeVisible(octaveSlider);
     octaveSlider.setSliderStyle(juce::Slider::LinearVertical);
@@ -115,22 +115,11 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p)
     tmp_s.clear();
     tmp_s << "Dur"<<line;
     comBoxDurationAtaachment =  std::make_unique <AudioProcessorValueTreeState::ComboBoxAttachment>(audioProcessor.valueTreeState, tmp_s, gridDurationCombo);
-   // gridDurationCombo.setSelectedId(14);
-//    gridSpeedCombo.onChange = [this]
-//    {
-//        auto x = gridSpeedCombo.getSelectedId();
-//
-//        audioProcessor.setSpeedofLine(x, myLine);
-//
-//    };
-//    gridDurationCombo.onChange = [this]
-//    {
-//        auto x = gridDurationCombo.getSelectedId();
-//
-//        audioProcessor.setDurationofLine(x, myLine);
-//
-//    };
-   
+
+    octaveSlider.setColour (Slider::ColourIds::backgroundColourId, Colours::lightgrey);
+    octaveSlider.setColour (Slider::ColourIds::trackColourId, Colours::lightgrey);
+    octaveSlider.setColour (Slider::ColourIds::thumbColourId, Colours::orange);
+    //Slider::ColourIds::thumbColourId
     octaveSlider.setRange(-2, 2,1);
    // octaveSlider.setValue(0);
 }
@@ -156,7 +145,7 @@ void Grids::resized()
     
     
     //auto tmp =
-    myLineLabel.setBounds(area.removeFromLeft(20));
+    myLineLabel.setBounds(area.removeFromLeft(25));
     midiInNote.setBounds(area.removeFromLeft(60).reduced(10));
     octaveSlider.setBounds(area.removeFromLeft(50));
     

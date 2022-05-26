@@ -24,6 +24,7 @@ TugMidiSeqAudioProcessorEditor::TugMidiSeqAudioProcessorEditor (TugMidiSeqAudioP
         addAndMakeVisible(g);
     }
     addAndMakeVisible(globalPanel);
+ 
     
     for(auto i =  0; i < topLabel.size() ; i++ )
     {
@@ -33,8 +34,8 @@ TugMidiSeqAudioProcessorEditor::TugMidiSeqAudioProcessorEditor (TugMidiSeqAudioP
         topInLabel.getLast()->setJustificationType(juce::Justification::centred);
         addAndMakeVisible(topInLabel.getLast());
     }
-    
-    
+    for(auto i =  0; i < 5; i++ )
+        globalPanel.setGridComp(grids[i],i);
     setSize (1000, 270);
 }
 

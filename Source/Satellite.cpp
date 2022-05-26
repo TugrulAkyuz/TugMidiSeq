@@ -63,6 +63,7 @@ void Satellite::paint (juce::Graphics& g)
  
         if(audioProcessor.stepLoopResetInterval[i] == 0) return;
         float angle = audioProcessor.sampleNumber[i]*2.0*juce::double_Pi/(audioProcessor.stepLoopResetInterval[i]);
+        if (audioProcessor.myIsPlaying == false) angle = 0;
         float x =  center_x+r[i]*sin(angle);
         float y =  center_y-r[i]*cos(angle);
         juce::String tmp = std::to_string(i+1);
@@ -90,15 +91,7 @@ void Satellite::paint (juce::Graphics& g)
     
      g.drawRoundedRectangle(x.toFloat(), 2.0f, 2.0f);
     
-//    g.setColour(juce::Colours::white.withAlpha(0.6f));
-//    auto xx = 4*audioProcessor.mySampleRate/(audioProcessor.myBpm/60);
-//    auto angle = audioProcessor.measureSample*2.0*juce::double_Pi/xx;
-//    g.drawLine(center_x, center_y, center_x+r[0]*sin(angle), center_y-r[0]*cos(angle));
-//
-//    float x = *audioProcessor.gridsArr[1][0];
-//    x = 0;
-    
-   // *audioProcessor.steps[0]
+
 
 }
 void Satellite::resized()
@@ -107,6 +100,12 @@ void Satellite::resized()
 }
 void Satellite::timerCallback()
 {
+    if (audioProcessor.myIsPlaying == false)
+    {
+        counter++;
+        counter %= 20;
+        if(counter != 0) return;
+    }
     repaint();
 
 }
