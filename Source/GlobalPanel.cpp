@@ -59,11 +59,12 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     gridAllVelSlider.setRange(1, 127,1);
     
     loopBarlenghtSlider.setSliderStyle (Slider::SliderStyle::LinearBarVertical);
-    loopBarlenghtSlider.setColour (Slider::ColourIds::trackColourId, Colours::transparentWhite);
+    //loopBarlenghtSlider.setColour (Slider::ColourIds::trackColourId, Colours::transparentWhite);
     loopBarlenghtSlider.setColour(Slider::ColourIds::textBoxOutlineColourId, Colours::orange);
-    loopBarlenghtSlider.setColour(Slider::ColourIds::textBoxTextColourId, Colours::orange);
+    loopBarlenghtSlider.setColour(Slider::ColourIds::textBoxTextColourId, Colours::white);
     loopBarlenghtSlider.setColour(Slider::textBoxBackgroundColourId, Colours::orange);
     loopBarlenghtSlider.setColour(Label::textWhenEditingColourId, Colours::orange);
+    loopBarlenghtSlider.setColour(Slider::ColourIds::textBoxBackgroundColourId, Colours::orange);
  
     loopBarlenghtSlider.setVelocityBasedMode (true);
     loopBarlenghtSlider.setVelocityModeParameters (0.4, 1, 0.09, false);
@@ -149,10 +150,29 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
 
     writeButton.onClick = [this]
     {
-        String s = "Preset";
-        s << std::to_string(preset_index_sil);
-        preset_index_sil++;
-        audioProcessor.createPrograms(s);
+//        String s = "Preset";
+//        s << std::to_string(preset_index_sil);
+//        preset_index_sil++;
+//        audioProcessor.createPrograms(s);
+//        const auto callback = juce::ModalCallbackFunction::create([this](int result) {
+//            if (result == 0) { return; }// result == 0 means you click Cancel
+//            if (result == 1) { /*factoryConfirmed();*/ }// result == 1 means you click OK
+//            });
+        
+        pwdDialog =  new AlertWindow  ( "Add Preset", "Please enter your preset name", AlertWindow::AlertIconType::NoIcon );
+        pwdDialog->addTextEditor( "Preset", "Preset ?" );
+        pwdDialog->addButton("OK", 1, KeyPress(KeyPress::returnKey, 0, 0));
+        pwdDialog->addButton("Cancel", 0, KeyPress(KeyPress::escapeKey, 0, 0));
+        pwdDialog->enterModalState(true,ModalCallbackFunction::create([this](int r)
+           {
+                if (r)
+                {
+                    auto text = pwdDialog->getTextEditorContents("Preset");
+                    setPresetMenu(text);
+                    audioProcessor.writePresetToFileJSON();
+                   
+                }
+            }), true);
     };
     int k =  audioProcessor.getNumPrograms();
     if(k == 1 ) return;
@@ -173,8 +193,19 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     };
     deleteButton.onClick = [&]
     {
-        new MainWindow("");
+//        BasicWindow *basicWindow = new BasicWindow("Information", Colours::grey, DocumentWindow::allButtons);
+//
+//        basicWindow->setUsingNativeTitleBar(true);
+//        basicWindow->setContentOwned(new InformationComponent(), true);// InformationComponent is my GUI editor component (the visual editor of JUCE)
+//
+//        basicWindow->centreWithSize(basicWindow->getWidth(), basicWindow->getHeight());
+//        basicWindow->setVisible(true);
+        deletePresetMenu();
     };
+    deleteButton.setButtonText("Delete");
+    deleteButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
+    writeButton.setButtonText("Save");
+    writeButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
     
 }
 void GlobalPanel::paint (juce::Graphics& g)
@@ -184,13 +215,7 @@ void GlobalPanel::paint (juce::Graphics& g)
 }
 void GlobalPanel::resized()
 {
-//    auto area = getLocalBounds().reduced(5, 5);
-//    auto w = getLocalBounds().getHeight();
-//    //area.removeFromLeft(w);
-//    gridAllNumberSlider.setBounds(area.removeFromLeft(w));
-//    gridAllVelSlider.setBounds(area.removeFromLeft(w));
-//    gridAllSpeedCombo.setBounds(area.removeFromLeft(2*w).reduced(5, 5));
-//    gridAllDurationCombo.setBounds(area.removeFromLeft(2*w).reduced(5, 5));
+
     auto area = getLocalBounds();
     auto rightarea = area.removeFromRight(200);
     gridAllVelSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
@@ -204,8 +229,8 @@ void GlobalPanel::resized()
     loopBarCounterLabel.setBounds( ra.removeFromRight(40).reduced(3, 5));
     loopBarlenghtSlider.setBounds( ra.removeFromRight(40).reduced(3, 5));
     
-    //rightarea.reduce(5, 0);
-    loopBarlenghtSliderLabel.setBounds(ar );
+    ar.removeFromTop(2);
+    loopBarlenghtSliderLabel.setBounds(ar);
 
     velUsageButton.setBounds( area.removeFromRight(70).reduced(3, 10));
 
@@ -217,9 +242,79 @@ void GlobalPanel::resized()
     
     resetButton.setBounds( rightarea.removeFromRight(60).reduced(3, 10));
     presetCombo.setBounds( rightarea.removeFromRight(70).reduced(3, 10));
- 
-    writeButton.setBounds( rightarea.removeFromTop(25).reduced(3, 5));
-    deleteButton.setBounds( rightarea.reduced(3, 5));
+    rightarea.removeFromTop(5);
+    rightarea.removeFromBottom(5);
+    writeButton.setBounds( rightarea.removeFromTop(20).reduced(3, 0));
+    deleteButton.setBounds( rightarea.reduced(3, 0));
 
+    
+}
+
+
+void GlobalPanel::deleteConfirmed()
+{
+    int k = audioProcessor.getNumPrograms();
+    if (k == 1) return;
+    int curr_prg = audioProcessor.getCurrentProgram();
+    if (curr_prg == 0) return;
+    audioProcessor.deletePreset(curr_prg);
+    presetCombo.clear();
+    k = audioProcessor.getNumPrograms();
+
+    for (auto i = 0; i < k; i++)
+    {
+        String s = audioProcessor.getProgramName(i + 1);
+        presetCombo.addItem(s, i + 1);
+
+    }
+    if ((k + 1) == curr_prg)  curr_prg--;
+    presetCombo.setSelectedId(curr_prg);
+    audioProcessor.setCurrentProgram(curr_prg);
+    audioProcessor.writePresetToFileJSON();
+    
+}
+
+void GlobalPanel::deletePresetMenu()
+{
+
+    const auto callback = juce::ModalCallbackFunction::create([this](int result) {
+        if (result == 0) { return; }// result == 0 means you click Cancel
+        if (result == 1) { deleteConfirmed(); }// result == 1 means you click OK
+        });
+    //juce::NativeMessageBox::showYesNoBox(juce::AlertWindow::WarningIcon,"Are you sure to delete?", "Are you sure to delete?", this, callback);
+    /*AlertWindow *alertWindow = new AlertWindow("Save changes to the current project?",
+        "The current project has unsaved changed that will be lost if you don't save them.",
+        AlertWindow::InfoIcon);
+        */
+    AlertWindow::showOkCancelBox(juce::AlertWindow::WarningIcon,
+        "The preset will be deleted.",
+        "Are you sure to delete it?",
+        "Yes",
+        "Cancel",
+        nullptr,
+         callback);
+
+    return;
+   // int result = alertWindow->runModalLoop();
+
+
+
+}
+
+
+void GlobalPanel::setPresetMenu(String preset_name)
+{
+    audioProcessor.createPrograms(preset_name);
+   int k =  audioProcessor.getNumPrograms();
+   String s  = audioProcessor.getProgramName(k);
+  //   myControlPanel->
+    presetCombo.clear();
+   for (auto i = 0; i < k; i++)
+   {
+       String s = audioProcessor.getProgramName(i + 1);
+       presetCombo.addItem(s, i + 1);
+   }
+    audioProcessor.setCurrentProgram(k);
+   presetCombo.setSelectedId(k);
     
 }

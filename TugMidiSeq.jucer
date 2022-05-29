@@ -2,10 +2,12 @@
 
 <JUCERPROJECT id="O6AZjO" name="TugMidiSeq" projectType="audioplug" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
-              pluginCharacteristicsValue="pluginProducesMidiOut,pluginWantsMidiIn">
+              pluginManufacturer="2Rule" pluginAUMainType="'aumi'" pluginCharacteristicsValue="pluginIsSynth,pluginProducesMidiOut,pluginWantsMidiIn"
+              pluginFormats="buildAU,buildAUv3,buildVST3">
   <MAINGROUP id="soeMpr" name="TugMidiSeq">
     <GROUP id="{8DE839C0-F477-F119-F4B1-66A417831F51}" name="PNGs"/>
     <GROUP id="{7C9F9E45-D71A-212B-2F03-0F6C14A6D85C}" name="Source">
+      <FILE id="bUJRuB" name="PresetMenu.cpp" compile="1" resource="0" file="Source/PresetMenu.cpp"/>
       <FILE id="cMPJRm" name="GlobalPanel.cpp" compile="1" resource="0" file="Source/GlobalPanel.cpp"/>
       <FILE id="rbwwcC" name="GlobalPanel.h" compile="0" resource="0" file="Source/GlobalPanel.h"/>
       <FILE id="IXXCZ0" name="Satellite.cpp" compile="1" resource="0" file="Source/Satellite.cpp"/>

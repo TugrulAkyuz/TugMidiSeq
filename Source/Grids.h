@@ -39,6 +39,7 @@ private:
     CustomRoratySlider gridVelSlider;
     juce::ComboBox gridSpeedCombo;
     juce::ComboBox gridDurationCombo;
+    juce::ArrowButton stepArrow;
     
     juce::TextButton midiInNote;
     juce::Slider octaveSlider;

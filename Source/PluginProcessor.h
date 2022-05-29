@@ -9,17 +9,19 @@
 #pragma once
 
 #include <JuceHeader.h>
-
+using namespace juce;
 #define numOfStep  32
 #define numOfLine  5
 
+
+
 const juce::StringArray valueTreeNames = 
 {
-   "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar"
+   "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel"
 };
  enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL
 };
 
 const std::vector <juce::String> myNotetUnit =
@@ -56,7 +58,8 @@ public:
      int gridsSpeed[numOfLine];
     int gridsDuration[numOfLine];
     int gridsVel[numOfLine];;
-    
+    int globalResyncBar;
+    bool GlobalInOrFixedVel;
   
 };
 
@@ -114,7 +117,7 @@ public:
     juce::AudioProcessorValueTreeState valueTreeState;
     int getSteps(int i)
     {
-        if (myIsPlaying == false) return 0;
+        if (myIsPlaying == false) return -1;
         return steps[i];
     }
     void setSpeedofLine(int index, int line)
@@ -159,7 +162,8 @@ public:
     }
 
     void resetAllParam();
- 
+    
+    void deletePreset(int);
     
     std::atomic<float> * gridsArr[numOfLine][numOfStep];
     int steps[5] = {};
@@ -182,8 +186,8 @@ private:
     int stepmidStopSampleCounter[5] = {-1,-1,-1,-1,-1};
     int  ppq = 0;
     
- 
-    
+    int  midiEffectSampelDiffBitweenCall;
+    double  prevtimeInSamples = 0;
    
     std::atomic<float> * gridsSpeedAtomic[numOfLine];
     std::atomic<float> * gridsDurationAtomic[numOfLine];
@@ -207,6 +211,8 @@ private:
     double gridsSpeed[numOfLine];
     double gridsDuration[numOfLine];
     std::vector <TugMidiSeqProgram >myProgram;
+    int program;
+    juce::File *resourceJsonFile;
     //juce::AudioProcessorValueTreeState::ParameterLayout createAllParameters();
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TugMidiSeqAudioProcessor)

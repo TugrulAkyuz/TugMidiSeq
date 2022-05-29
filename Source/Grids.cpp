@@ -13,7 +13,9 @@
  
 
 
-Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p)
+Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepArrow("",
+                                                                                   0.0f,
+                                                                                   juce::Colours::orange)
 {
     myLine = line;
     step = 0;
@@ -22,6 +24,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p)
     myLineLabel.setJustificationType(Justification::right);
     addAndMakeVisible(myLineLabel);
     addAndMakeVisible(octaveSlider);
+    addAndMakeVisible(stepArrow);
     octaveSlider.setSliderStyle(juce::Slider::LinearVertical);
     octaveSlider.setColour(Slider::textBoxOutlineColourId , juce::Colours::black.withAlpha(0.0f));
     //octaveSlider.gette
@@ -38,11 +41,11 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p)
     gridDurationCombo.setLookAndFeel(&myLookAndFeel);
     gridDurationCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::orange);
 
-    gridNumberSlider.setSliderStyle(juce::Slider::Rotary);
+    //gridNumberSlider.setSliderStyle(juce::Slider::Rotary);
     gridNumberSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     //gridNumberSlider.setValue(16);
     addAndMakeVisible(gridVelSlider);
-    gridVelSlider.setSliderStyle(juce::Slider::Rotary);
+    //gridVelSlider.setSliderStyle(juce::Slider::Rotary);
     gridVelSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
    // gridVelSlider.setValue(90);
     juce::String  tmp_s;
@@ -161,23 +164,31 @@ void Grids::resized()
     int n = gridNumberSlider.getValue() ;
     auto w = (griidbounds.toFloat().getWidth()   /(n)) ;
     for ( auto *b : buttons) b->setVisible(false);
+    stepArrow.setVisible(false);
     for ( int i = 0; i < n;i++)
-    {// [5]
-        fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
+    {
+        if(step != i || step == -1)
+        {
         buttons[i]->setVisible(true);
-        ;
         buttons[i]->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::darkgrey);
         buttons[i]->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::orange);
         buttons[i]->setButtonText("");
+        fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
+        }
+        else{
+            buttons[i]->setVisible(true);
+            buttons[step]->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::black.withAlpha(0.90f));
+            buttons[step]->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::cyan.withAlpha(0.90f));
+            buttons[step]->setButtonText(">");
+            buttons[step]->setColour(juce::TextButton::ColourIds::textColourOnId, juce::Colours::darkgrey);
+            buttons[step]->setColour(juce::TextButton::ColourIds::textColourOffId, juce::Colours::darkgrey);
+            fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
+        }
     }
      
     
     fb.performLayout (griidbounds.toFloat());
 
-    buttons[step]->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::limegreen.withAlpha(0.90f));
-    buttons[step]->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::yellow.withAlpha(0.90f));
-    buttons[step]->setButtonText("->");
-    buttons[step]->setColour(juce::TextButton::ColourIds::textColourOnId, juce::Colours::darkgrey);
-    buttons[step]->setColour(juce::TextButton::ColourIds::textColourOffId, juce::Colours::darkgrey);
+
 }
 

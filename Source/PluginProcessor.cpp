@@ -9,7 +9,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-juce::File *resourceJsonFile;
+
 
 //==============================================================================
 TugMidiSeqAudioProcessor::TugMidiSeqAudioProcessor()
@@ -27,17 +27,16 @@ valueTreeState(*this, &undoManager)
 {
     // we're on Windows
 
-    String filePath =  File::getSpecialLocation(File::currentApplicationFile).getChildFile ("TugSynth.txt").getFullPathName();
-   // File pajLogoFile = filePath
+    String filePath;
  
 #if JUCE_MAC
 
-    filePath =  File::getSpecialLocation(File::currentApplicationFile).getChildFile ("2RuleSynthPresets.json").getFullPathName();
+    filePath =  File::getSpecialLocation(File::currentApplicationFile).getChildFile ("TugMidiSeqPresets.json").getFullPathName();
     resourceJsonFile = new File(filePath);
 #elif JUCE_WINDOWS
     auto a = File::getSpecialLocation(File::currentApplicationFile);
     auto b = a.getParentDirectory();
-    filePath =  b.getChildFile("2RuleSynthPresets.json").getFullPathName();
+    filePath =  b.getChildFile("TugMidiSeqPresets.json").getFullPathName();
     resourceJsonFile = new File(filePath);
 #endif
     juce::String  tmp_s;
@@ -87,12 +86,12 @@ valueTreeState(*this, &undoManager)
         
     }
     tmp_s.clear();
-    tmp_s << "GlobalRestncBar";
+    tmp_s << valueTreeNames[GLOBALRESTBAR];
     valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,1,32,1));
     globalResyncBar = valueTreeState.getRawParameterValue(tmp_s);
     
     tmp_s.clear();
-    tmp_s << "GlobalInOrFixedVel";
+    tmp_s << valueTreeNames[GLOABLINORFIXVEL];
     valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(tmp_s, tmp_s,false));
     GlobalInOrFixedAtomic = valueTreeState.getRawParameterValue(tmp_s);
     
@@ -154,13 +153,13 @@ int TugMidiSeqAudioProcessor::getNumPrograms()
 
 int TugMidiSeqAudioProcessor::getCurrentProgram()
 {
-    return 0;
+    return program;
 }
 
 void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
 {
     if (index == 0) return;
-    int program = index;
+     program = index;
 //    if (hasEditor() == true)
 //    {
 //        auto x = getActiveEditor();
@@ -191,11 +190,15 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
             tmp_s.clear();
             tmp_s << valueTreeNames[VEL] << i;
             valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsVel[i]);
-   
-            
-            
-          
+
         }
+    tmp_s.clear();
+    tmp_s << valueTreeNames[GLOBALRESTBAR];
+    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).globalResyncBar);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[GLOABLINORFIXVEL];
+    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).GlobalInOrFixedVel);
 }
 
 const juce::String TugMidiSeqAudioProcessor::getProgramName (int index)
@@ -272,12 +275,12 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     // the samples and the outer loop is handling the channels.
     // Alternatively, you can process the samples with the channels
     // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer (channel);
-        
-        // ..do something to the data...
-    }
+//    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+//    {
+//        auto* channelData = buffer.getWritePointer (channel);
+//
+//        // ..do something to the data...
+//    }
     juce::AudioPlayHead* playHead = getPlayHead();
     if (playHead == nullptr) return;
     juce::AudioPlayHead::CurrentPositionInfo positionInfo;
@@ -298,7 +301,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             inMidiNoteList.push_back(currentMessage);
             auto comp = [](MidiMessage &l1,MidiMessage &l2){ return l1.getNoteNumber() < l2.getNoteNumber(); };
             inMidiNoteList.sort(comp);
-            int i = 0;
+          
             for (auto  &it: inMidiNoteList)
             {
                 //                if(it.getNoteNumber() == currentMessage.getNoteNumber())
@@ -345,6 +348,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         ppq = positionInfo .ppqPosition;
   
 
+
+       // in  t x = positionInfo.ppqPosition;
+         
         
         stepResetInterval[0] =  1*(60*mySampleRate/ mBpm);
         stepResetInterval[1] =  1*(60*mySampleRate/ mBpm);
@@ -381,16 +387,35 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             
             
         }
+        
         if (myIsPlaying == false &&  positionInfo.isPlaying == true )
         {
             measureBar = *globalResyncBar-1;
             measureSample = (int)(4*mySampleRate/mBps)-1;
+            
+           prevtimeInSamples = positionInfo.ppqPosition;; /**ppq ye bakma code*/
         }
+        auto  x = positionInfo.ppqPosition; /**ppq ye bakma code*/
+        midiEffectSampelDiffBitweenCall = 60*mySampleRate*( x- prevtimeInSamples)/mBpm;/**ppq ye bakma code*/
+        prevtimeInSamples = positionInfo.ppqPosition;;/**ppq ye bakma code*/
+        
         myIsPlaying = positionInfo.isPlaying;
         
-        
-        for(int s = 0 ; s < buffer.getNumSamples();  s++)
+        if(myIsPlaying == false)/**ppq ye bakma code*/
         {
+            std::list<RealMidiNoteList>::iterator it;
+            for (it = inRealMidiNoteList.begin(); it != inRealMidiNoteList.end(); )
+            {
+                it->sentMidi.setVelocity(0.0f);
+                midiMessages.addEvent(it->sentMidi, 0);
+                it = inRealMidiNoteList.erase(it);
+            }
+        }/**ppq ye bakma code*/
+        
+        if(midiEffectSampelDiffBitweenCall < 0) midiEffectSampelDiffBitweenCall = 0;
+        
+        for(int s = 0 ; s < buffer.getNumSamples();  s++)/**ppq ye bakma code*/
+        { 
             measureSample++;
             measureSample %= (int)(4*mySampleRate/mBps);
             if(measureSample == 0)
@@ -431,10 +456,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 }
                 if( stepmidStopSampleCounter[i]== 0)
                 {
-                    //                   auto it1 = std::next(inMidiNoteList.begin(), i);
-                    //                   MidiMessage it = *it1;
-                    //                   it.setVelocity(0.0f);
-                    //                   midiMessages.addEvent(it, 0);
+
                     stepmidStopSampleCounter[i] = -1;
                     midiState[i] = false;
                 }
@@ -456,10 +478,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                             auto it1 = std::next(inMidiNoteList.begin(), i);
                             
                             MidiMessage it = *it1;
-                            //                        float vel = it.getFloatVelocity();
-                            //                        it.setVelocity(0.0f);
-                            //                        midiMessages.addEvent(it, 0);
-                            //                        it.setVelocity(vel);
+  
                             
                             it.setNoteNumber( it.getNoteNumber() + *octave[i]*12 );
                             
@@ -522,234 +541,22 @@ void TugMidiSeqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     // You should use this method to store your parameters in the memory block.
     // You could do that either as raw data, or use the XML or ValueTree classes
     // as intermediaries to make it easy to save and load complex data.
+    auto state = valueTreeState.copyState();
+    std::unique_ptr<XmlElement> xml (state.createXml());
+    copyXmlToBinary (*xml, destData);
 }
 
 void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     // You should use this method to restore your parameters from this memory block,
     // whose contents will have been created by the getStateInformation() call.
+    std::unique_ptr<XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
+    if (xmlState.get() != nullptr)
+        if (xmlState->hasTagName (valueTreeState.state.getType()))
+            valueTreeState.replaceState (ValueTree::fromXml (*xmlState));
 }
 
 
-void TugMidiSeqAudioProcessor::resetAllParam()
-{
-    String tmp_s;
-    for(int j = 0 ; j <  numOfLine; j++)
-    {
-        for(int i = 0 ; i < numOfStep ; i++)
-        {
-            tmp_s.clear();
-            tmp_s << valueTreeNames[BLOCK] << j << i;
-            valueTreeState.getParameterAsValue(tmp_s).setValue(0);
-        }
-        tmp_s.clear();
-        tmp_s << valueTreeNames[SPEEED] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(13);
-        tmp_s.clear();
-        tmp_s << valueTreeNames[DUR] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(13);
-        tmp_s.clear();
-        tmp_s << valueTreeNames[GRIDNUM] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(16);
-        tmp_s.clear();
-        tmp_s << valueTreeNames[OCTAVE] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(0);
-        tmp_s.clear();
-        tmp_s << valueTreeNames[VEL] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(90);
-        tmp_s.clear();
-        tmp_s << valueTreeNames[GLOBALRESTBAR] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(1);
-        
-        
-      
-    }
-    
-}
-
-void  TugMidiSeqAudioProcessor::writePresetToFileJSON()
-{
-    String strName;
-    
-    
-    juce::FileOutputStream outputStream (*resourceJsonFile);
-    outputStream.setPosition(0);
-    
-    DynamicObject* tree = new DynamicObject();
-    Array<var> arr;
-    juce::String  tmp_s;
-    for(auto p = 0 ; p < myProgram.size(); p++)
-    {
-        var newObj ( new DynamicObject() );
-        String ss = myProgram.at(p).myProgramname;
-        newObj.getDynamicObject()->setProperty("PresetName",ss);
-        //------------
-        for(int i = 0 ; i < numOfLine; i++)
-        {
-            for(int j = 0 ; j < numOfStep ; j++)
-          {
-              tmp_s.clear();
-              tmp_s <<valueTreeNames[BLOCK]<< i << j;
-              auto v = myProgram.at(p).grids[i][j];
-              newObj.getDynamicObject()->setProperty(tmp_s,v);
-          }
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[SPEEED]<< i;
-            auto v = myProgram.at(p).gridsSpeed[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[DUR]<< i;
-             v = myProgram.at(p).gridsDuration[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[GRIDNUM]<< i;
-             v = myProgram.at(p).numOfGrid[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[OCTAVE]<< i;
-             v = myProgram.at(p).octave[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[VEL]<< i;
-             v = myProgram.at(p).gridsVel[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            
-        }
-        arr.add(newObj);
-    }
-    tree->setProperty("Presets",arr);
-    
-    var json (tree);
-    String sil_string = JSON::toString(json);
-    DBG(sil_string);
- 
-    outputStream.writeString(sil_string);
-    outputStream.flush();
-    
-}
-
-void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
-{
-    juce::FileInputStream inputStream (*resourceJsonFile);
-    if (inputStream.failedToOpen())
-          return;
-    String sil_string = inputStream.readString();
-    juce::var parsedJson;
- 
-    var jsonReply = JSON::parse(sil_string);
-    Array<var>* presetArray= jsonReply.getProperty("Presets", var()).getArray();
-    juce::String  tmp_s;
-  
-    for (auto& preset : *presetArray)
-    {
-        String strName = preset.getProperty("PresetName", var()).toString();
-        preset_idex++;
-        
-        float v;
-        
-        TugMidiSeqProgram p (strName);
-        
-        for(int i = 0 ; i < numOfLine; i++)
-        {
-            for(int j = 0 ; j < numOfStep ; j++)
-          {
-              tmp_s.clear();
-              tmp_s <<valueTreeNames[BLOCK]<< i << j;
-              v = preset.getProperty(tmp_s, var());
-              p.grids[i][j] = v;
-          }
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[SPEEED]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.gridsSpeed[i] = v;
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[DUR]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.gridsDuration[i] = v;
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[GRIDNUM]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.numOfGrid[i] = v;
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[OCTAVE]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.octave[i] = v;
-    
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[VEL]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.gridsVel[i] = v;
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[VEL]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.gridsVel[i] = v;
-        }
-        myProgram.push_back(p);
-    }
-
-}
-void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
-{
-        
-        preset_idex++;
-        String strName;
-    juce::String  tmp_s;
-         strName = preset_name;
-        TugMidiSeqProgram paramProg (strName);
-    for(int i = 0 ; i < numOfLine; i++)
-    {
-        for(int j = 0 ; j < numOfStep ; j++)
-      {
-          tmp_s.clear();
-          tmp_s <<valueTreeNames[BLOCK]<< i << j;
-          
-          paramProg.grids[i][j] = *valueTreeState.getRawParameterValue(tmp_s);
-      }
-        tmp_s.clear();
-        tmp_s <<valueTreeNames[SPEEED]<< i;
-    
-        paramProg.gridsSpeed[i] = *valueTreeState.getRawParameterValue(tmp_s);;
-        
-        tmp_s.clear();
-        tmp_s <<valueTreeNames[DUR]<< i;
- 
-        paramProg.gridsDuration[i] = *valueTreeState.getRawParameterValue(tmp_s);
-        
-        tmp_s.clear();
-        tmp_s <<valueTreeNames[GRIDNUM]<< i;
- 
-        paramProg.numOfGrid[i] = *valueTreeState.getRawParameterValue(tmp_s);;
-        
-        tmp_s.clear();
-        tmp_s <<valueTreeNames[OCTAVE]<< i;
- 
-        paramProg.octave[i] = *valueTreeState.getRawParameterValue(tmp_s);;
-
-        tmp_s.clear();
-        tmp_s <<valueTreeNames[VEL]<< i;
-    
-        paramProg.gridsVel[i] = *valueTreeState.getRawParameterValue(tmp_s);;
-        
-        tmp_s.clear();
-        tmp_s <<valueTreeNames[VEL]<< i;
- 
-        paramProg.gridsVel[i] = *valueTreeState.getRawParameterValue(tmp_s);;
-    }
-    myProgram.push_back(paramProg);
-    writePresetToFileJSON();
-}
-    
 
 
 //==============================================================================

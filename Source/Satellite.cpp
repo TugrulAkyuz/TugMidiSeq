@@ -73,6 +73,7 @@ void Satellite::paint (juce::Graphics& g)
             g.setColour(juce::Colours::lightgrey);
             g.fillEllipse(x-6, y-6, 12, 12);
             g.setColour(juce::Colours::black);
+     
             g.drawText(tmp, x-5, y-5, 11, 11, juce::Justification::centred);
             
         }
