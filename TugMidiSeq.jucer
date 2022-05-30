@@ -2,8 +2,8 @@
 
 <JUCERPROJECT id="O6AZjO" name="TugMidiSeq" projectType="audioplug" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
-              pluginManufacturer="2Rule" pluginAUMainType="'aumi'" pluginCharacteristicsValue="pluginIsSynth,pluginProducesMidiOut,pluginWantsMidiIn"
-              pluginFormats="buildAU,buildAUv3,buildVST3">
+              pluginManufacturer="2Rule" pluginCharacteristicsValue="pluginIsSynth,pluginProducesMidiOut,pluginWantsMidiIn"
+              pluginFormats="buildAU,buildVST3" pluginAUMainType="'aumi'" bundleIdentifier="2Rule.TugMidiSeq">
   <MAINGROUP id="soeMpr" name="TugMidiSeq">
     <GROUP id="{8DE839C0-F477-F119-F4B1-66A417831F51}" name="PNGs"/>
     <GROUP id="{7C9F9E45-D71A-212B-2F03-0F6C14A6D85C}" name="Source">

@@ -66,6 +66,11 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     loopBarlenghtSlider.setColour(Label::textWhenEditingColourId, Colours::orange);
     loopBarlenghtSlider.setColour(Slider::ColourIds::textBoxBackgroundColourId, Colours::orange);
  
+    deleteButton.setButtonText("Delete");
+    deleteButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
+    writeButton.setButtonText("Save");
+    writeButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
+    
     loopBarlenghtSlider.setVelocityBasedMode (true);
     loopBarlenghtSlider.setVelocityModeParameters (0.4, 1, 0.09, false);
     loopBarlenghtSlider.setRange(1, 32,1);
@@ -202,10 +207,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
 //        basicWindow->setVisible(true);
         deletePresetMenu();
     };
-    deleteButton.setButtonText("Delete");
-    deleteButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
-    writeButton.setButtonText("Save");
-    writeButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
+
     
 }
 void GlobalPanel::paint (juce::Graphics& g)
