@@ -95,11 +95,37 @@ valueTreeState(*this, &undoManager)
     valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(tmp_s, tmp_s,false));
     GlobalInOrFixedAtomic = valueTreeState.getRawParameterValue(tmp_s);
     
+   
+    tmp_s.clear();
+    tmp_s << valueTreeNames[GLOABLINORFIXVEL];
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(tmp_s, tmp_s,false));
+    GlobalInOrFixedAtomic = valueTreeState.getRawParameterValue(tmp_s);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[INBUILTSYNTH];
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(tmp_s, tmp_s,false));
+    inBuiltSynthAtomic = valueTreeState.getRawParameterValue(tmp_s);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SORTEDORFIRST];
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(tmp_s, tmp_s,false));
+    sortedOrFirstEmptySelectAtomic = valueTreeState.getRawParameterValue(tmp_s);
+    
     
     valueTreeState.state = juce::ValueTree("midiSeq"); // do not forget for valuetree
     
     
     readPresetToFileJSON();
+    mySynth.setCurrentPlaybackSampleRate(mySampleRate);
+    mySynth.clearSounds();
+    mySynth.addSound(new SynthSound());
+    for(auto i = 0; i < numOfLine; i++)
+    {
+        mySynth.addVoice(new SynthVoice(i));
+    }
+    inMidiNoteListVector.resize(5);
+    for(auto i = 0 ; i < numOfLine ; i++)
+    inMidiNoteListVector.at(i).setVelocity(0.0f);
     
 }
 
@@ -199,6 +225,15 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOABLINORFIXVEL];
     valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).GlobalInOrFixedVel);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[INBUILTSYNTH];
+    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).inBuiltSynth);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SORTEDORFIRST];
+    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).sortedOrFirst);
+    
 }
 
 const juce::String TugMidiSeqAudioProcessor::getProgramName (int index)
@@ -220,6 +255,12 @@ void TugMidiSeqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
     mySampleRate = sampleRate;
+    mySynth.setCurrentPlaybackSampleRate(mySampleRate);
+    for(auto i = 0 ; i <  mySynth.getNumVoices()  ; i++)
+    {
+        SynthVoice *v =  (SynthVoice *)mySynth.getVoice(i);
+        v->prepare_to_play(sampleRate,samplesPerBlock);
+    }
 }
 
 void TugMidiSeqAudioProcessor::releaseResources()
@@ -309,8 +350,18 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 //                i++;
                 DBG(it.getNoteNumber());
             }
-            
-            DBG("");
+           
+            for (auto i = 0 ; i < inMidiNoteListVector.size() ;i++)
+            {
+                if(inMidiNoteListVector.at(i).getVelocity() != 0) continue;
+                
+                inMidiNoteListVector.at(i) = currentMessage;
+                break;;
+            }
+            for( auto it : inMidiNoteListVector)
+            {
+                DBG("ekl "+std::to_string(it.getVelocity()) );
+            }
         }
         if(currentMessage.isNoteOff())
         {
@@ -328,6 +379,19 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             //            for(int j = 0 ; j <  numOfLine; j++)
             //              for(int i = 0 ; i < numOfStep ; i++)
             //            DBG(*gridsArr[j][i]);
+            
+            for (auto i = 0 ; i < inMidiNoteListVector.size() ;i++)
+            {
+                if(inMidiNoteListVector.at(i).getNoteNumber() != currentMessage.getNoteNumber()) continue;
+                
+                inMidiNoteListVector.at(i).setVelocity(0.0f);
+                break;;
+            }
+            
+            for( auto it : inMidiNoteListVector)
+            {
+                DBG("sil "+std::to_string(it.getVelocity()) );
+            }
         }
         
         
@@ -471,14 +535,26 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     
                     if(*gridsArr[i][steps[i]] == 1)
                     {
-                        if(inMidiNoteList.size() > i)
+                        bool  sortedofirs_Bool = inMidiNoteList.size() > i;
+                        if(*sortedOrFirstEmptySelectAtomic == true)
+                            sortedofirs_Bool = true;
+                        
+                        if(sortedofirs_Bool)
                         {
-                            
-                            
-                            auto it1 = std::next(inMidiNoteList.begin(), i);
-                            
-                            MidiMessage it = *it1;
-  
+                            MidiMessage it;
+                            if(*sortedOrFirstEmptySelectAtomic == false)
+                            {
+                               auto it1 = std::next(inMidiNoteList.begin(), i);
+                                it = *it1;
+                            }
+                            else
+                            {
+                                auto it1 = &inMidiNoteListVector.at(i);
+                                it = *it1;
+                                if(it1->getVelocity() == 0)
+                                    continue;
+                            }
+      
                             
                             it.setNoteNumber( it.getNoteNumber() + *octave[i]*12 );
                             
@@ -517,8 +593,12 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         }
         
     }
-    
-    
+
+    mySynth.renderNextBlock(buffer, midiMessages, 0 , buffer.getNumSamples());
+    if(*inBuiltSynthAtomic == false)
+        for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
+            buffer.clear (i, 0, buffer.getNumSamples());
+        
     
 }
 

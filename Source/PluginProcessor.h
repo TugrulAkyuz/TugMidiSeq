@@ -1,10 +1,10 @@
 /*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin processor.
-
-  ==============================================================================
-*/
+ ==============================================================================
+ 
+ This file contains the basic framework code for a JUCE plugin processor.
+ 
+ ==============================================================================
+ */
 
 #pragma once
 
@@ -13,21 +13,22 @@ using namespace juce;
 #define numOfStep  32
 #define numOfLine  5
 
+#include "SynthVoice.h"
 
 
 const juce::StringArray valueTreeNames = 
 {
-   "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect"
 };
- enum valueTreeNamesEnum
+enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST
 };
 
 const std::vector <juce::String> myNotetUnit =
 { "1nd","1n", "1nt",
-  "2nd","2n","2nt",
-  "4nd","4n","4nt",
+    "2nd","2n","2nt",
+    "4nd","4n","4nt",
     "8nd","8n","8nt",
     "16nd","16n","16nt",
     "32nd","32n","32nt",
@@ -37,14 +38,14 @@ const std::vector <juce::String> myNotetUnit =
 const juce::StringArray myNotetUnitSA  = { "1nd","1n", "1nt",
     "2nd","2n","2nt",
     "4nd","4n","4nt",
-      "8nd","8n","8nt",
-      "16nd","16n","16nt",
-      "32nd","32n","32nt",
-      "64nd","64n","64nt",
-      "128nd","128n","128nt" };
+    "8nd","8n","8nt",
+    "16nd","16n","16nt",
+    "32nd","32n","32nt",
+    "64nd","64n","64nt",
+    "128nd","128n","128nt" };
 class TugMidiSeqProgram
 {
-//  MDAEPianoProgram();
+    //  MDAEPianoProgram();
 public:
     TugMidiSeqProgram(juce::String name)
     {
@@ -55,62 +56,64 @@ public:
     bool grids[numOfLine][numOfStep];
     int numOfGrid[numOfLine];
     int octave[numOfLine];
-     int gridsSpeed[numOfLine];
+    int gridsSpeed[numOfLine];
     int gridsDuration[numOfLine];
     int gridsVel[numOfLine];;
     int globalResyncBar;
     bool GlobalInOrFixedVel;
-  
+    bool inBuiltSynth;
+    bool sortedOrFirst;
+    
 };
 
 
 //==============================================================================
 /**
-*/
+ */
 class TugMidiSeqAudioProcessor  : public juce::AudioProcessor
 {
 public:
     //==============================================================================
     TugMidiSeqAudioProcessor();
     ~TugMidiSeqAudioProcessor() override;
-
+    
     //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
-
-   #ifndef JucePlugin_PreferredChannelConfigurations
+    
+#ifndef JucePlugin_PreferredChannelConfigurations
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
-   #endif
-
+#endif
+    
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-
+    
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override;
-
+    
     //==============================================================================
     const juce::String getName() const override;
-
+    
     bool acceptsMidi() const override;
     bool producesMidi() const override;
     bool isMidiEffect() const override;
     double getTailLengthSeconds() const override;
-
+    
     //==============================================================================
     int getNumPrograms() override;
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
     void changeProgramName (int index, const juce::String& newName) override;
-
+    
     //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
     
     
     void  writePresetToFileJSON();
- 
-
+    
+    
     void  readPresetToFileJSON();
     void createPrograms(juce::String preset_name );
     
@@ -128,14 +131,19 @@ public:
     {
         gridsDuration[line] = index;
     }
-
+    
     int getMidi(int line)
     {
-        std::list<juce::MidiMessage>::iterator it = inMidiNoteList.begin();
-        if(inMidiNoteList.size() <= line ) return -1;
-        std::advance(it, line);
-        //it = g.begin();
-        return it->getNoteNumber();
+        if(*sortedOrFirstEmptySelectAtomic == false)
+        {
+            std::list<juce::MidiMessage>::iterator it = inMidiNoteList.begin();
+            if(inMidiNoteList.size() <= line ) return -1;
+            std::advance(it, line);
+            return it->getNoteNumber();
+        }
+        if(inMidiNoteListVector.at(line).getVelocity() != 0)
+            return     inMidiNoteListVector.at(line).getNoteNumber();
+        else return -1;
     }
     int getLoopMeasure()
     {
@@ -160,7 +168,7 @@ public:
             valueTreeState.getParameterAsValue(grid_block).setValue(x);
         }
     }
-
+    
     void resetAllParam();
     
     void deletePreset(int);
@@ -180,7 +188,7 @@ public:
     bool myIsPlaying  = false;
 private:
     int stpSample[5] = {};
-
+    
     int stepResetInterval[5] = {};
     int stepmidStopSampleInterval[5] = {-1,-1,-1,-1,-1};
     int stepmidStopSampleCounter[5] = {-1,-1,-1,-1,-1};
@@ -188,17 +196,20 @@ private:
     
     int  midiEffectSampelDiffBitweenCall;
     double  prevtimeInSamples = 0;
-   
+    
     std::atomic<float> * gridsSpeedAtomic[numOfLine];
     std::atomic<float> * gridsDurationAtomic[numOfLine];
     
     std::atomic<float> *gridsVelAtomic[numOfLine];;
     std::atomic<float> * GlobalInOrFixedAtomic;;
+    std::atomic<float> *inBuiltSynthAtomic;
+    std::atomic<float> *sortedOrFirstEmptySelectAtomic;
     
     //std::atomic<float> *numOfGrid[5];
     juce::UndoManager undoManager;
     juce::MidiBuffer myInnmidiBuffer;
     std::list<juce::MidiMessage> inMidiNoteList;
+    std::vector<juce::MidiMessage> inMidiNoteListVector;
     
     struct RealMidiNoteList
     {
@@ -213,6 +224,9 @@ private:
     std::vector <TugMidiSeqProgram >myProgram;
     int program;
     juce::File *resourceJsonFile;
+    Synthesiser   mySynth;
+    SynthVoice*  myVoice;
+    SynthSound    *synthSound;
     //juce::AudioProcessorValueTreeState::ParameterLayout createAllParameters();
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TugMidiSeqAudioProcessor)

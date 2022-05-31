@@ -159,13 +159,18 @@ private:
     Label loopBarCounterLabel;
     TextButton resetButton;
     TextButton velUsageButton;
+    TextButton inBuiltSynthButton;
+    TextButton sortedOrFirstEmptySelectButton;
     
     Label globalNameLabel;
     Label loopBarlenghtSliderLabel;
     
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> loopBarlenghtSliderAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::ButtonAttachment> velUsageButtonAttachment;
- 
+    std::unique_ptr  <AudioProcessorValueTreeState::ButtonAttachment> inBultSynthButtonAttachment;
+    std::unique_ptr  <AudioProcessorValueTreeState::ButtonAttachment> sortedOrFixedButtonAttachment;
+    
+    
     TextButton writeButton;
     TextButton deleteButton;
     
