@@ -156,9 +156,9 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
         sortedOrFirstEmptySelectButton.setButtonText("Sorted");
     else sortedOrFirstEmptySelectButton.setButtonText("FirstIn");
     
-    if(velUsageButton.getToggleStateValue() == false)
-        velUsageButton.setButtonText("Fixed Vel");
-    else  velUsageButton.setButtonText("In Vel");
+//    if(velUsageButton.getToggleStateValue() == false)
+//        velUsageButton.setButtonText("Fixed Vel");
+//    else  velUsageButton.setButtonText("In Vel");
     
     gridAllSpeedCombo.onChange = [this]
     {
