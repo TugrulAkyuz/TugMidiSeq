@@ -98,7 +98,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
         
         for(auto i = 0; i < 5 ;i++)
         if(otherg[i] == 0) return;
-        if(velUsageButton.getToggleStateValue() == false)
+        if(velUsageButton.getToggleState() == false)
         {
             for(auto i = 0; i < 5 ;i++)
             otherg[i]->setEnable(true);

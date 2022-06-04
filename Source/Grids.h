@@ -81,7 +81,8 @@ private:
             m %= 12;
             
             midiInNote.setButtonText(midiNotes[m] + std::to_string(i));
-            midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, colourarray[myLine]);
+           // midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, colourarray[myLine]);
+            midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId,Colours::lightgreen);
         }
     }
     
