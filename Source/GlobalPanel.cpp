@@ -192,7 +192,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     };
     sortedOrFirstEmptySelectButton.onClick = [this]
     {
-        if(sortedOrFirstEmptySelectButton.getToggleStateValue() == false)
+        if(sortedOrFirstEmptySelectButton.getToggleState() == false)
             sortedOrFirstEmptySelectButton.setButtonText("Sorted");
         else sortedOrFirstEmptySelectButton.setButtonText("FirstIn");
     };
