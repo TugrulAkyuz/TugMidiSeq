@@ -152,13 +152,13 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     tmp_s << valueTreeNames[SORTEDORFIRST];
     sortedOrFixedButtonAttachment =  std::make_unique <AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.valueTreeState, tmp_s, sortedOrFirstEmptySelectButton);
     
-    if(sortedOrFirstEmptySelectButton.getState() == false)
+    if(sortedOrFirstEmptySelectButton.getToggleState() == false)
         sortedOrFirstEmptySelectButton.setButtonText("Sorted");
     else sortedOrFirstEmptySelectButton.setButtonText("FirstIn");
     
-//    if(velUsageButton.getToggleStateValue() == false)
-//        velUsageButton.setButtonText("Fixed Vel");
-//    else  velUsageButton.setButtonText("In Vel");
+    if(velUsageButton.getToggleState() == false)
+        velUsageButton.setButtonText("Fixed Vel");
+    else  velUsageButton.setButtonText("In Vel");
     
     gridAllSpeedCombo.onChange = [this]
     {
