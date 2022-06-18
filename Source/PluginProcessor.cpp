@@ -123,7 +123,7 @@ valueTreeState(*this, &undoManager)
     {
         mySynth.addVoice(new SynthVoice(i));
     }
-    inMidiNoteListVector.resize(5);
+    inMidiNoteListVector.resize(numOfLine);
     for(auto i = 0 ; i < numOfLine ; i++)
     inMidiNoteListVector.at(i).setVelocity(0.0f);
     
@@ -423,26 +423,22 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         stepResetInterval[4] =  1*(60*mySampleRate/ mBpm);
         
         
-        for(int i = 0 ; i< 5 ;i++)
+        for(int i = 0 ; i< numOfLine ;i++)
         {
-            double first = 1.5*4*(60*mySampleRate/ mBpm);
+            double first = 1.5*4*(60*mySampleRate/ mBpm); // first value in combos  number of sample musical durations and speeds
             
-            //int index =  valueTreeState.getParameterAsValue(tmp_s).getValue();
             int index = *gridsSpeedAtomic[i] ;
-            //            if(*gridsSpeedAtomic[i] <= 0)
-            //                return;
-            //index--;
+     
             if(index%3 == 0) {  index = (index+1) / 3;}
             else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
-            stepResetInterval[i] = first / pow(2,index);
+            stepResetInterval[i] = first / pow(2,index); // dviding  "first" you get number of sample  for musical note time values
             
             stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
             
             first = 1.5*4*(60*mySampleRate/ mBpm);
             index = *gridsDurationAtomic[i];
-            //            if(gridsDuration[i] == 0)
-            //                return;
+       
             if(index%3 == 0) {  index = (index+1) / 3;}
             else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
@@ -452,10 +448,10 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             
         }
         
-        if (myIsPlaying == false &&  positionInfo.isPlaying == true )
+        if (myIsPlaying == false &&  positionInfo.isPlaying == true ) // stop to start
         {
-            measureBar = *globalResyncBar-1;
-            measureSample = (int)(4*mySampleRate/mBps)-1;
+            measureBar = *globalResyncBar-1;  // resync var number
+            measureSample = (int)(4*mySampleRate/mBps)-1; // mBps Beat per second  ---> 1 bar  numof sample
             
            prevtimeInSamples = positionInfo.ppqPosition;; /**ppq ye bakma code*/
         }
@@ -488,7 +484,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 measureBar %= (int)(*globalResyncBar);
                 if(measureBar == 0)
                 {
-                    for(int i =  0; i  < 5 ; i++)
+                    for(int i =  0; i  < numOfLine ; i++)
                     {
                         steps[i] = (int)(*numOfGrid[i]) -1;
                         sampleNumber[i] = 0;
@@ -508,7 +504,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             }
             
             
-            for(int i =  0; i  < 5 ; i++)
+            for(int i =  0; i  < numOfLine ; i++)
             {
                 sampleNumber[i]++;
                 stpSample[i]++;
