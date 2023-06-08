@@ -186,11 +186,18 @@ public:
     int stepLoopResetInterval[5];
     bool midiState[5] = {};
     bool myIsPlaying  = false;
+
+    float getDurAngle(int index)
+    {
+        return ( stepmidStopSampleInterval[index] *2.0*juce::double_Pi/stepResetInterval[index])/(*numOfGrid[index]);
+        
+    }
 private:
     int stpSample[5] = {};
     
     int stepResetInterval[5] = {};
     int stepmidStopSampleInterval[5] = {-1,-1,-1,-1,-1};
+
     int stepmidStopSampleCounter[5] = {-1,-1,-1,-1,-1};
     int  ppq = 0;
     

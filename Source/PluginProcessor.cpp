@@ -46,7 +46,7 @@ valueTreeState(*this, &undoManager)
         {
             juce::String  grid_block;
             grid_block <<valueTreeNames[BLOCK]<< j << i;
-            valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(grid_block, grid_block,false));
+            valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{grid_block,1}, grid_block,false));
             
             gridsArr[j][i] = valueTreeState.getRawParameterValue(grid_block);
             
@@ -55,25 +55,25 @@ valueTreeState(*this, &undoManager)
         tmp_s << valueTreeNames[SPEEED] << j;
         //myNotetUnitSA
         
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterChoice>(tmp_s,tmp_s,myNotetUnitSA,13));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterChoice>(ParameterID{tmp_s,1},tmp_s,myNotetUnitSA,13));
         gridsSpeedAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         tmp_s.clear();
         tmp_s << valueTreeNames[DUR] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterChoice>(tmp_s,tmp_s,myNotetUnitSA,13));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterChoice>(ParameterID{tmp_s,1},tmp_s,myNotetUnitSA,13));
         gridsDurationAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDNUM] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,1,32,16));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,32,16));
         numOfGrid[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         tmp_s.clear();
         tmp_s << valueTreeNames[OCTAVE] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,-2,2,0));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-2,2,0));
         octave[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         tmp_s.clear();
         tmp_s << valueTreeNames[VEL] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,0,127,90));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,0,127,90));
         gridsVelAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
       
@@ -87,28 +87,28 @@ valueTreeState(*this, &undoManager)
     }
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOBALRESTBAR];
-    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(tmp_s, tmp_s,1,32,1));
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,32,1));
     globalResyncBar = valueTreeState.getRawParameterValue(tmp_s);
     
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOABLINORFIXVEL];
-    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(tmp_s, tmp_s,false));
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s,false));
     GlobalInOrFixedAtomic = valueTreeState.getRawParameterValue(tmp_s);
     
    
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOABLINORFIXVEL];
-    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(tmp_s, tmp_s,false));
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s,false));
     GlobalInOrFixedAtomic = valueTreeState.getRawParameterValue(tmp_s);
     
     tmp_s.clear();
     tmp_s << valueTreeNames[INBUILTSYNTH];
-    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(tmp_s, tmp_s,false));
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s,false));
     inBuiltSynthAtomic = valueTreeState.getRawParameterValue(tmp_s);
     
     tmp_s.clear();
     tmp_s << valueTreeNames[SORTEDORFIRST];
-    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(tmp_s, tmp_s,false));
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s,false));
     sortedOrFirstEmptySelectAtomic = valueTreeState.getRawParameterValue(tmp_s);
     
     

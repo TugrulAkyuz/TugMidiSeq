@@ -3,7 +3,7 @@
 <JUCERPROJECT id="O6AZjO" name="TugMidiSeq" projectType="audioplug" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
               pluginManufacturer="2Rule" pluginCharacteristicsValue="pluginIsSynth,pluginProducesMidiOut,pluginWantsMidiIn"
-              pluginFormats="buildAU,buildVST3" bundleIdentifier="2Rule.TugMidiSeq"
+              pluginFormats="buildAU,buildStandalone,buildVST3" bundleIdentifier="2Rule.TugMidiSeq"
               version="1.0.1" pluginAUMainType="'aumu'" companyName="2Rule"
               companyWebsite="https://akyuz5.wixsite.com/mysite" companyEmail="tugrulvega@gmail.com">
   <MAINGROUP id="soeMpr" name="TugMidiSeq">

@@ -41,14 +41,22 @@ void Satellite::paint (juce::Graphics& g)
     {
     //  float  r = (5-i)*(area.getHeight()/2)/7 ;
         g.setColour(colourarray[i].withAlpha(0.8f));
+        float arcangle = audioProcessor.getDurAngle(i);
      for(int j = 0 ; j < *audioProcessor.numOfGrid[i] ; j++)
       {
           if(*audioProcessor.gridsArr[i][j] == 0) continue;
+                    
+          Path p;
+
           float angle = 2.0*j*juce::double_Pi/(*audioProcessor.numOfGrid[i]);
           
           float x =  center_x+r[i]*sin(angle);
           float y =  center_y-r[i]*cos(angle);
 
+          p.addCentredArc (center_x, center_y, r[i], r[i], 0.f, angle, angle+arcangle, true);
+          g.setColour(colourarray[i].withAlpha(0.6f));
+          g.strokePath (p, juce::PathStrokeType (2.f));
+          g.setColour(colourarray[i].withAlpha(0.8f));
           g.fillEllipse(x-4, y-4, 8, 8);
      
          // g.drawEllipse(x-4, y-4, 8, 8);
