@@ -13,8 +13,55 @@
 #include "Satellite.h"
 #pragma once
 
+enum  {
+    SELECTEDGRID,
+    FOLLOWGRID
+};
 
+enum  {
+    GETDURATION,
+    GETSPEED,
+    GETNUMOF,
+    GETCOORDOFBUTTON,
+    GETCURRSETEP,
+    GETBUTTONLEN
+};
 const std::string midiNotes[]={"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
+class Grids;
+
+class SubGrids: public juce::Component,   public juce::Timer
+{
+public:
+    SubGrids(Grids& g, TugMidiSeqAudioProcessor& p ,int line, int type) : ownerGrid(g), audioProcessor(p),myLine(line),subGridType(type)
+    {
+         startTimer(20);
+    }
+    ~SubGrids()
+    {
+        
+    }
+    void  paint (juce::Graphics& g) override;
+    void rP()
+    {
+        repaint();
+    }
+    void timerCallback()  override
+    {
+       
+        
+        //if(ratio == -1 ) return;
+        repaint();
+        
+    }
+private:
+    int subGridType;
+    TugMidiSeqAudioProcessor& audioProcessor;
+    Grids& ownerGrid;
+    int myLine;
+
+};
+
+
 
 class Grids : public juce::Component,  public juce::Timer
 {
@@ -31,6 +78,18 @@ public:
     {
         gridVelSlider.setEnabled(r);
     }
+    int getParam(int type, int index = -1)
+    {
+        int x = -1;
+        if(type ==  GETCOORDOFBUTTON)
+        {
+            if(buttons[index]->getToggleStateValue() == 1)
+               x = buttons[index]->getX() - subGrids->getX();
+        }
+        if(type ==  GETNUMOF)
+            x = gridNumberSlider.getValue();
+        return x;
+    }
 private:
     MyLookAndFeel myLookAndFeel;
     TugMidiSeqAudioProcessor& audioProcessor;
@@ -44,6 +103,8 @@ private:
     juce::TextButton midiInNote;
     juce::Slider octaveSlider;
     juce::Label myLineLabel;
+    std::unique_ptr  <SubGrids> subGrids;
+    std::unique_ptr  <SubGrids> subGrids2;
     
     bool dirt = false;
     int step;

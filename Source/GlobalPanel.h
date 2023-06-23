@@ -130,7 +130,7 @@ class GlobalPanel   : public juce::Component , juce::Timer
         loopBarCounterLabel.setText(std::to_string(rread_m),juce::NotificationType::dontSendNotification) ;
         if(myMeasure != 1 && rread_m == 1)
             loopBarlenghtSliderLabel.setColour(Label::textColourId, Colours::red);
-        else  loopBarlenghtSliderLabel.setColour(Label::textColourId,  Colours::lightgrey);
+        else  loopBarlenghtSliderLabel.setColour(Label::textColourId,  Colours::aqua);
         myMeasure = rread_m;
         getComponentID();
     }
@@ -148,14 +148,14 @@ private:
     Grids *otherg[5] = {};
     MyLookAndFeel myLookAndFeel;
     TugMidiSeqAudioProcessor& audioProcessor;
-    
+    Component  associatedComponent;
     CustomRoratySlider gridAllNumberSlider;
     CustomRoratySlider gridAllVelSlider;
     juce::ComboBox gridAllSpeedCombo;
     juce::ComboBox gridAllDurationCombo;
     juce::ComboBox presetCombo;
     
-    Slider loopBarlenghtSlider;
+    CustomRoratySlider loopBarlenghtSlider;
     Label loopBarCounterLabel;
     TextButton resetButton;
     TextButton velUsageButton;

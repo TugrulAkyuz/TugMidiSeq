@@ -18,11 +18,11 @@ using namespace juce;
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","event"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT
 };
 
 const std::vector <juce::String> myNotetUnit =
@@ -192,6 +192,19 @@ public:
         return ( stepmidStopSampleInterval[index] *2.0*juce::double_Pi/stepResetInterval[index])/(*numOfGrid[index]);
         
     }
+    float getGridSampleLen(int line)
+    {
+       
+        
+        return stepmidStopSampleInterval[line]*1.0f/stepLoopResetInterval[line];
+
+    }
+    float getGridContinousRatio(int line)
+    {
+        if (myIsPlaying == false) return -1;
+        return sampleNumber[line]*1.0/(stepLoopResetInterval[line]);
+
+    }
 private:
     int stpSample[5] = {};
     
@@ -207,7 +220,8 @@ private:
     std::atomic<float> * gridsSpeedAtomic[numOfLine];
     std::atomic<float> * gridsDurationAtomic[numOfLine];
     
-    std::atomic<float> *gridsVelAtomic[numOfLine];;
+    std::atomic<float> *gridsVelAtomic[numOfLine];
+    std::atomic<float> *gridsEventAtomic[numOfLine];;
     std::atomic<float> * GlobalInOrFixedAtomic;;
     std::atomic<float> *inBuiltSynthAtomic;
     std::atomic<float> *sortedOrFirstEmptySelectAtomic;

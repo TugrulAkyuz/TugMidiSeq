@@ -22,40 +22,42 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     addAndMakeVisible(sortedOrFirstEmptySelectButton);
     inBuiltSynthButton.setButtonText("InBSynth");
     inBuiltSynthButton.setClickingTogglesState (true);
-    inBuiltSynthButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
+    inBuiltSynthButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
     inBuiltSynthButton.setColour(TextButton::ColourIds::buttonOnColourId, Colours::orange);
-    velUsageButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
+    inBuiltSynthButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
+    velUsageButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
     velUsageButton.setColour(TextButton::ColourIds::textColourOnId, Colours::orange);
-    velUsageButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
-    velUsageButton.setColour(TextButton::ColourIds::textColourOnId, Colours::orange);
+    velUsageButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
+    velUsageButton.setColour(TextButton::ColourIds::buttonOnColourId, Colours::black);
     
     
     sortedOrFirstEmptySelectButton.setButtonText("Sorted");
     sortedOrFirstEmptySelectButton.setClickingTogglesState (true);
-    sortedOrFirstEmptySelectButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
+    sortedOrFirstEmptySelectButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
     sortedOrFirstEmptySelectButton.setColour(TextButton::ColourIds::textColourOnId, Colours::orange);
-   // sortedOrFirstEmptySelectButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
-   // sortedOrFirstEmptySelectButton.setColour(TextButton::ColourIds::buttonOnColourId, Colours::orange);
+    sortedOrFirstEmptySelectButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
+    sortedOrFirstEmptySelectButton.setColour(TextButton::ColourIds::buttonOnColourId, Colours::black);
     
     
     for(int i = 0 ; i < 5 ; i++)
     {
         randomButton.add(new TextButton());
         addAndMakeVisible(randomButton.getLast());
-        randomButton.getLast()->setLookAndFeel(&myLookAndFeel);
+        //randomButton.getLast()->setLookAndFeel(&myLookAndFeel);
         randomButton.getLast()->setButtonText("Rnd "+std::to_string(5-i));
         randomButton.getLast()->setColour(TextButton::ColourIds::textColourOffId, colourarray[4-i]);
+        randomButton.getLast()->setColour(TextButton::ColourIds::buttonColourId, Colours::black);
         
         
     }
     
     globalNameLabel.setText("GLOBAL CONTROLS", juce::dontSendNotification);
-    globalNameLabel.setColour(juce::Label::ColourIds::textColourId, Colours::lightgrey);
+    globalNameLabel.setColour(juce::Label::ColourIds::textColourId, myTextLabelColour);
     
     addAndMakeVisible(globalNameLabel);
     loopBarlenghtSliderLabel.setFont (juce::Font (12, juce::Font::italic));
     loopBarlenghtSliderLabel.setText("RESYNC BAR", juce::dontSendNotification);
-    loopBarlenghtSliderLabel.setColour(juce::Label::ColourIds::textColourId, Colours::lightgreen);
+    loopBarlenghtSliderLabel.setColour(juce::Label::ColourIds::textColourId, myTextLabelColour);
     
     
     addAndMakeVisible(loopBarlenghtSliderLabel);
@@ -78,22 +80,34 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     gridAllNumberSlider.setRange(1, numOfStep,1);
     gridAllVelSlider.setRange(1, 127,1);
     
-    loopBarlenghtSlider.setSliderStyle (Slider::SliderStyle::LinearBarVertical);
-    //loopBarlenghtSlider.setColour (Slider::ColourIds::trackColourId, Colours::transparentWhite);
+    
+    //loopBarCounterLabel.setColour(Label::ColourIds::backgroundColourId, Colours::yellow);
+    loopBarCounterLabel.setColour(Label::ColourIds::textColourId, Colours::yellowgreen);
+    
+  //  loopBarlenghtSlider.setSliderStyle (Slider::SliderStyle::LinearBarVertical);
+/*
     loopBarlenghtSlider.setColour(Slider::ColourIds::textBoxOutlineColourId, Colours::orange);
     loopBarlenghtSlider.setColour(Slider::ColourIds::textBoxTextColourId, Colours::white);
     loopBarlenghtSlider.setColour(Slider::textBoxBackgroundColourId, Colours::orange);
     loopBarlenghtSlider.setColour(Label::textWhenEditingColourId, Colours::orange);
     loopBarlenghtSlider.setColour(Slider::ColourIds::textBoxBackgroundColourId, Colours::orange);
-    
+  */
     deleteButton.setButtonText("Delete");
-    deleteButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
+    deleteButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
+    deleteButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
     writeButton.setButtonText("Save");
-    writeButton.setColour(TextButton::ColourIds::textColourOffId, Colours::orange);
+    writeButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
+    writeButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
     
+    
+    /*
     loopBarlenghtSlider.setVelocityBasedMode (true);
     loopBarlenghtSlider.setVelocityModeParameters (0.4, 1, 0.09, false);
     loopBarlenghtSlider.setRange(1, 32,1);
+     */
+    loopBarlenghtSlider.setLookAndFeel(&myLookAndFeel);
+    loopBarlenghtSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    
     velUsageButton.onClick = [this](){
         
         for(auto i = 0; i < 5 ;i++)
@@ -111,9 +125,10 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
             velUsageButton.setButtonText("In Vel");
         }
     };
-    resetButton.setLookAndFeel(&myLookAndFeel);
+   // resetButton.setLookAndFeel(&myLookAndFeel);
     resetButton.setColour(TextButton::ColourIds::buttonOnColourId, Colours::orange);
-    velUsageButton.setLookAndFeel(&myLookAndFeel);
+    resetButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
+    //velUsageButton.setLookAndFeel(&myLookAndFeel);
     resetButton.setButtonText("RESET");
     int i= 1;
     for(auto s: myNotetUnit)
@@ -131,9 +146,13 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     
     
     gridAllSpeedCombo.setLookAndFeel(&myLookAndFeel);
-    gridAllSpeedCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::orange);
+    gridAllSpeedCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::white);
     gridAllDurationCombo.setLookAndFeel(&myLookAndFeel);
-    gridAllDurationCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::orange);
+    gridAllDurationCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::white);
+    
+    myLookAndFeel.setColour (ComboBox::textColourId, Colours::white);
+    myLookAndFeel.setColour (PopupMenu::backgroundColourId, Colours::black);
+    myLookAndFeel.setColour (ComboBox::backgroundColourId, Colours::black);
     
     juce::String tmp_s;
     tmp_s << "GlobalRestncBar";
@@ -210,6 +229,8 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
         
         pwdDialog =  new AlertWindow  ( "Add Preset", "Please enter your preset name", AlertWindow::AlertIconType::NoIcon );
         pwdDialog->addTextEditor( "Preset", "Preset ?" );
+        pwdDialog->setColour(AlertWindow::ColourIds::textColourId, Colours::orange);
+        pwdDialog->setColour(AlertWindow::ColourIds::backgroundColourId,  Colours::black);
         pwdDialog->addButton("OK", 1, KeyPress(KeyPress::returnKey, 0, 0));
         pwdDialog->addButton("Cancel", 0, KeyPress(KeyPress::escapeKey, 0, 0));
         pwdDialog->enterModalState(true,ModalCallbackFunction::create([this](int r)
@@ -251,12 +272,17 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
         //        basicWindow->setVisible(true);
         deletePresetMenu();
     };
-    
+    associatedComponent.getLookAndFeel().setColour(AlertWindow::ColourIds::backgroundColourId, Colours::black);
+    associatedComponent.getLookAndFeel().setColour(AlertWindow::ColourIds::textColourId, Colours::orange);
     
 }
 void GlobalPanel::paint (juce::Graphics& g)
 {
     g.fillAll (  Colour(0xff303030));
+    g.setColour(juce::Colours::orange.withAlpha(0.7f));
+    
+    g.drawLine(gridAllNumberSlider.getX() -5, 0, gridAllNumberSlider.getX() - 5, getHeight());
+    g.drawLine(gridAllVelSlider.getRight() + 5, 0, gridAllVelSlider.getRight() +  5, getHeight());
     
 }
 void GlobalPanel::resized()
@@ -267,15 +293,16 @@ void GlobalPanel::resized()
     auto top_area = xarea.removeFromTop(13);
     auto rightarea = area.removeFromRight(200);
     gridAllVelSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
-    gridAllDurationCombo.setBounds(area.removeFromRight(70).reduced(2,10));
-    gridAllSpeedCombo.setBounds(area.removeFromRight(70).reduced(2,10));
+    gridAllDurationCombo.setBounds(area.removeFromRight(70).reduced(2,13));
+    gridAllSpeedCombo.setBounds(area.removeFromRight(70).reduced(2,13));
     gridAllNumberSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
     
+    
     auto ra = area.removeFromRight(80);
-    auto ar = ra.removeFromTop(12);
-    ra.removeFromBottom(10);
-    loopBarCounterLabel.setBounds( ra.removeFromRight(40).reduced(3, 5));
-    loopBarlenghtSlider.setBounds( ra.removeFromRight(40).reduced(3, 5));
+    auto ar = ra.removeFromTop(10);
+    ra.removeFromBottom(0);
+    loopBarCounterLabel.setBounds( ra.removeFromRight(30).reduced(3, 5));
+    loopBarlenghtSlider.setBounds( ra.removeFromRight(60).reduced(0, 0).translated(10, 0));
     
     ar.removeFromTop(2);
     loopBarlenghtSliderLabel.setBounds(ar);
@@ -292,8 +319,8 @@ void GlobalPanel::resized()
     presetCombo.setBounds( rightarea.removeFromRight(70).reduced(3, 10));
     rightarea.removeFromTop(5);
     rightarea.removeFromBottom(5);
-    writeButton.setBounds( rightarea.removeFromTop(20).reduced(3, 0));
-    deleteButton.setBounds( rightarea.reduced(3, 0));
+    writeButton.setBounds( rightarea.removeFromTop(20).reduced(6, 1));
+    deleteButton.setBounds( rightarea.reduced(6, 1));
     
     xarea.removeFromBottom(5);
     inBuiltSynthButton.setBounds(xarea.removeFromLeft(70).reduced(4, 5));
@@ -341,7 +368,7 @@ void GlobalPanel::deletePresetMenu()
                                  "Are you sure to delete it?",
                                  "Yes",
                                  "Cancel",
-                                 nullptr,
+                                 &associatedComponent,
                                  callback);
     
     return;

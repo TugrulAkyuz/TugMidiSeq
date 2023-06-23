@@ -36,11 +36,20 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     addAndMakeVisible(gridNumberSlider);
     addAndMakeVisible(gridSpeedCombo);
     gridSpeedCombo.setLookAndFeel(&myLookAndFeel);
-    gridSpeedCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::orange);
+    //gridSpeedCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::orange);
     addAndMakeVisible(gridDurationCombo);
     gridDurationCombo.setLookAndFeel(&myLookAndFeel);
-    gridDurationCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::orange);
+    gridDurationCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::lightgrey);
+    gridDurationCombo.getLookAndFeel().setColour (PopupMenu::backgroundColourId, Colours::black);
+    gridDurationCombo.getLookAndFeel().setColour (ComboBox::backgroundColourId, Colours::black);
+    
+    subGrids =  std::make_unique<SubGrids>(*this,audioProcessor,myLine,SELECTEDGRID);
+    subGrids2 =  std::make_unique<SubGrids>(*this,audioProcessor,myLine,FOLLOWGRID);
+    addAndMakeVisible(subGrids.get());
+    addAndMakeVisible(subGrids2.get());
+    
 
+    
     //gridNumberSlider.setSliderStyle(juce::Slider::Rotary);
     gridNumberSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     //gridNumberSlider.setValue(16);
@@ -64,6 +73,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
                 stepArray[i] = (b->getToggleState());
                 i++;
             }
+            subGrids->rP();
         };
         tmp_s.clear();
         tmp_s << "block" << line << i;
@@ -87,6 +97,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     gridNumberSlider.onValueChange = [this]()
     {
         resized();
+        subGrids->rP();
     };
     gridVelSlider.onValueChange = [this]()
     {
@@ -129,11 +140,28 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
 void Grids::paint (juce::Graphics& g)
 {
    
-    g.fillAll (  Colour(0xff101010));
+    g.fillAll (  Colour(0xff202020));
     auto y = getLocalBounds().getHeight();
     auto x = getLocalBounds().getWidth();
-    g.setColour(juce::Colours::orange);
-    g.drawLine(0, y, x, y, 1);
+    g.setColour(juce::Colours::orange.withAlpha(0.7f));
+    g.drawLine(0, y, x, y, 2);
+    if(myLine == 4)
+        g.drawLine(0, 0, x, 0, 2);
+    float ratio =   audioProcessor.getGridContinousRatio(myLine);
+
+    /*
+    if(midiInNote.getButtonText() != "")
+    {
+        auto b = midiInNote.getBounds();
+        ColourGradient gf(Colours::lightgreen , b.getCentreX(),  b.getCentreY(), Colours::lightgreen.withAlpha(0.0f), b.getX()-20,b.getY()-20, true);
+        g.setGradientFill(gf);
+        
+        g.fillRect(b.expanded(10, 10));
+    }
+     */
+   // if(ratio >= 0)
+   // g.fillRect(  subGrids->getX(), 0, (int)(ratio*(subGrids->getWidth()-20)), getHeight());
+    
 }
 void Grids::resized()
 {
@@ -142,15 +170,19 @@ void Grids::resized()
     auto area = getLocalBounds();
    
     gridVelSlider.setBounds( area.removeFromRight(50));
-    gridDurationCombo.setBounds(area.removeFromRight(70).reduced(5)/*.withHeight(area.getHeight()-10)*/);
-    gridSpeedCombo.setBounds(area.removeFromRight(70).reduced(5)/*.withHeight(area.getHeight()-)*/);
+    gridDurationCombo.setBounds(area.removeFromRight(70).reduced(5,8)/*.withHeight(area.getHeight()-10)*/);
+    gridSpeedCombo.setBounds(area.removeFromRight(70).reduced(5,8)/*.withHeight(area.getHeight()-)*/);
     gridNumberSlider.setBounds( area.removeFromRight(50)/*.withHeight(area.getHeight()+5)*/);
-    
+     
     
     //auto tmp =
     myLineLabel.setBounds(area.removeFromLeft(25));
     midiInNote.setBounds(area.removeFromLeft(60).reduced(10));
     octaveSlider.setBounds(area.removeFromLeft(50));
+    
+    subGrids->setBounds(area);
+    area.removeFromTop(7);
+    area.removeFromBottom(7);
     
     auto griidbounds =  area.reduced(10, 2);
     juce::FlexBox fb;
@@ -171,7 +203,7 @@ void Grids::resized()
         {
         buttons[i]->setVisible(true);
         buttons[i]->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::darkgrey);
-        buttons[i]->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::orange);
+        buttons[i]->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::orange.withAlpha(0.95f));
         buttons[i]->setButtonText("");
         fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
         }
@@ -192,3 +224,52 @@ void Grids::resized()
 
 }
 
+void  SubGrids::paint (juce::Graphics& g)
+{
+    float ratio =   audioProcessor.getGridContinousRatio(myLine);
+    
+     DropShadow ds(juce::Colours::lightgreen.withAlpha(1.0f), 2, {0,0});
+    float thickness = 2;
+    Rectangle<int>  area;
+    if(ratio >= 0)
+    {
+        area = Rectangle<int>  (10,getHeight() -10,ratio*(getWidth() -20),2);
+
+        ds.drawForRectangle(g, area);
+    
+    }
+    float len = audioProcessor.getGridSampleLen( myLine);
+    int  s_x = 0;
+    Rectangle<int> area2;
+    bool passed = false;
+    for(int i = ownerGrid.getParam(GETNUMOF) - 1 ; i >= 0; i--)
+    {
+        s_x = ownerGrid.getParam(GETCOORDOFBUTTON,i);
+        if(s_x != -1)
+        {
+            
+            g.setColour(colourarray[myLine].withAlpha(0.6f));
+            area2 = Rectangle<int> (s_x, 4 ,  (int)(len*getWidth()), 5);
+            g.fillRect(area2);
+            if(area.getRight() < area2.getRight() && area.getRight() > area2.getX()  && audioProcessor.midiState[myLine] == true && passed == false)
+            {
+                /*
+                ColourGradient gf(colourarray[myLine],  area2.getCentreX(),  area2.getCentreY(), colourarray[myLine].withAlpha(0.0f), area2.getX()-10,-2, true);
+                g.setGradientFill(gf);
+                
+                g.fillRect(area2.expanded(20, 2));
+                 */
+                g.setColour(colourarray[myLine].withAlpha(1.0f));
+                g.fillRect(area2);
+                passed = true;
+                
+                
+            }
+         //   g.setColour(colourarray[myLine].withAlpha(0.6f));
+         //   g.drawRect(area2);
+        }
+
+    }
+    
+    
+}

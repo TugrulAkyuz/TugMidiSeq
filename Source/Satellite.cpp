@@ -28,6 +28,12 @@ void Satellite::paint (juce::Graphics& g)
     float center_x =  area.getHeight()/2;
     float center_y =  center_x;
     float r[5];
+    g.setColour(juce::Colours::grey);
+    g.drawLine(0, center_y,getWidth(), center_y);
+    g.drawLine(center_x, 0,center_x, getHeight());
+    g.setColour(juce::Colours::grey.withAlpha(0.6f));
+    g.drawLine(0, 0,getWidth(),getWidth());
+    g.drawLine(0, getHeight(),getWidth(), 0);
     for(int i = 0 ; i < 5 ; i++)
     {
         float x = i*(area.getHeight()/2)/7 +10;
@@ -54,17 +60,17 @@ void Satellite::paint (juce::Graphics& g)
           float y =  center_y-r[i]*cos(angle);
 
           p.addCentredArc (center_x, center_y, r[i], r[i], 0.f, angle, angle+arcangle, true);
-          g.setColour(colourarray[i].withAlpha(0.6f));
-          g.strokePath (p, juce::PathStrokeType (2.f));
+          g.setColour(colourarray[i].withAlpha(0.99f));
+          g.strokePath (p, juce::PathStrokeType (4.f));
           g.setColour(colourarray[i].withAlpha(0.8f));
-          g.fillEllipse(x-4, y-4, 8, 8);
+          //g.fillEllipse(x-4, y-4, 8, 8);
+          g.drawLine(center_x+(r[i]-5)*sin(angle), center_y-(r[i]-5)*cos(angle),center_x+(r[i]+5)*sin(angle), center_y-(r[i]+5)*cos(angle),4.0f);
+         // g.fillEllipse(center_x + r[i]*cos(angle+arcangle -3.14/2)-4, center_y + r[i]*sin(angle+arcangle -3.14/2)-4, 8, 8);
      
          // g.drawEllipse(x-4, y-4, 8, 8);
       }
     }
-    g.setColour(juce::Colours::grey);
-    g.drawLine(0, center_y,getWidth(), center_y);
-    g.drawLine(center_x, 0,center_x, getHeight());
+
     
     for(int i = 0 ; i < 5 ; i++)
     {

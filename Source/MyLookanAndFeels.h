@@ -14,6 +14,8 @@
 #pragma once
 using namespace juce;
 
+const Colour myTextLabelColour = juce::Colours::linen;
+
 class MyLookAndFeel : public juce::LookAndFeel_V4
 {
 private:
@@ -104,10 +106,10 @@ private:
         auto cornerSize = box.findParentComponentOfClass<ChoicePropertyComponent>() != nullptr ? 0.0f : 3.0f;
         Rectangle<int> boxBounds (0, 0, width, height);
 
-        g.setColour (box.findColour (ComboBox::backgroundColourId));
+        g.setColour (Colour(20,20,20));
         g.fillRoundedRectangle (boxBounds.toFloat(), cornerSize);
 
-        g.setColour (juce::Colours::orange);
+        g.setColour (juce::Colours::lightgrey.withAlpha(0.7f));
         g.drawRoundedRectangle (boxBounds.toFloat().reduced (0.5f, 0.5f), cornerSize, 1.0f);
 
         Rectangle<int> arrowZone (width - 15, 0, 15, height);
@@ -116,7 +118,7 @@ private:
         path.lineTo ((float) arrowZone.getCentreX(), (float) arrowZone.getCentreY() + 3.0f);
         path.lineTo ((float) arrowZone.getRight() - 3.0f, (float) arrowZone.getCentreY() - 2.0f);
 
-        g.setColour (juce::Colours::orange);
+        g.setColour (juce::Colours::lightgrey);
         g.strokePath (path, PathStrokeType (2.0f));
     }
     void  positionComboBoxText (ComboBox& box, Label& label) override
@@ -199,8 +201,8 @@ public:
         setTextBoxStyle(juce::Slider::TextBoxAbove, true, 120, 20);
         
         //
-        setColour(juce::Slider::ColourIds::rotarySliderFillColourId, juce::Colours::orange);
-        setColour(juce::Slider::ColourIds::thumbColourId, juce::Colours::orange);
+        setColour(juce::Slider::ColourIds::rotarySliderFillColourId, juce::Colours::lightcyan);
+        setColour(juce::Slider::ColourIds::thumbColourId, juce::Colours::lightblue);
         setColour(Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
         
 

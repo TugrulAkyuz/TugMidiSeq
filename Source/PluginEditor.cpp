@@ -30,13 +30,13 @@ TugMidiSeqAudioProcessorEditor::TugMidiSeqAudioProcessorEditor (TugMidiSeqAudioP
     {
         
         topInLabel.add(new juce::Label(topLabel.at(i),topLabel.at(i)));
-        topInLabel.getLast()->setColour(Label::textColourId, Colours::white);
+        topInLabel.getLast()->setColour(Label::textColourId, myTextLabelColour);
         topInLabel.getLast()->setJustificationType(juce::Justification::centred);
         addAndMakeVisible(topInLabel.getLast());
     }
     for(auto i =  0; i < 5; i++ )
         globalPanel.setGridComp(grids[i],i);
-    setSize (1000, 270);
+    setSize (1000, 276);
 }
 
 TugMidiSeqAudioProcessorEditor::~TugMidiSeqAudioProcessorEditor()
@@ -48,7 +48,9 @@ void TugMidiSeqAudioProcessorEditor::paint (juce::Graphics& g)
 {
     // (Our component is opaque, so we must completely fill the background with a solid colour)
     g.fillAll (  Colour(0xff303030));
-
+    auto allarea = getLocalBounds();
+    g.setColour(Colours::yellow.withAlpha(0.2f));
+    g.drawRect(allarea,3.0f);
  
 }
 
@@ -56,12 +58,13 @@ void TugMidiSeqAudioProcessorEditor::resized()
 {
 
     auto allarea = getLocalBounds();
+    allarea.reduce(3, 3);
     auto label_area = allarea.removeFromTop(20);
-    label_area.removeFromLeft(20);
+    label_area.removeFromLeft(26);
     //topInLabel[1]->setBounds(label_area.removeFromRight(400));
     topInLabel[0]->setBounds(label_area.removeFromLeft(50));
     topInLabel[1]->setBounds(label_area.removeFromLeft(60));
-    topInLabel[2]->setBounds(label_area.removeFromLeft(425));
+    topInLabel[2]->setBounds(label_area.removeFromLeft(415));
     topInLabel[3]->setBounds(label_area.removeFromLeft(50));
     topInLabel[4]->setBounds(label_area.removeFromLeft(70));
     topInLabel[5]->setBounds(label_area.removeFromLeft(70));
