@@ -46,7 +46,7 @@ valueTreeState(*this, &undoManager)
         {
             juce::String  grid_block;
             grid_block <<valueTreeNames[BLOCK]<< j << i;
-            valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{grid_block,1}, grid_block,false));
+            valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{grid_block,1}, grid_block,0,2,0));
             
             gridsArr[j][i] = valueTreeState.getRawParameterValue(grid_block);
             
@@ -78,7 +78,7 @@ valueTreeState(*this, &undoManager)
         
         tmp_s.clear();
         tmp_s << valueTreeNames[EVENT] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,0,127,90));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,0,100,100));
         gridsEventAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         
@@ -533,7 +533,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     if(steps[i] == 0)
                         sampleNumber[i] = 0;
                     
-                    if(*gridsArr[i][steps[i]] == 1)
+                    if(*gridsArr[i][steps[i]] != 0)
                     {
                         bool  sortedofirs_Bool = inMidiNoteList.size() > i;
                         if(*sortedOrFirstEmptySelectAtomic == true)

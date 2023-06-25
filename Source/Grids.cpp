@@ -56,11 +56,15 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     addAndMakeVisible(gridVelSlider);
     //gridVelSlider.setSliderStyle(juce::Slider::Rotary);
     gridVelSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    
+    addAndMakeVisible(gridEventSlider);
+    gridEventSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    
    // gridVelSlider.setValue(90);
     juce::String  tmp_s;
     for (int i = 0; i < numOfStep; ++i)
     {
-        addAndMakeVisible (buttons.add (new juce::TextButton ()));
+        addAndMakeVisible (buttons.add (new MultiStateButton ()));
         buttons.getLast()->setClickingTogglesState(true);
         buttons.getLast()->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::grey);
         buttons.getLast()->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::orange);
@@ -68,19 +72,26 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
         buttons.getLast()->onClick = [this]()
         {
             int i = 0;
-            for(juce::TextButton * b : buttons)
+            for(MultiStateButton * b : buttons)
             {
                 stepArray[i] = (b->getToggleState());
+                int x = stepArray[i];
                 i++;
             }
             subGrids->rP();
         };
         tmp_s.clear();
         tmp_s << "block" << line << i;
-        juce::TextButton *  st = buttons.getLast();
-        buttonAttachmentArray.add (new juce::AudioProcessorValueTreeState::ButtonAttachment(audioProcessor.valueTreeState, tmp_s,*st));
-
-   
+        MultiStateButton *  st = buttons.getLast();
+        buttonAttachmentArray.add (new MultiStateButtonAttachment(audioProcessor.valueTreeState, tmp_s,*st));
+        tmp_s.clear();
+        tmp_s << valueTreeNames[EVENT] << line;
+        
+        audioProcessor.valueTreeState.addParameterListener(tmp_s,(juce::AudioProcessorValueTreeState::Listener *)(st));
+       
+        auto v = audioProcessor.valueTreeState.getParameter(tmp_s)->getValue();
+      
+        st->parameterChanged(tmp_s, 100*v);
     }
 
 
@@ -93,6 +104,10 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     tmp_s.clear();
     tmp_s << "Octave"<<line;
     octaveAttachment = std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, octaveSlider);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[EVENT] << line;
+    gridEventSliderAttachment =  std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, gridEventSlider);
     
     gridNumberSlider.onValueChange = [this]()
     {
@@ -169,6 +184,8 @@ void Grids::resized()
  
     auto area = getLocalBounds();
    
+    gridEventSlider.setBounds( area.removeFromRight(50));
+    
     gridVelSlider.setBounds( area.removeFromRight(50));
     gridDurationCombo.setBounds(area.removeFromRight(70).reduced(5,8)/*.withHeight(area.getHeight()-10)*/);
     gridSpeedCombo.setBounds(area.removeFromRight(70).reduced(5,8)/*.withHeight(area.getHeight()-)*/);
@@ -249,7 +266,7 @@ void  SubGrids::paint (juce::Graphics& g)
         {
             
             g.setColour(colourarray[myLine].withAlpha(0.6f));
-            area2 = Rectangle<int> (s_x, 4 ,  (int)(len*getWidth()), 5);
+            area2 = Rectangle<int> (s_x, 4 ,  (int)(0.95*len*getWidth()), 5);
             g.fillRect(area2);
             if(area.getRight() < area2.getRight() && area.getRight() > area2.getX()  && audioProcessor.midiState[myLine] == true && passed == false)
             {

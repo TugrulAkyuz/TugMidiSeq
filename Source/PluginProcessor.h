@@ -205,6 +205,13 @@ public:
         return sampleNumber[line]*1.0/(stepLoopResetInterval[line]);
 
     }
+    float getEventRandom(int line)
+    {
+      // if (myIsPlaying == false) return -1;
+        return *gridsEventAtomic[line]/100;;
+
+    }
+    
 private:
     int stpSample[5] = {};
     

@@ -36,7 +36,7 @@ TugMidiSeqAudioProcessorEditor::TugMidiSeqAudioProcessorEditor (TugMidiSeqAudioP
     }
     for(auto i =  0; i < 5; i++ )
         globalPanel.setGridComp(grids[i],i);
-    setSize (1000, 276);
+    setSize (1050, 276);
 }
 
 TugMidiSeqAudioProcessorEditor::~TugMidiSeqAudioProcessorEditor()
