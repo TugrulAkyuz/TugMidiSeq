@@ -80,8 +80,9 @@ public:
     }
     ~MultiStateButton()
     {
-        setClickingTogglesState(true);
        
+        myState->removeParameterListener(myParameterID, this);
+
     }
 
     void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override
@@ -122,12 +123,14 @@ public:
     }
     void setparameterListener(juce::AudioProcessorValueTreeState& state,juce::String& parameterID)
     {
-         
+        myState = &state;
+        myParameterID = parameterID;
         state.addParameterListener ( parameterID, this);
     }
+ 
     void parameterChanged (const String& parameterID, float newValue) override
     {
-        
+      
         
         // Called when parameter "yourParamId" is changed.
         if(parameterID.contains(valueTreeNames[EVENT]) == true)
@@ -135,7 +138,12 @@ public:
             evenAlpha = newValue /100;
             return;
         }
-        setCurrentState((State)newValue);
+        if(parameterID.contains(valueTreeNames[BLOCK]) == true)
+        {
+            setCurrentState((State)newValue);
+            return;
+        }
+       
     }
     void setCurrentAlpha( float a)
     {
@@ -143,6 +151,8 @@ public:
         repaint();
     }
 private:
+    juce::String myParameterID;
+    juce::AudioProcessorValueTreeState *myState;
     State currentState = State::ButtonOffState;
     float evenAlpha =1.0;;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MultiStateButton)
@@ -182,8 +192,9 @@ public:
                 newValue =  MultiStateButton::State::ButtonEventState;
             else  newValue =  MultiStateButton::State::ButtonOffState;
             float x = (float)newValue;
-            state.getParameter(parameterID)->setValueNotifyingHost(x);
+           
             button.setCurrentState(newValue);
+            state.getParameterAsValue(parameterID).setValue(x);
         }
     }
 
@@ -199,11 +210,11 @@ private:
         auto* parameter = state.getParameter(parameterID);
         if (parameter != nullptr)
         {
-          
+            button.setparameterListener(state,parameterID);
             auto currentValue = parameter->convertFrom0to1(parameter->getValue());
             auto currentState = static_cast<MultiStateButton::State>(currentValue);
             button.setCurrentState(currentState);
-            button.setparameterListener(state,parameterID);
+            
         }
     }
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MultiStateButtonAttachment)
@@ -215,6 +226,18 @@ public:
     Grids(TugMidiSeqAudioProcessor&,int line);
     ~Grids()
     {
+        juce::String  tmp_s;
+        for (int i = 0; i < numOfStep; ++i)
+        {
+            
+            tmp_s.clear();
+            tmp_s << "block" << myLine << i;
+            MultiStateButton *  st = buttons.getUnchecked(i);
+            tmp_s.clear();
+            tmp_s << valueTreeNames[EVENT] << myLine;
+            audioProcessor.valueTreeState.removeParameterListener(tmp_s,(juce::AudioProcessorValueTreeState::Listener *)(st));
+        }
+        
         setLookAndFeel (nullptr);
     }
     void  paint (juce::Graphics& g) override;

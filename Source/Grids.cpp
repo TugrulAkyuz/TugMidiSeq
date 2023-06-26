@@ -83,7 +83,8 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
         tmp_s.clear();
         tmp_s << "block" << line << i;
         MultiStateButton *  st = buttons.getLast();
-        buttonAttachmentArray.add (new MultiStateButtonAttachment(audioProcessor.valueTreeState, tmp_s,*st));
+       // buttonAttachmentArray.add (new AudioProcessorValueTreeState::ButtonAttachment(audioProcessor.valueTreeState, tmp_s,*st));
+        buttonAttachmentArray.add( std::make_unique  <MultiStateButtonAttachment>(audioProcessor.valueTreeState, tmp_s,*st));
         tmp_s.clear();
         tmp_s << valueTreeNames[EVENT] << line;
         
