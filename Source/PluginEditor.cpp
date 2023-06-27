@@ -68,8 +68,9 @@ void TugMidiSeqAudioProcessorEditor::resized()
     topInLabel[3]->setBounds(label_area.removeFromLeft(50));
     topInLabel[4]->setBounds(label_area.removeFromLeft(70));
     topInLabel[5]->setBounds(label_area.removeFromLeft(70));
-    topInLabel[6]->setBounds(label_area.removeFromLeft(60));
-    topInLabel[7]->setBounds(label_area);
+    topInLabel[6]->setBounds(label_area.removeFromLeft(55));
+    topInLabel[7]->setBounds(label_area.removeFromLeft(50));
+    topInLabel[8]->setBounds(label_area);
  
 
     auto area = allarea.removeFromTop(200);

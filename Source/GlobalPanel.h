@@ -124,6 +124,7 @@ class GlobalPanel   : public juce::Component , juce::Timer
     {
        setLookAndFeel (nullptr);
     }
+    
     void timerCallback() override
     {
         int rread_m = audioProcessor.getLoopMeasure();
@@ -151,6 +152,7 @@ private:
     Component  associatedComponent;
     CustomRoratySlider gridAllNumberSlider;
     CustomRoratySlider gridAllVelSlider;
+    CustomRoratySlider gridAllEventSlider;
     juce::ComboBox gridAllSpeedCombo;
     juce::ComboBox gridAllDurationCombo;
     juce::ComboBox presetCombo;

@@ -39,6 +39,9 @@ void TugMidiSeqAudioProcessor::resetAllParam()
         tmp_s << valueTreeNames[VEL] << j;
         valueTreeState.getParameterAsValue(tmp_s).setValue(90);
         tmp_s.clear();
+        tmp_s << valueTreeNames[EVENT] << j;
+        valueTreeState.getParameterAsValue(tmp_s).setValue(50);
+        tmp_s.clear();
         tmp_s << valueTreeNames[GLOBALRESTBAR] << j;
         valueTreeState.getParameterAsValue(tmp_s).setValue(1);
         
@@ -119,6 +122,10 @@ void  TugMidiSeqAudioProcessor::writePresetToFileJSON()
             v = myProgram.at(p).gridsVel[i];
             newObj.getDynamicObject()->setProperty(tmp_s,v);
             
+            tmp_s.clear();
+            tmp_s <<valueTreeNames[EVENT]<< i;
+            v = myProgram.at(p).gridsEvent[i];
+            newObj.getDynamicObject()->setProperty(tmp_s,v);
             
         }
         tmp_s.clear();
@@ -211,9 +218,9 @@ void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
             p.gridsVel[i] = v;
             
             tmp_s.clear();
-            tmp_s <<valueTreeNames[VEL]<< i;
+            tmp_s <<valueTreeNames[EVENT]<< i;
             v = preset.getProperty(tmp_s, var());
-            p.gridsVel[i] = v;
+            p.gridsEvent[i] = v;
         }
         tmp_s.clear();
         tmp_s << valueTreeNames[GLOBALRESTBAR];
@@ -282,6 +289,10 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
         
         paramProg.gridsVel[i] = *valueTreeState.getRawParameterValue(tmp_s);;
         
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[EVENT]<< i;
+        
+        paramProg.gridsEvent[i] = *valueTreeState.getRawParameterValue(tmp_s);;
         
     }
     

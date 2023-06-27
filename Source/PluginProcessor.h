@@ -18,7 +18,7 @@ using namespace juce;
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","event"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event"
 };
 enum valueTreeNamesEnum
 {
@@ -53,12 +53,13 @@ public:
     }
     
     juce::String myProgramname;
-    bool grids[numOfLine][numOfStep];
+    int grids[numOfLine][numOfStep];
     int numOfGrid[numOfLine];
     int octave[numOfLine];
     int gridsSpeed[numOfLine];
     int gridsDuration[numOfLine];
     int gridsVel[numOfLine];;
+    int gridsEvent[numOfLine];
     int globalResyncBar;
     bool GlobalInOrFixedVel;
     bool inBuiltSynth;

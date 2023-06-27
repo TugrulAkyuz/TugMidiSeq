@@ -78,7 +78,7 @@ valueTreeState(*this, &undoManager)
         
         tmp_s.clear();
         tmp_s << valueTreeNames[EVENT] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,100,100));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,100,50));
         gridsEventAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         
@@ -220,7 +220,9 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
             tmp_s.clear();
             tmp_s << valueTreeNames[VEL] << i;
             valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsVel[i]);
-
+            tmp_s.clear();
+            tmp_s << valueTreeNames[EVENT] << i;
+            valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsEvent[i]);
         }
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOBALRESTBAR];
@@ -448,8 +450,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
             
             stepmidStopSampleInterval[i] = first / pow(2,index);
-            
-            
+
         }
         
         if (myIsPlaying == false &&  positionInfo.isPlaying == true ) // stop to start

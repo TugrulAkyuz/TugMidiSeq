@@ -89,6 +89,7 @@ public:
     {
         juce::Colour buttonColor;
         String t = "";;
+       
         // Determine the color based on the current state
         switch (currentState)
         {
@@ -100,14 +101,39 @@ public:
                 t = "F";
                 break;
             case State::ButtonEventState:
+              
                 buttonColor = juce::Colours::orange.withAlpha(juce::jlimit(0.1f, 1.0f, evenAlpha));
                 t = "R";
                 break;
         }
 
-      
+        g.fillAll(juce::Colours::darkgrey);
         g.fillAll(buttonColor);
-        g.drawText(t, 0, 0, getWidth(), getHeight(), Justification::centred);
+       // g.drawText(t, 0, 0, getWidth(), getHeight(), Justification::centred);
+        g.setColour(Colours::darkgrey);
+        if(currentState == State::ButtonOnState)
+        {
+            Line <float> l  (getWidth()/3,getHeight()/2,3*getWidth()/4,getHeight()/2);
+            g.drawArrow(l, 2, 3, 4);
+        }
+        if(currentState == State::ButtonEventState)
+        {
+            juce::Path p;
+            int  y = getHeight()/2;
+            float effet = sin(evenAlpha*3.14)*y/2;
+            p.startNewSubPath(getWidth()/5, y + effet);
+            p.lineTo(2*getWidth()/5, y + effet);
+            p.lineTo(3*getWidth()/5, y - effet);
+            p.lineTo(4*getWidth()/5, y - effet);
+            g.strokePath(p, PathStrokeType(2.0f));
+            p.clear();
+            p.startNewSubPath(getWidth()/5, y - effet);
+            p.lineTo(2*getWidth()/5, y - effet);
+            p.lineTo(3*getWidth()/5, y + effet);
+            p.lineTo(4*getWidth()/5, y + effet);
+            g.strokePath(p, PathStrokeType(2.0f));
+            //p.cubicTo(getWidth()/3, 0, <#float controlPoint2X#>, <#float controlPoint2Y#>, <#float endPointX#>, <#float endPointY#>)
+        }
         //juce::Button::paintButton(g, isMouseOverButton, isButtonDown);
     }
 
