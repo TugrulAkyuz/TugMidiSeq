@@ -59,6 +59,10 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     loopBarlenghtSliderLabel.setText("RESYNC BAR", juce::dontSendNotification);
     loopBarlenghtSliderLabel.setColour(juce::Label::ColourIds::textColourId, myTextLabelColour);
     
+    ShuffleNameLabel.setFont (juce::Font (12, juce::Font::italic));
+    ShuffleNameLabel.setText("SHUFFLE", juce::dontSendNotification);
+    ShuffleNameLabel.setColour(juce::Label::ColourIds::textColourId, myTextLabelColour);
+    addAndMakeVisible(ShuffleNameLabel);
     
     addAndMakeVisible(loopBarlenghtSliderLabel);
     
@@ -68,6 +72,8 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     addAndMakeVisible( loopBarCounterLabel);
     addAndMakeVisible( resetButton);
     addAndMakeVisible( velUsageButton);
+    addAndMakeVisible(gridAllShuffleSlider);
+    
     velUsageButton.setClickingTogglesState (true);
     velUsageButton.setButtonText("Fixed Vel");
     
@@ -79,6 +85,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     gridAllNumberSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridAllVelSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridAllEventSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    gridAllShuffleSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridAllNumberSlider.setRange(1, numOfStep,1);
     gridAllVelSlider.setRange(1, 127,1);
     gridAllEventSlider.setRange(1, 100,1);
@@ -179,6 +186,12 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     tmp_s << valueTreeNames[SORTEDORFIRST];
     sortedOrFixedButtonAttachment =  std::make_unique <AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.valueTreeState, tmp_s, sortedOrFirstEmptySelectButton);
     
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SHUFFLE];
+    gridAllShuffleSliderAttachment =  std::make_unique <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, gridAllShuffleSlider);
+    
+    
+    
     if(sortedOrFirstEmptySelectButton.getToggleState() == false)
         sortedOrFirstEmptySelectButton.setButtonText("Sorted");
     else sortedOrFirstEmptySelectButton.setButtonText("FirstIn");
@@ -207,6 +220,12 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     gridAllEventSlider.onValueChange = [this]
     {
         audioProcessor.setAllValue( valueTreeNames[EVENT],gridAllEventSlider.getValue());
+    };
+    
+    gridAllShuffleSlider.onValueChange = [this]()
+    {
+        
+        audioProcessor.setShuffle();
     };
     
     for(auto r : randomButton)
@@ -315,12 +334,14 @@ void GlobalPanel::resized()
     
     auto ra = area.removeFromRight(80);
     auto ar = ra.removeFromTop(10);
-    ra.removeFromBottom(0);
+  
+    //gridAllShuffleSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
     loopBarCounterLabel.setBounds( ra.removeFromRight(30).reduced(3, 5));
     loopBarlenghtSlider.setBounds( ra.removeFromRight(60).reduced(0, 0).translated(10, 0));
     
     ar.removeFromTop(2);
-    loopBarlenghtSliderLabel.setBounds(ar);
+    loopBarlenghtSliderLabel.setBounds(ar.translated(0, 1));
+    
     
     velUsageButton.setBounds( area.removeFromRight(70).reduced(3, 10));
     
@@ -340,6 +361,11 @@ void GlobalPanel::resized()
     xarea.removeFromBottom(5);
     inBuiltSynthButton.setBounds(xarea.removeFromLeft(70).reduced(4, 5));
     sortedOrFirstEmptySelectButton.setBounds(xarea.removeFromLeft(70).reduced(4, 5));
+    
+    auto sh = area.removeFromRight(50);
+    ShuffleNameLabel.setBounds(sh.removeFromTop(10).translated(0, 1));
+    gridAllShuffleSlider.setBounds( sh);
+   // ShuffleNameLabel
 }
 
 

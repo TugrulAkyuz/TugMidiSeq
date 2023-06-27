@@ -18,11 +18,11 @@ using namespace juce;
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE
 };
 
 const std::vector <juce::String> myNotetUnit =
@@ -64,6 +64,7 @@ public:
     bool GlobalInOrFixedVel;
     bool inBuiltSynth;
     bool sortedOrFirst;
+    bool shuffle;
     
 };
 
@@ -187,7 +188,7 @@ public:
     int stepLoopResetInterval[5];
     bool midiState[5] = {};
     bool myIsPlaying  = false;
-
+    
     float getDurAngle(int index)
     {
         return ( stepmidStopSampleInterval[index] *2.0*juce::double_Pi/stepResetInterval[index])/(*numOfGrid[index]);
@@ -195,21 +196,33 @@ public:
     }
     float getGridSampleLen(int line)
     {
-       
+        
         
         return stepmidStopSampleInterval[line]*1.0f/stepLoopResetInterval[line];
-
+        
     }
     float getGridContinousRatio(int line)
     {
         if (myIsPlaying == false) return -1;
         return sampleNumber[line]*1.0/(stepLoopResetInterval[line]);
-
+        
     }
     float getEventRandom(int line)
     {
-      // if (myIsPlaying == false) return -1;
+        // if (myIsPlaying == false) return -1;
         return *gridsEventAtomic[line]/100;;
+        
+    }
+    
+    float getSfuffleRatios(int line, int step)
+    {
+        // if (myIsPlaying == false) return -1;
+        return (float)(stepmidStopSampleIntervalForShuffle[line][step]) /stepmidStopSampleInterval[line];
+        
+    }
+    
+    void setShuffle()
+    {
 
     }
     
@@ -218,6 +231,9 @@ private:
     
     int stepResetInterval[5] = {};
     int stepmidStopSampleInterval[5] = {-1,-1,-1,-1,-1};
+    
+    int stepmidStopSampleIntervalForShuffle[5][numOfStep];
+    int stepResetIntervalForShuffle[5][numOfStep];
 
     int stepmidStopSampleCounter[5] = {-1,-1,-1,-1,-1};
     int  ppq = 0;
@@ -233,6 +249,7 @@ private:
     std::atomic<float> * GlobalInOrFixedAtomic;;
     std::atomic<float> *inBuiltSynthAtomic;
     std::atomic<float> *sortedOrFirstEmptySelectAtomic;
+    std::atomic<float> *shuffleAtomic;
     
     //std::atomic<float> *numOfGrid[5];
     juce::UndoManager undoManager;

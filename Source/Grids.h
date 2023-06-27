@@ -246,7 +246,7 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MultiStateButtonAttachment)
 };
 
-class Grids : public juce::Component,  public juce::Timer
+class Grids : public juce::Component,  public juce::Timer , private AudioProcessorValueTreeState::Listener
 {
 public:
     Grids(TugMidiSeqAudioProcessor&,int line);
@@ -262,13 +262,21 @@ public:
             tmp_s.clear();
             tmp_s << valueTreeNames[EVENT] << myLine;
             audioProcessor.valueTreeState.removeParameterListener(tmp_s,(juce::AudioProcessorValueTreeState::Listener *)(st));
-        }
+        };;
         
+       audioProcessor.valueTreeState.removeParameterListener(valueTreeNames[SHUFFLE], this);
+    
         setLookAndFeel (nullptr);
     }
     void  paint (juce::Graphics& g) override;
     void resized() override;
-
+    void parameterChanged (const String& parameterID, float newValue) override
+    {
+      
+        myShuffleChabged =  true;
+      
+       
+    }
     void setEnable(bool r)
     {
         gridVelSlider.setEnabled(r);
@@ -286,6 +294,7 @@ public:
         return x;
     }
 private:
+    bool myShuffleChabged = false;
     MyLookAndFeel myLookAndFeel;
     TugMidiSeqAudioProcessor& audioProcessor;
     juce::OwnedArray<MultiStateButton> buttons;
@@ -318,7 +327,11 @@ private:
         if(myMidiNote != midi)
             setMidiName(midi);
      
-
+        if(myShuffleChabged == true)
+        {
+            resized();
+            myShuffleChabged = false;
+        }
         myMidiNote =  midi;
     }
     

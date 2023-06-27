@@ -152,6 +152,10 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     //Slider::ColourIds::thumbColourId
     octaveSlider.setRange(-2, 2,1);
    // octaveSlider.setValue(0);
+    
+    audioProcessor.valueTreeState.addParameterListener(valueTreeNames[SHUFFLE], this);
+
+    
 }
 void Grids::paint (juce::Graphics& g)
 {
@@ -191,7 +195,7 @@ void Grids::resized()
     gridDurationCombo.setBounds(area.removeFromRight(70).reduced(5,8)/*.withHeight(area.getHeight()-10)*/);
     gridSpeedCombo.setBounds(area.removeFromRight(70).reduced(5,8)/*.withHeight(area.getHeight()-)*/);
     gridNumberSlider.setBounds( area.removeFromRight(50)/*.withHeight(area.getHeight()+5)*/);
-     
+    
     
     //auto tmp =
     myLineLabel.setBounds(area.removeFromLeft(25));
@@ -213,17 +217,23 @@ void Grids::resized()
  
     int n = gridNumberSlider.getValue() ;
     auto w = (griidbounds.toFloat().getWidth()   /(n)) ;
+    float  w_tmp;
     for ( auto *b : buttons) b->setVisible(false);
     stepArrow.setVisible(false);
     for ( int i = 0; i < n;i++)
     {
+        auto r = audioProcessor.getSfuffleRatios(myLine,i);
+         w_tmp = w*r;
+ 
         if(step != i || step == -1)
         {
         buttons[i]->setVisible(true);
         buttons[i]->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::darkgrey);
         buttons[i]->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::orange.withAlpha(0.95f));
         buttons[i]->setButtonText("");
-        fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
+            
+
+        fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w_tmp-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
         }
         else{
             buttons[i]->setVisible(true);
@@ -232,7 +242,7 @@ void Grids::resized()
             buttons[step]->setButtonText(">");
             buttons[step]->setColour(juce::TextButton::ColourIds::textColourOnId, juce::Colours::darkgrey);
             buttons[step]->setColour(juce::TextButton::ColourIds::textColourOffId, juce::Colours::darkgrey);
-            fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
+            fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w_tmp-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
         }
     }
      
@@ -263,11 +273,12 @@ void  SubGrids::paint (juce::Graphics& g)
     for(int i = ownerGrid.getParam(GETNUMOF) - 1 ; i >= 0; i--)
     {
         s_x = ownerGrid.getParam(GETCOORDOFBUTTON,i);
+        auto sr = audioProcessor.getSfuffleRatios(myLine,  i);
         if(s_x != -1)
         {
             
             g.setColour(colourarray[myLine].withAlpha(0.6f));
-            area2 = Rectangle<int> (s_x, 4 ,  (int)(0.95*len*getWidth()), 5);
+            area2 = Rectangle<int> (s_x, 4 ,  (int)(0.95*len*sr*getWidth()), 5);
             g.fillRect(area2);
             if(area.getRight() < area2.getRight() && area.getRight() > area2.getX()  && audioProcessor.midiState[myLine] == true && passed == false)
             {

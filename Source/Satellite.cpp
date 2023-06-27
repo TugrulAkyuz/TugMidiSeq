@@ -56,13 +56,13 @@ void Satellite::paint (juce::Graphics& g)
           else alpha = audioProcessor.getEventRandom(i);
           
           Path p;
-          
+          auto sr = audioProcessor.getSfuffleRatios(i,  j);
           float angle = 2.0*j*juce::double_Pi/(*audioProcessor.numOfGrid[i]);
           
           float x =  center_x+r[i]*sin(angle);
           float y =  center_y-r[i]*cos(angle);
 
-          p.addCentredArc (center_x, center_y, r[i], r[i], 0.f, angle, angle+arcangle, true);
+          p.addCentredArc (center_x, center_y, r[i], r[i], 0.f, angle, angle+sr*arcangle, true);
           g.setColour(colourarray[i].withAlpha(alpha));
           g.strokePath (p, juce::PathStrokeType (4.f));
           g.setColour(colourarray[i].withAlpha(0.8f));

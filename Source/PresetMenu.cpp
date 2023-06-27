@@ -41,11 +41,8 @@ void TugMidiSeqAudioProcessor::resetAllParam()
         tmp_s.clear();
         tmp_s << valueTreeNames[EVENT] << j;
         valueTreeState.getParameterAsValue(tmp_s).setValue(50);
-        tmp_s.clear();
-        tmp_s << valueTreeNames[GLOBALRESTBAR] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(1);
         
-        
+
         
     }
     tmp_s.clear();
@@ -54,6 +51,10 @@ void TugMidiSeqAudioProcessor::resetAllParam()
     
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOABLINORFIXVEL];
+    valueTreeState.getParameterAsValue(tmp_s).setValue(0);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SHUFFLE];
     valueTreeState.getParameterAsValue(tmp_s).setValue(0);
     
     //    tmp_s.clear();
@@ -146,6 +147,11 @@ void  TugMidiSeqAudioProcessor::writePresetToFileJSON()
         tmp_s.clear();
         tmp_s << valueTreeNames[SORTEDORFIRST];
         v = myProgram.at(p).sortedOrFirst;
+        newObj.getDynamicObject()->setProperty(tmp_s,v);
+        
+        tmp_s.clear();
+        tmp_s << valueTreeNames[SHUFFLE];
+        v  = myProgram.at(p).shuffle;
         newObj.getDynamicObject()->setProperty(tmp_s,v);
         
         
@@ -243,6 +249,11 @@ void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
         v = preset.getProperty(tmp_s, var());
         p.sortedOrFirst = v;
         
+        tmp_s.clear();
+        tmp_s << valueTreeNames[SHUFFLE];
+        v = preset.getProperty(tmp_s, var());
+        p.shuffle = v;
+        
         myProgram.push_back(p);
     }
     
@@ -313,6 +324,11 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
     tmp_s.clear();
     tmp_s << valueTreeNames[SORTEDORFIRST];
     paramProg.sortedOrFirst = *valueTreeState.getRawParameterValue(tmp_s);;
+    
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SHUFFLE];
+    paramProg.shuffle = *valueTreeState.getRawParameterValue(tmp_s);;
     
     myProgram.push_back(paramProg);
     writePresetToFileJSON();

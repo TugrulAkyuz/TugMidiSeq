@@ -157,6 +157,8 @@ private:
     juce::ComboBox gridAllDurationCombo;
     juce::ComboBox presetCombo;
     
+    CustomRoratySlider gridAllShuffleSlider;
+    
     CustomRoratySlider loopBarlenghtSlider;
     Label loopBarCounterLabel;
     TextButton resetButton;
@@ -166,11 +168,12 @@ private:
     
     Label globalNameLabel;
     Label loopBarlenghtSliderLabel;
-    
+    Label ShuffleNameLabel;
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> loopBarlenghtSliderAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::ButtonAttachment> velUsageButtonAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::ButtonAttachment> inBultSynthButtonAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::ButtonAttachment> sortedOrFixedButtonAttachment;
+    std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridAllShuffleSliderAttachment;
     
     
     TextButton writeButton;

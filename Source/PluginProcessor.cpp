@@ -116,6 +116,11 @@ valueTreeState(*this, &undoManager)
     sortedOrFirstEmptySelectAtomic = valueTreeState.getRawParameterValue(tmp_s);
     
     
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SHUFFLE];
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-75,75,0));
+    shuffleAtomic = valueTreeState.getRawParameterValue(tmp_s);
+    
     valueTreeState.state = juce::ValueTree("midiSeq"); // do not forget for valuetree
     
     
@@ -239,6 +244,10 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
     tmp_s.clear();
     tmp_s << valueTreeNames[SORTEDORFIRST];
     valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).sortedOrFirst);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SHUFFLE];
+    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).shuffle);
     
 }
 
@@ -440,6 +449,16 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
             stepResetInterval[i] = first / pow(2,index); // dviding  "first" you get number of sample  for musical note time values
             
+            for(int s = 0 ; s < numOfStep ; s++)
+            {
+                if(s%2 == 0 )
+                {
+                    stepResetIntervalForShuffle[i][s] = stepResetInterval[i]*(1 + *shuffleAtomic/100);
+                }
+                else stepResetIntervalForShuffle[i][s] = stepResetInterval[i]*(1 - *shuffleAtomic/100);
+            }
+            
+            
             stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
             
             first = 1.5*4*(60*mySampleRate/ mBpm);
@@ -451,6 +470,16 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             
             stepmidStopSampleInterval[i] = first / pow(2,index);
 
+            for(int s = 0 ; s < numOfStep ; s++)
+            {
+                if(s%2 == 0 )
+                {
+                    stepmidStopSampleIntervalForShuffle[i][s] = stepmidStopSampleInterval[i]*(1 + *shuffleAtomic/100);
+                }
+                else stepmidStopSampleIntervalForShuffle[i][s] = stepmidStopSampleInterval[i]*(1 - *shuffleAtomic/100);
+            }
+            
+            
         }
         
         if (myIsPlaying == false &&  positionInfo.isPlaying == true ) // stop to start
@@ -493,7 +522,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     {
                         steps[i] = (int)(*numOfGrid[i]) -1;
                         sampleNumber[i] = 0;
-                        stpSample[i] = stepResetInterval[i] -1;
+                        stpSample[i] = stepResetIntervalForShuffle[i][steps[i]] -1;
                     }
                     
                 }
@@ -513,11 +542,11 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             {
                 sampleNumber[i]++;
                 stpSample[i]++;
-                stpSample[i] %=stepResetInterval[i];
+                stpSample[i] %=stepResetIntervalForShuffle[i][steps[i]];
                 if(stepmidStopSampleCounter[i] != -1)
                 {
                     stepmidStopSampleCounter[i]++;
-                    stepmidStopSampleCounter[i] %= stepmidStopSampleInterval[i]; // byrada uçuyor bir bak
+                    stepmidStopSampleCounter[i] %= stepmidStopSampleIntervalForShuffle[i][steps[i]] ; // byrada uçuyor bir bak
                 }
                 if( stepmidStopSampleCounter[i]== 0)
                 {
@@ -579,7 +608,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                             stepmidStopSampleCounter[i] = 1;
                             RealMidiNoteList tmp;
                             tmp.sentMidi = it;
-                            tmp.durationsample = stepmidStopSampleInterval[i] -1;
+                            tmp.durationsample = stepmidStopSampleIntervalForShuffle[i][steps[i]]  -1;
                             inRealMidiNoteList.push_back(tmp);
                             
                             DBG(" Channel: "  << it.getChannel());
