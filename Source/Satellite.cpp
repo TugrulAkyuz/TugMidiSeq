@@ -48,17 +48,21 @@ void Satellite::paint (juce::Graphics& g)
     //  float  r = (5-i)*(area.getHeight()/2)/7 ;
         g.setColour(colourarray[i].withAlpha(0.8f));
         float arcangle = audioProcessor.getDurAngle(i);
+        float startplacediff = 0;
      for(int j = 0 ; j < *audioProcessor.numOfGrid[i] ; j++)
       {
-          if(*audioProcessor.gridsArr[i][j] == 0) continue;
+
           float alpha ;
           if(*audioProcessor.gridsArr[i][j] == 1) alpha = 0.99;
           else alpha = audioProcessor.getEventRandom(i);
           
           Path p;
-          auto sr = audioProcessor.getSfuffleRatios(i,  j);
-          float angle = 2.0*j*juce::double_Pi/(*audioProcessor.numOfGrid[i]);
+        
+          float angle = 2.0*(j + startplacediff )*juce::double_Pi/(*audioProcessor.numOfGrid[i]);
           
+          auto sr = audioProcessor.getSfuffleRatios(i,  j);
+          startplacediff =  startplacediff + (sr -1);
+          if(*audioProcessor.gridsArr[i][j] == 0) continue;
           float x =  center_x+r[i]*sin(angle);
           float y =  center_y-r[i]*cos(angle);
 

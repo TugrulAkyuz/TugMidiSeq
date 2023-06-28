@@ -185,12 +185,11 @@ void Grids::paint (juce::Graphics& g)
 }
 void Grids::resized()
 {
-    int marjin =  1;
+    float marjin =  1;
  
     auto area = getLocalBounds();
    
     gridEventSlider.setBounds( area.removeFromRight(50));
-    
     gridVelSlider.setBounds( area.removeFromRight(50));
     gridDurationCombo.setBounds(area.removeFromRight(70).reduced(5,8)/*.withHeight(area.getHeight()-10)*/);
     gridSpeedCombo.setBounds(area.removeFromRight(70).reduced(5,8)/*.withHeight(area.getHeight()-)*/);
@@ -220,11 +219,16 @@ void Grids::resized()
     float  w_tmp;
     for ( auto *b : buttons) b->setVisible(false);
     stepArrow.setVisible(false);
+    int sumButton =  0 ;
+    int totalGridWidth = griidbounds.getWidth();
     for ( int i = 0; i < n;i++)
     {
         auto r = audioProcessor.getSfuffleRatios(myLine,i);
          w_tmp = w*r;
- 
+        sumButton =  sumButton + w_tmp ;
+        if(sumButton > totalGridWidth)
+            w_tmp = w_tmp  - (sumButton -totalGridWidth);
+            
         if(step != i || step == -1)
         {
         buttons[i]->setVisible(true);
@@ -232,9 +236,11 @@ void Grids::resized()
         buttons[i]->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::orange.withAlpha(0.95f));
         buttons[i]->setButtonText("");
             
-
+       
         fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w_tmp-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
         }
+        
+        
         else{
             buttons[i]->setVisible(true);
             buttons[step]->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::black.withAlpha(0.90f));
@@ -246,7 +252,7 @@ void Grids::resized()
         }
     }
      
-    
+
     fb.performLayout (griidbounds.toFloat());
 
 

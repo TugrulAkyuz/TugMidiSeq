@@ -130,8 +130,15 @@ class GlobalPanel   : public juce::Component , juce::Timer
         int rread_m = audioProcessor.getLoopMeasure();
         loopBarCounterLabel.setText(std::to_string(rread_m),juce::NotificationType::dontSendNotification) ;
         if(myMeasure != 1 && rread_m == 1)
-            loopBarlenghtSliderLabel.setColour(Label::textColourId, Colours::red);
-        else  loopBarlenghtSliderLabel.setColour(Label::textColourId,  Colours::aqua);
+        {
+            loopBarlenghtSliderLabel.setColour(Label::textColourId, Colours::lightgreen);
+            //loopBarlenghtSliderLabel.setColour(Label::backgroundColourId,  Colours::black  );
+        }
+        else
+        {
+            loopBarlenghtSliderLabel.setColour(Label::textColourId,  Colours::lightgrey );
+            //loopBarlenghtSliderLabel.setColour(Label::backgroundColourId,  Colours::transparentBlack  );
+        }
         myMeasure = rread_m;
         getComponentID();
     }

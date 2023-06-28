@@ -64,7 +64,7 @@ public:
     bool GlobalInOrFixedVel;
     bool inBuiltSynth;
     bool sortedOrFirst;
-    bool shuffle;
+    int shuffle;
     
 };
 
@@ -181,6 +181,7 @@ public:
     std::atomic<float> *octave[5];
     std::atomic<float> *globalResyncBar;
     float myBpm;
+    float myBps;
     int measureSample = 0;
     int measureBar = 0;
     double  mySampleRate = 0;
@@ -189,21 +190,24 @@ public:
     bool midiState[5] = {};
     bool myIsPlaying  = false;
     
+    
     float getDurAngle(int index)
     {
+        if (stepResetInterval[index] == 0) return 0;
         return ( stepmidStopSampleInterval[index] *2.0*juce::double_Pi/stepResetInterval[index])/(*numOfGrid[index]);
         
     }
     float getGridSampleLen(int line)
     {
         
-        
+        if (stepLoopResetInterval[line] == 0) return 0;
         return stepmidStopSampleInterval[line]*1.0f/stepLoopResetInterval[line];
         
     }
     float getGridContinousRatio(int line)
     {
         if (myIsPlaying == false) return -1;
+        if (stepLoopResetInterval[line] == 0) return 0;
         return sampleNumber[line]*1.0/(stepLoopResetInterval[line]);
         
     }
@@ -217,6 +221,7 @@ public:
     float getSfuffleRatios(int line, int step)
     {
         // if (myIsPlaying == false) return -1;
+        if (stepmidStopSampleInterval[line] == 0) return 0;
         return (float)(stepmidStopSampleIntervalForShuffle[line][step]) /stepmidStopSampleInterval[line];
         
     }
@@ -225,6 +230,8 @@ public:
     {
 
     }
+    
+    void initPrepareValue();
     
 private:
     int stpSample[5] = {};

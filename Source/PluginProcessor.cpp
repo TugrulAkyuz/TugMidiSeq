@@ -136,6 +136,8 @@ valueTreeState(*this, &undoManager)
     for(auto i = 0 ; i < numOfLine ; i++)
     inMidiNoteListVector.at(i).setVelocity(0.0f);
     
+    program = 1;
+    
 }
 
 TugMidiSeqAudioProcessor::~TugMidiSeqAudioProcessor()
@@ -253,8 +255,8 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
 
 const juce::String TugMidiSeqAudioProcessor::getProgramName (int index)
 {
-    String s ;
-    if(index == 0)  return   s;
+    String s;
+    if (index == 0)  return   "Init";
     
     s = myProgram.at(index -1 ).myProgramname;
     return   s;
@@ -276,6 +278,8 @@ void TugMidiSeqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
         SynthVoice *v =  (SynthVoice *)mySynth.getVoice(i);
         v->prepare_to_play(sampleRate,samplesPerBlock);
     }
+    
+    initPrepareValue();
 }
 
 void TugMidiSeqAudioProcessor::releaseResources()
@@ -419,78 +423,17 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     if (positionInfo.bpm == 0) return;
     if (positionInfo.bpm)
     {
-        double mBpm =  positionInfo.bpm;
-        double mBps = (float)mBpm/60;
-        myBpm = mBpm;
-        //  std::cout << mBps << " " ;
-        
-        ppq = positionInfo .ppqPosition;
-  
-
-
-       // in  t x = positionInfo.ppqPosition;
-         
-        
-        stepResetInterval[0] =  1*(60*mySampleRate/ mBpm);
-        stepResetInterval[1] =  1*(60*mySampleRate/ mBpm);
-        stepResetInterval[2] =  1*(60*mySampleRate/ mBpm);
-        stepResetInterval[3] =  1*(60*mySampleRate/ mBpm);
-        stepResetInterval[4] =  1*(60*mySampleRate/ mBpm);
-        
-        
-        for(int i = 0 ; i< numOfLine ;i++)
-        {
-            double first = 1.5*4*(60*mySampleRate/ mBpm); // first value in combos  number of sample musical durations and speeds
-            
-            int index = *gridsSpeedAtomic[i] ;
-     
-            if(index%3 == 0) {  index = (index+1) / 3;}
-            else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
-            else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
-            stepResetInterval[i] = first / pow(2,index); // dviding  "first" you get number of sample  for musical note time values
-            
-            for(int s = 0 ; s < numOfStep ; s++)
-            {
-                if(s%2 == 0 )
-                {
-                    stepResetIntervalForShuffle[i][s] = stepResetInterval[i]*(1 + *shuffleAtomic/100);
-                }
-                else stepResetIntervalForShuffle[i][s] = stepResetInterval[i]*(1 - *shuffleAtomic/100);
-            }
-            
-            
-            stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
-            
-            first = 1.5*4*(60*mySampleRate/ mBpm);
-            index = *gridsDurationAtomic[i];
-       
-            if(index%3 == 0) {  index = (index+1) / 3;}
-            else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
-            else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
-            
-            stepmidStopSampleInterval[i] = first / pow(2,index);
-
-            for(int s = 0 ; s < numOfStep ; s++)
-            {
-                if(s%2 == 0 )
-                {
-                    stepmidStopSampleIntervalForShuffle[i][s] = stepmidStopSampleInterval[i]*(1 + *shuffleAtomic/100);
-                }
-                else stepmidStopSampleIntervalForShuffle[i][s] = stepmidStopSampleInterval[i]*(1 - *shuffleAtomic/100);
-            }
-            
-            
-        }
+        initPrepareValue();
         
         if (myIsPlaying == false &&  positionInfo.isPlaying == true ) // stop to start
         {
             measureBar = *globalResyncBar-1;  // resync var number
-            measureSample = (int)(4*mySampleRate/mBps)-1; // mBps Beat per second  ---> 1 bar  numof sample
+            measureSample = (int)(4*mySampleRate/myBps)-1; // mBps Beat per second  ---> 1 bar  numof sample
             
            prevtimeInSamples = positionInfo.ppqPosition;; /**ppq ye bakma code*/
         }
         auto  x = positionInfo.ppqPosition; /**ppq ye bakma code*/
-        midiEffectSampelDiffBitweenCall = 60*mySampleRate*( x- prevtimeInSamples)/mBpm;/**ppq ye bakma code*/
+        midiEffectSampelDiffBitweenCall = 60*mySampleRate*( x- prevtimeInSamples)/myBpm;/**ppq ye bakma code*/
         prevtimeInSamples = positionInfo.ppqPosition;;/**ppq ye bakma code*/
         
         myIsPlaying = positionInfo.isPlaying;
@@ -511,7 +454,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         for(int s = 0 ; s < buffer.getNumSamples();  s++)/**ppq ye bakma code*/
         { 
             measureSample++;
-            measureSample %= (int)(4*mySampleRate/mBps);
+            measureSample %= (int)(4*mySampleRate/myBps);
             if(measureSample == 0)
             {
                 measureBar++;
@@ -668,7 +611,82 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
             valueTreeState.replaceState (ValueTree::fromXml (*xmlState));
 }
 
-
+void TugMidiSeqAudioProcessor::initPrepareValue()
+{
+    
+    juce::AudioPlayHead* playHead = getPlayHead();
+    if (playHead == nullptr) return;
+    juce::AudioPlayHead::CurrentPositionInfo positionInfo;
+    playHead->getCurrentPosition(positionInfo);
+    
+    if (positionInfo.bpm)
+    {
+         myBpm =  positionInfo.bpm;
+         myBps = (float)myBpm/60;
+   
+        //  std::cout << mBps << " " ;
+        
+        ppq = positionInfo .ppqPosition;
+        
+        
+        
+        // in  t x = positionInfo.ppqPosition;
+        
+        
+        stepResetInterval[0] =  1*(60*mySampleRate/ myBpm);
+        stepResetInterval[1] =  1*(60*mySampleRate/ myBpm);
+        stepResetInterval[2] =  1*(60*mySampleRate/ myBpm);
+        stepResetInterval[3] =  1*(60*mySampleRate/ myBpm);
+        stepResetInterval[4] =  1*(60*mySampleRate/ myBpm);
+        
+        
+        for(int i = 0 ; i< numOfLine ;i++)
+        {
+            double first = 1.5*4*(60*mySampleRate/ myBpm); // first value in combos  number of sample musical durations and speeds
+            
+            int index = *gridsSpeedAtomic[i] ;
+            
+            if(index%3 == 0) {  index = (index+1) / 3;}
+            else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
+            else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
+            stepResetInterval[i] = first / pow(2,index); // dviding  "first" you get number of sample  for musical note time values
+            
+            for(int s = 0 ; s < numOfStep ; s++)
+            {
+                if(s%2 == 0 )
+                {
+                    stepResetIntervalForShuffle[i][s] = stepResetInterval[i]*(1 + *shuffleAtomic/100);
+                }
+                else stepResetIntervalForShuffle[i][s] = stepResetInterval[i]*(1 - *shuffleAtomic/100);
+            }
+            
+            
+            stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
+            
+            first = 1.5*4*(60*mySampleRate/ myBpm);
+            index = *gridsDurationAtomic[i];
+            
+            if(index%3 == 0) {  index = (index+1) / 3;}
+            else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
+            else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
+            
+            stepmidStopSampleInterval[i] = first / pow(2,index);
+            
+            for(int s = 0 ; s < numOfStep ; s++)
+            {
+                if(s%2 == 0 )
+                {
+                    stepmidStopSampleIntervalForShuffle[i][s] = stepmidStopSampleInterval[i]*(1 + *shuffleAtomic/100);
+                }
+                else stepmidStopSampleIntervalForShuffle[i][s] = stepmidStopSampleInterval[i]*(1 - *shuffleAtomic/100);
+            }
+            
+            
+        }
+    }
+    
+    
+}
 
 
 //==============================================================================
