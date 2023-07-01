@@ -67,7 +67,7 @@ void TugMidiSeqAudioProcessor::resetAllParam()
     
     // mySynth.clearSounds();
     
-    
+    initPrepareValue();
 }
 
 void  TugMidiSeqAudioProcessor::writePresetToFileJSON()

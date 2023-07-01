@@ -235,7 +235,7 @@ public:
     
 private:
     int stpSample[5] = {};
-    
+    juce::AudioPlayHead::CurrentPositionInfo positionInfo;
     int stepResetInterval[5] = {};
     int stepmidStopSampleInterval[5] = {-1,-1,-1,-1,-1};
     

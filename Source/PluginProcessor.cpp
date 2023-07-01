@@ -137,7 +137,9 @@ valueTreeState(*this, &undoManager)
     inMidiNoteListVector.at(i).setVelocity(0.0f);
     
     program = 1;
-    
+    positionInfo.bpm = 120;
+    mySampleRate = 44100;
+    initPrepareValue();
 }
 
 TugMidiSeqAudioProcessor::~TugMidiSeqAudioProcessor()
@@ -278,7 +280,10 @@ void TugMidiSeqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
         SynthVoice *v =  (SynthVoice *)mySynth.getVoice(i);
         v->prepare_to_play(sampleRate,samplesPerBlock);
     }
-    
+    juce::AudioPlayHead* playHead = getPlayHead();
+    if (playHead == nullptr) return;
+
+    playHead->getCurrentPosition(positionInfo);
     initPrepareValue();
 }
 
@@ -343,7 +348,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 //    }
     juce::AudioPlayHead* playHead = getPlayHead();
     if (playHead == nullptr) return;
-    juce::AudioPlayHead::CurrentPositionInfo positionInfo;
+   
     playHead->getCurrentPosition(positionInfo);
     
     MidiBuffer::Iterator it(midiMessages);
@@ -420,6 +425,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     
     midiMessages.clear();
     midiMessages.swapWith(erasedMidi);
+
     if (positionInfo.bpm == 0) return;
     if (positionInfo.bpm)
     {
@@ -614,10 +620,7 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
 void TugMidiSeqAudioProcessor::initPrepareValue()
 {
     
-    juce::AudioPlayHead* playHead = getPlayHead();
-    if (playHead == nullptr) return;
-    juce::AudioPlayHead::CurrentPositionInfo positionInfo;
-    playHead->getCurrentPosition(positionInfo);
+
     
     if (positionInfo.bpm)
     {

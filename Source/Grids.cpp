@@ -221,12 +221,14 @@ void Grids::resized()
     stepArrow.setVisible(false);
     int sumButton =  0 ;
     int totalGridWidth = griidbounds.getWidth();
+    totalGridWidth = totalGridWidth - 1;
     for ( int i = 0; i < n;i++)
     {
         auto r = audioProcessor.getSfuffleRatios(myLine,i);
          w_tmp = w*r;
         sumButton =  sumButton + w_tmp ;
-        if(sumButton > totalGridWidth)
+        
+        if(sumButton  > totalGridWidth)
             w_tmp = w_tmp  - (sumButton -totalGridWidth);
             
         if(step != i || step == -1)
@@ -237,7 +239,8 @@ void Grids::resized()
         buttons[i]->setButtonText("");
             
        
-        fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w_tmp-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
+       // fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w_tmp-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
+        fb.items.add(juce::FlexItem(*buttons[i]).withMinWidth(w_tmp - 2 * marjin).withMinHeight((float)griidbounds.getHeight() - 2).withMargin(marjin));
         }
         
         
@@ -248,7 +251,7 @@ void Grids::resized()
             buttons[step]->setButtonText(">");
             buttons[step]->setColour(juce::TextButton::ColourIds::textColourOnId, juce::Colours::darkgrey);
             buttons[step]->setColour(juce::TextButton::ColourIds::textColourOffId, juce::Colours::darkgrey);
-            fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w_tmp-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
+            fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth(w_tmp-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
         }
     }
      

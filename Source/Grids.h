@@ -109,6 +109,13 @@ public:
 
         g.fillAll(juce::Colours::darkgrey);
         g.fillAll(buttonColor);
+        if (currentState == State::ButtonEventState)
+        {
+            g.setColour(Colours::red);
+            Rectangle<float> area(getWidth() - 4, 1, 3, 3);
+            g.fillEllipse(area);
+        }
+           
        // g.drawText(t, 0, 0, getWidth(), getHeight(), Justification::centred);
         g.setColour(Colours::darkgrey);
         if(currentState == State::ButtonOnState)
