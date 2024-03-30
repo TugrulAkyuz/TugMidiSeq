@@ -324,7 +324,7 @@ void GlobalPanel::resized()
     auto xarea =getLocalBounds();
     auto top_area = xarea.removeFromTop(13);
     auto rightarea = area.removeFromRight(200);
-   
+    area.removeFromRight(50);
     gridAllEventSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridAllVelSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
     gridAllDurationCombo.setBounds(area.removeFromRight(70).reduced(2,13));

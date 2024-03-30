@@ -272,6 +272,9 @@ public:
         };;
         
        audioProcessor.valueTreeState.removeParameterListener(valueTreeNames[SHUFFLE], this);
+        tmp_s.clear();
+        tmp_s << valueTreeNames[GRIDSHUFFLE] << myLine;
+        audioProcessor.valueTreeState.removeParameterListener(tmp_s, this);
     
         setLookAndFeel (nullptr);
     }
@@ -308,6 +311,7 @@ private:
     CustomRoratySlider gridNumberSlider;
     CustomRoratySlider gridVelSlider;
     CustomRoratySlider gridEventSlider;
+    CustomRoratySlider gridShuffleSlider;
     juce::ComboBox gridSpeedCombo;
     juce::ComboBox gridDurationCombo;
     juce::ArrowButton stepArrow;
@@ -370,6 +374,7 @@ private:
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridNumberSliderAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridVelSliderAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridEventSliderAttachment;
+    std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridShuffleSliderAttachment;
 
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> octaveAttachment;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Grids)

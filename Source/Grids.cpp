@@ -60,6 +60,9 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     addAndMakeVisible(gridEventSlider);
     gridEventSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     
+    addAndMakeVisible(gridShuffleSlider);
+    gridShuffleSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    
    // gridVelSlider.setValue(90);
     juce::String  tmp_s;
     for (int i = 0; i < numOfStep; ++i)
@@ -93,6 +96,13 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
         auto v = audioProcessor.valueTreeState.getParameter(tmp_s)->getValue();
       
         st->parameterChanged(tmp_s, 100*v);
+        
+        tmp_s.clear();
+        tmp_s << valueTreeNames[GRIDSHUFFLE] << line;
+        
+        audioProcessor.valueTreeState.addParameterListener(tmp_s, this);
+        
+        
     }
 
 
@@ -109,6 +119,10 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     tmp_s.clear();
     tmp_s << valueTreeNames[EVENT] << line;
     gridEventSliderAttachment =  std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, gridEventSlider);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[GRIDSHUFFLE] << line;
+    gridShuffleSliderAttachment =  std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, gridShuffleSlider);
     
     gridNumberSlider.onValueChange = [this]()
     {
@@ -188,7 +202,7 @@ void Grids::resized()
     float marjin =  1;
  
     auto area = getLocalBounds();
-   
+    gridShuffleSlider.setBounds( area.removeFromRight(50));
     gridEventSlider.setBounds( area.removeFromRight(50));
     gridVelSlider.setBounds( area.removeFromRight(50));
     gridDurationCombo.setBounds(area.removeFromRight(70).reduced(5,8)/*.withHeight(area.getHeight()-10)*/);
@@ -222,6 +236,7 @@ void Grids::resized()
     int sumButton =  0 ;
     int totalGridWidth = griidbounds.getWidth();
     totalGridWidth = totalGridWidth - 1;
+    std::vector<float> testdmp;
     for ( int i = 0; i < n;i++)
     {
         auto r = audioProcessor.getSfuffleRatios(myLine,i);
@@ -241,6 +256,7 @@ void Grids::resized()
        
        // fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w_tmp-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
         fb.items.add(juce::FlexItem(*buttons[i]).withMinWidth(w_tmp - 2 * marjin).withMinHeight((float)griidbounds.getHeight() - 2).withMargin(marjin));
+            testdmp.push_back(w_tmp);
         }
         
         

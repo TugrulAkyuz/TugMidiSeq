@@ -80,7 +80,11 @@ valueTreeState(*this, &undoManager)
         tmp_s << valueTreeNames[EVENT] << j;
         valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,100,50));
         gridsEventAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
-        
+       
+        tmp_s.clear();
+        tmp_s << valueTreeNames[GRIDSHUFFLE] << j;
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-75,75,0));
+        gridsShuffleAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         //*numOfGrid[j] = 16;
         //*gridsSpeedAtomic[j] = 16;
@@ -653,19 +657,29 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
             else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
             stepResetInterval[i] = first / pow(2,index); // dviding  "first" you get number of sample  for musical note time values
-            
-            for(int s = 0 ; s < numOfStep ; s++)
+            stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
+            float shuffleTmp = (*gridsShuffleAtomic[i] + *shuffleAtomic)/100;
+            shuffleTmp = juce::jlimit(-1.0f, 1.0f, shuffleTmp);
+            int tmpTotal = stepLoopResetInterval[i];
+            for(int s = 0 ; s < *numOfGrid[i] ; s++)
             {
                 if(s%2 == 0 )
                 {
-                    stepResetIntervalForShuffle[i][s] = stepResetInterval[i]*(1 + *shuffleAtomic/100);
+                    stepResetIntervalForShuffle[i][s] = stepResetInterval[i]*(1 + shuffleTmp);
+                    tmpTotal -= stepResetIntervalForShuffle[i][s];
+                    if(tmpTotal <0 )
+                        stepResetIntervalForShuffle[i][s]  =  stepResetIntervalForShuffle[i][s]  + tmpTotal  ;
                 }
-                else stepResetIntervalForShuffle[i][s] = stepResetInterval[i]*(1 - *shuffleAtomic/100);
+                else
+                {
+                    stepResetIntervalForShuffle[i][s] = stepResetInterval[i]*(1 - shuffleTmp );
+                    tmpTotal -= stepResetIntervalForShuffle[i][s];
+                    if(tmpTotal <0 )
+                        stepResetIntervalForShuffle[i][s]  =  stepResetIntervalForShuffle[i][s]  + tmpTotal  ;
+                }
             }
             
-            
-            stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
-            
+
             first = 1.5*4*(60*mySampleRate/ myBpm);
             index = *gridsDurationAtomic[i];
             
@@ -674,14 +688,23 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
             
             stepmidStopSampleInterval[i] = first / pow(2,index);
-            
-            for(int s = 0 ; s < numOfStep ; s++)
+            tmpTotal = stepLoopResetInterval[i];
+            for(int s = 0 ; s < *numOfGrid[i] ; s++)
             {
                 if(s%2 == 0 )
                 {
-                    stepmidStopSampleIntervalForShuffle[i][s] = stepmidStopSampleInterval[i]*(1 + *shuffleAtomic/100);
+                    stepmidStopSampleIntervalForShuffle[i][s] = stepmidStopSampleInterval[i]*(1 + shuffleTmp);
+                    tmpTotal -= stepmidStopSampleIntervalForShuffle[i][s];
+                    if(tmpTotal <0 )
+                        stepmidStopSampleIntervalForShuffle[i][s]  =  stepmidStopSampleIntervalForShuffle[i][s]  + tmpTotal  ;
                 }
-                else stepmidStopSampleIntervalForShuffle[i][s] = stepmidStopSampleInterval[i]*(1 - *shuffleAtomic/100);
+                else
+                {
+                    stepmidStopSampleIntervalForShuffle[i][s] = stepmidStopSampleInterval[i]*(1 - shuffleTmp);
+                    tmpTotal -= stepmidStopSampleIntervalForShuffle[i][s];
+                    if(tmpTotal <0 )
+                        stepmidStopSampleIntervalForShuffle[i][s]  =  stepmidStopSampleIntervalForShuffle[i][s]  + tmpTotal  ;
+                }
             }
             
             

@@ -18,11 +18,11 @@ using namespace juce;
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE
 };
 
 const std::vector <juce::String> myNotetUnit =
@@ -60,6 +60,7 @@ public:
     int gridsDuration[numOfLine];
     int gridsVel[numOfLine];;
     int gridsEvent[numOfLine];
+    int gridsShuffle[numOfLine];
     int globalResyncBar;
     bool GlobalInOrFixedVel;
     bool inBuiltSynth;
@@ -252,7 +253,8 @@ private:
     std::atomic<float> * gridsDurationAtomic[numOfLine];
     
     std::atomic<float> *gridsVelAtomic[numOfLine];
-    std::atomic<float> *gridsEventAtomic[numOfLine];;
+    std::atomic<float> *gridsEventAtomic[numOfLine];
+    std::atomic<float> *gridsShuffleAtomic[numOfLine];
     std::atomic<float> * GlobalInOrFixedAtomic;;
     std::atomic<float> *inBuiltSynthAtomic;
     std::atomic<float> *sortedOrFirstEmptySelectAtomic;
