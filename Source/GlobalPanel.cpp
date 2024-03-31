@@ -89,12 +89,11 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     gridAllNumberSlider.setRange(1, numOfStep,1);
     gridAllVelSlider.setRange(1, 127,1);
     gridAllEventSlider.setRange(1, 100,1);
-    
-    gridAllNumberSlider.setValue(16);
-    gridAllVelSlider.setValue(100);
-    gridAllEventSlider.setValue(50);
-    
-    
+    gridAllNumberSlider.setValue(16,juce::dontSendNotification);
+    gridAllVelSlider.setValue(100,juce::dontSendNotification);
+    gridAllEventSlider.setValue(50,juce::dontSendNotification);
+
+   
     
     //loopBarCounterLabel.setColour(Label::ColourIds::backgroundColourId, Colours::yellow);
     loopBarCounterLabel.setColour(Label::ColourIds::textColourId, Colours::yellowgreen);

@@ -97,23 +97,24 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
       
         st->parameterChanged(tmp_s, 100*v);
         
-        tmp_s.clear();
-        tmp_s << valueTreeNames[GRIDSHUFFLE] << line;
-        
-        audioProcessor.valueTreeState.addParameterListener(tmp_s, this);
-        
+
         
     }
-
-
+    //gridNumberSlider.setRange(1, numOfStep,1);
+    //gridVelSlider.setRange(1, 127,1);
     tmp_s.clear();
-    tmp_s << "GridNum"<<line;
+    tmp_s << valueTreeNames[GRIDSHUFFLE] << line;
+    
+    audioProcessor.valueTreeState.addParameterListener(tmp_s, this);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[GRIDNUM] <<line;
     gridNumberSliderAttachment = std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, gridNumberSlider);
     tmp_s.clear();
-    tmp_s << "Vel"<<line;
+    tmp_s << valueTreeNames[VEL]<<line;
     gridVelSliderAttachment = std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, gridVelSlider);
     tmp_s.clear();
-    tmp_s << "Octave"<<line;
+    tmp_s << valueTreeNames[OCTAVE]<<line;
     octaveAttachment = std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, octaveSlider);
     
     tmp_s.clear();
@@ -135,8 +136,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
 //        resized();
     };
     startTimer(20);
-    gridNumberSlider.setRange(1, numOfStep,1);
-    gridVelSlider.setRange(1, 127,1);
+
     
     
     int i= 1;
@@ -146,7 +146,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
         i++;
     }
     tmp_s.clear();
-    tmp_s << "Speed"<<line;
+    tmp_s << valueTreeNames[SPEEED]<<line;
     comBoxSpeedAtaachment = std::make_unique <AudioProcessorValueTreeState::ComboBoxAttachment>(audioProcessor.valueTreeState, tmp_s, gridSpeedCombo);
 
     
@@ -157,7 +157,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
         i++;
     }
     tmp_s.clear();
-    tmp_s << "Dur"<<line;
+    tmp_s << valueTreeNames[DUR] <<line;
     comBoxDurationAtaachment =  std::make_unique <AudioProcessorValueTreeState::ComboBoxAttachment>(audioProcessor.valueTreeState, tmp_s, gridDurationCombo);
 
     octaveSlider.setColour (Slider::ColourIds::backgroundColourId, Colours::lightgrey);
