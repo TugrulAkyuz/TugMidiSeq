@@ -228,15 +228,14 @@ void Grids::resized()
     fb.flexWrap= juce::FlexBox::Wrap::noWrap;
     fb.justifyContent = juce::FlexBox::JustifyContent::spaceBetween;
  
-    int n = gridNumberSlider.getValue() ;
+    int n = *audioProcessor.numOfGrid[myLine] ;
     auto w = (griidbounds.toFloat().getWidth()   /(n)) ;
     float  w_tmp;
     for ( auto *b : buttons) b->setVisible(false);
     stepArrow.setVisible(false);
-    int sumButton =  0 ;
+    float sumButton =  0 ;
     int totalGridWidth = griidbounds.getWidth();
     totalGridWidth = totalGridWidth - 1;
-    std::vector<float> testdmp;
     for ( int i = 0; i < n;i++)
     {
         auto r = audioProcessor.getSfuffleRatios(myLine,i);
@@ -256,7 +255,7 @@ void Grids::resized()
        
        // fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w_tmp-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
         fb.items.add(juce::FlexItem(*buttons[i]).withMinWidth(w_tmp - 2 * marjin).withMinHeight((float)griidbounds.getHeight() - 2).withMargin(marjin));
-            testdmp.push_back(w_tmp);
+        
         }
         
         

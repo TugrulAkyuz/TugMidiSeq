@@ -223,8 +223,13 @@ public:
     {
         // if (myIsPlaying == false) return -1;
         if (stepmidStopSampleInterval[line] == 0) return 0;
-        return (float)(stepmidStopSampleIntervalForShuffle[line][step]) /stepmidStopSampleInterval[line];
-        
+        float x = stepResetIntervalForShuffle[line][step];
+        float y = stepResetInterval[line];
+        float test = x / y;
+
+      //  DBG(std::to_string(test));
+        return test;
+     //   return (float)(stepmidStopSampleIntervalForShuffle[line][step]) /stepmidStopSampleInterval[line];
     }
     
     void setShuffle()
@@ -242,6 +247,7 @@ private:
     
     int stepmidStopSampleIntervalForShuffle[5][numOfStep];
     int stepResetIntervalForShuffle[5][numOfStep];
+   // int forGuiStepResetIntervalForShuffle[5][numOfStep];
 
     int stepmidStopSampleCounter[5] = {-1,-1,-1,-1,-1};
     int  ppq = 0;

@@ -639,13 +639,13 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
         
         // in  t x = positionInfo.ppqPosition;
         
-        
+       /*
         stepResetInterval[0] =  1*(60*mySampleRate/ myBpm);
         stepResetInterval[1] =  1*(60*mySampleRate/ myBpm);
         stepResetInterval[2] =  1*(60*mySampleRate/ myBpm);
         stepResetInterval[3] =  1*(60*mySampleRate/ myBpm);
         stepResetInterval[4] =  1*(60*mySampleRate/ myBpm);
-        
+       */
         
         for(int i = 0 ; i< numOfLine ;i++)
         {
@@ -660,7 +660,7 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
             stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
             float shuffleTmp = (*gridsShuffleAtomic[i] + *shuffleAtomic)/100;
             shuffleTmp = juce::jlimit(-1.0f, 1.0f, shuffleTmp);
-            int tmpTotal = stepLoopResetInterval[i];
+            long tmpTotal = stepLoopResetInterval[i];
             for(int s = 0 ; s < *numOfGrid[i] ; s++)
             {
                 if(s%2 == 0 )
@@ -679,7 +679,21 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
                 }
             }
             
-
+            if(tmpTotal > 0)
+            {
+                int tmp = *numOfGrid[i];
+                tmp = tmp/2;
+                int addTmp = tmpTotal / tmp;
+                for(int s = 1 ; s < *numOfGrid[i] ; s = s + 2)
+                {
+                    stepResetIntervalForShuffle[i][s] =  stepResetIntervalForShuffle[i][s]+ addTmp;
+                }
+                
+            }
+           
+            //for(int s = 0 ; s < *numOfGrid[i] ; s++)
+            //    forGuiStepResetIntervalForShuffle[i][s] = stepResetIntervalForShuffle[i][s] ;
+            
             first = 1.5*4*(60*mySampleRate/ myBpm);
             index = *gridsDurationAtomic[i];
             
@@ -706,7 +720,6 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
                         stepmidStopSampleIntervalForShuffle[i][s]  =  stepmidStopSampleIntervalForShuffle[i][s]  + tmpTotal  ;
                 }
             }
-            
             
         }
     }
