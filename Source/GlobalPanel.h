@@ -160,6 +160,8 @@ private:
     CustomRoratySlider gridAllNumberSlider;
     CustomRoratySlider gridAllVelSlider;
     CustomRoratySlider gridAllEventSlider;
+    CustomRoratySlider gridGridAllShuffleSlider;
+    CustomRoratySlider gridAllDelaySlider;
     juce::ComboBox gridAllSpeedCombo;
     juce::ComboBox gridAllDurationCombo;
     juce::ComboBox presetCombo;

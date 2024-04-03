@@ -57,14 +57,12 @@ void Satellite::paint (juce::Graphics& g)
           else alpha = audioProcessor.getEventRandom(i);
           
           Path p;
-        
-          float angle = 2.0*(j + startplacediff )*juce::double_Pi/(*audioProcessor.numOfGrid[i]);
+          float delay = 2.0*juce::double_Pi*audioProcessor.getDelayRatio(i);
+          float angle = delay + 2.0*(j + startplacediff )*juce::double_Pi/(*audioProcessor.numOfGrid[i]);
           
           auto sr = audioProcessor.getSfuffleRatios(i,  j);
           startplacediff =  startplacediff + (sr -1);
           if(*audioProcessor.gridsArr[i][j] == 0) continue;
-          float x =  center_x+r[i]*sin(angle);
-          float y =  center_y-r[i]*cos(angle);
 
           p.addCentredArc (center_x, center_y, r[i], r[i], 0.f, angle, angle+sr*arcangle, true);
           g.setColour(colourarray[i].withAlpha(alpha));
@@ -77,7 +75,7 @@ void Satellite::paint (juce::Graphics& g)
          // g.drawEllipse(x-4, y-4, 8, 8);
       }
     }
-
+ 
     
     for(int i = 0 ; i < 5 ; i++)
     {

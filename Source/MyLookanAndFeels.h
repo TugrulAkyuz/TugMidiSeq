@@ -14,7 +14,7 @@
 #pragma once
 using namespace juce;
 
-const Colour myTextLabelColour = juce::Colours::linen;
+const Colour myTextLabelColour = juce::Colours::wheat;
 
 class MyLookAndFeel : public juce::LookAndFeel_V4
 {
@@ -39,6 +39,7 @@ private:
     
         auto outline = juce::Colours::grey;
         auto fill    = slider.findColour (juce::Slider::rotarySliderFillColourId);
+        //auto fill    = Colours::turquoise;
         
         auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat().reduced (5);
         

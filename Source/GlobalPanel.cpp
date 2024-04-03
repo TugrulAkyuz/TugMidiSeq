@@ -15,6 +15,7 @@
 GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
 {
     startTimer(100);
+
     
     addAndMakeVisible(writeButton);
     addAndMakeVisible(deleteButton);
@@ -82,6 +83,14 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     addAndMakeVisible(gridAllSpeedCombo);
     addAndMakeVisible(gridAllDurationCombo);
     addAndMakeVisible(gridAllEventSlider);
+    
+    addAndMakeVisible( gridGridAllShuffleSlider);
+    addAndMakeVisible(gridAllDelaySlider);
+    gridGridAllShuffleSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    gridAllDelaySlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    gridGridAllShuffleSlider.setRange(-75, 75,1);
+    gridAllDelaySlider.setRange(0, 75,1);
+    
     gridAllNumberSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridAllVelSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridAllEventSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
@@ -223,8 +232,16 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     
     gridAllShuffleSlider.onValueChange = [this]()
     {
-        
         audioProcessor.setShuffle();
+    };
+    
+    gridGridAllShuffleSlider.onValueChange = [this]
+    {
+        audioProcessor.setAllValue( valueTreeNames[GRIDSHUFFLE],gridGridAllShuffleSlider.getValue());
+    };
+    gridAllDelaySlider.onValueChange = [this]
+    {
+        audioProcessor.setAllValue( valueTreeNames[GRIDDELAY],gridAllDelaySlider.getValue());
     };
     
     for(auto r : randomButton)
@@ -309,11 +326,11 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
 }
 void GlobalPanel::paint (juce::Graphics& g)
 {
-    g.fillAll (  Colour(0xff303030));
+    g.fillAll (  Colour(0xff101010));
     g.setColour(juce::Colours::orange.withAlpha(0.7f));
     
     g.drawLine(gridAllNumberSlider.getX() -5, 0, gridAllNumberSlider.getX() - 5, getHeight());
-    g.drawLine(gridAllEventSlider.getRight() + 4, 0, gridAllEventSlider.getRight() +  4, getHeight());
+    g.drawLine(gridAllDelaySlider.getRight() + 4, 0, gridAllDelaySlider.getRight() +  4, getHeight());
     
 }
 void GlobalPanel::resized()
@@ -323,7 +340,10 @@ void GlobalPanel::resized()
     auto xarea =getLocalBounds();
     auto top_area = xarea.removeFromTop(13);
     auto rightarea = area.removeFromRight(200);
-    area.removeFromRight(50);
+ 
+ 
+    gridAllDelaySlider.setBounds(area.removeFromRight(50).reduced(3, 5));
+    gridGridAllShuffleSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridAllEventSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridAllVelSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
     gridAllDurationCombo.setBounds(area.removeFromRight(70).reduced(2,13));

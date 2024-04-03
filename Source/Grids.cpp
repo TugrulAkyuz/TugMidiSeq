@@ -11,6 +11,7 @@
 
 #include "Grids.h"
  
+extern ChangeBroadcaster myGridChangeListener;
 
 
 Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepArrow("",
@@ -63,6 +64,9 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     addAndMakeVisible(gridShuffleSlider);
     gridShuffleSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     
+    addAndMakeVisible(gridDelaySlider);
+    gridDelaySlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    
    // gridVelSlider.setValue(90);
     juce::String  tmp_s;
     for (int i = 0; i < numOfStep; ++i)
@@ -100,6 +104,12 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
 
         
     }
+    
+    gridNumberSlider.setColour(juce::Slider::rotarySliderFillColourId,colourarray[myLine]);
+    gridVelSlider.setColour(juce::Slider::rotarySliderFillColourId,colourarray[myLine]);
+    gridEventSlider.setColour(juce::Slider::rotarySliderFillColourId,colourarray[myLine]);
+    gridShuffleSlider.setColour(juce::Slider::rotarySliderFillColourId,colourarray[myLine]);
+    gridDelaySlider.setColour(juce::Slider::rotarySliderFillColourId,colourarray[myLine]);
     //gridNumberSlider.setRange(1, numOfStep,1);
     //gridVelSlider.setRange(1, 127,1);
     tmp_s.clear();
@@ -124,6 +134,15 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     tmp_s.clear();
     tmp_s << valueTreeNames[GRIDSHUFFLE] << line;
     gridShuffleSliderAttachment =  std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, gridShuffleSlider);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[GRIDDELAY] << line;
+    gridDelaySliderAttachment =  std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, gridDelaySlider);
+    
+    gridDelaySlider.onValueChange = [this]()
+    {
+        resized();
+    };
     
     gridNumberSlider.onValueChange = [this]()
     {
@@ -164,11 +183,12 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     octaveSlider.setColour (Slider::ColourIds::trackColourId, Colours::lightgrey);
     octaveSlider.setColour (Slider::ColourIds::thumbColourId, Colours::orange);
     //Slider::ColourIds::thumbColourId
-    octaveSlider.setRange(-2, 2,1);
+    //octaveSlider.setRange(-2, 2,1);
    // octaveSlider.setValue(0);
-    
+   
     audioProcessor.valueTreeState.addParameterListener(valueTreeNames[SHUFFLE], this);
-
+ 
+    myGridChangeListener.addChangeListener(this);
     
 }
 void Grids::paint (juce::Graphics& g)
@@ -202,6 +222,7 @@ void Grids::resized()
     float marjin =  1;
  
     auto area = getLocalBounds();
+    gridDelaySlider.setBounds( area.removeFromRight(50));
     gridShuffleSlider.setBounds( area.removeFromRight(50));
     gridEventSlider.setBounds( area.removeFromRight(50));
     gridVelSlider.setBounds( area.removeFromRight(50));
@@ -212,7 +233,7 @@ void Grids::resized()
     
     //auto tmp =
     myLineLabel.setBounds(area.removeFromLeft(25));
-    midiInNote.setBounds(area.removeFromLeft(60).reduced(10));
+    midiInNote.setBounds(area.removeFromLeft(40).reduced(0,10));
     octaveSlider.setBounds(area.removeFromLeft(50));
     
     subGrids->setBounds(area);
@@ -221,7 +242,7 @@ void Grids::resized()
     
     auto griidbounds =  area.reduced(10, 2);
     juce::FlexBox fb;
-   fb.flexWrap = juce::FlexBox::Wrap::wrap;
+    fb.flexWrap = juce::FlexBox::Wrap::wrap;
 
     fb.alignContent = juce::FlexBox::AlignContent::center;
 
@@ -236,6 +257,7 @@ void Grids::resized()
     float sumButton =  0 ;
     int totalGridWidth = griidbounds.getWidth();
     totalGridWidth = totalGridWidth - 1;
+    float delayRatio = audioProcessor.getDelayRatio(myLine);
     for ( int i = 0; i < n;i++)
     {
         auto r = audioProcessor.getSfuffleRatios(myLine,i);
@@ -270,7 +292,7 @@ void Grids::resized()
         }
     }
      
-
+    //fb.performLayout (griidbounds.toFloat().translated(getWidth()* audioProcessor.getDelayRatio(myLine), 0));
     fb.performLayout (griidbounds.toFloat());
 
 
@@ -323,6 +345,12 @@ void  SubGrids::paint (juce::Graphics& g)
         }
 
     }
+    
+    
+}
+
+void  SubGrids::resized ()
+{
     
     
 }

@@ -18,11 +18,11 @@ using namespace juce;
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY
 };
 
 const std::vector <juce::String> myNotetUnit =
@@ -61,6 +61,7 @@ public:
     int gridsVel[numOfLine];;
     int gridsEvent[numOfLine];
     int gridsShuffle[numOfLine];
+    int gridsDelay[numOfLine];
     int globalResyncBar;
     bool GlobalInOrFixedVel;
     bool inBuiltSynth;
@@ -113,6 +114,7 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
     
+    bool subComputrFunc(int i,juce::MidiBuffer& midiMessages);
     
     void  writePresetToFileJSON();
     
@@ -186,11 +188,17 @@ public:
     int measureSample = 0;
     int measureBar = 0;
     double  mySampleRate = 0;
-    int  sampleNumber[5];
+    int  sampleNumber[5] ={};
     int stepLoopResetInterval[5];
     bool midiState[5] = {};
     bool myIsPlaying  = false;
     
+    float getDelayRatio(int index)
+    {
+        if (stepLoopResetInterval[index] == 0) return 0;
+        return  (*gridsDelayAtomic[index]*100)/stepLoopResetInterval[index];
+        
+    }
     
     float getDurAngle(int index)
     {
@@ -209,8 +217,19 @@ public:
     {
         if (myIsPlaying == false) return -1;
         if (stepLoopResetInterval[line] == 0) return 0;
-        return sampleNumber[line]*1.0/(stepLoopResetInterval[line]);
+      
+        auto x = -*gridsDelayAtomic[line]*100 + sampleNumber[line] ;
+        x = circularRange(x, 0, stepLoopResetInterval[line]);
         
+        return x/(stepLoopResetInterval[line]);
+        
+    }
+
+    float  circularRange(int value, int lowerBound, int upperBound)
+    {
+        int rangeSize = upperBound - lowerBound + 1;
+        int normalizedValue = (value - lowerBound) % rangeSize;
+        return (normalizedValue + rangeSize) % rangeSize + lowerBound;
     }
     float getEventRandom(int line)
     {
@@ -261,6 +280,7 @@ private:
     std::atomic<float> *gridsVelAtomic[numOfLine];
     std::atomic<float> *gridsEventAtomic[numOfLine];
     std::atomic<float> *gridsShuffleAtomic[numOfLine];
+    std::atomic<float> *gridsDelayAtomic[numOfLine];
     std::atomic<float> * GlobalInOrFixedAtomic;;
     std::atomic<float> *inBuiltSynthAtomic;
     std::atomic<float> *sortedOrFirstEmptySelectAtomic;

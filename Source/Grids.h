@@ -35,11 +35,13 @@ public:
     SubGrids(Grids& g, TugMidiSeqAudioProcessor& p ,int line, int type) : ownerGrid(g), audioProcessor(p),myLine(line),subGridType(type)
     {
          startTimer(20);
+        
     }
     ~SubGrids()
     {
         
     }
+    void resized() override;
     void  paint (juce::Graphics& g) override;
     void rP()
     {
@@ -106,9 +108,11 @@ public:
                 t = "R";
                 break;
         }
-
-        g.fillAll(juce::Colours::darkgrey);
-        g.fillAll(buttonColor);
+        
+        //g.fillAll(juce::Colours::darkgrey);
+        //g.fillAll(buttonColor);
+        g.setColour(buttonColor);
+        g.fillRoundedRectangle(getLocalBounds().toFloat(), 2);
         if (currentState == State::ButtonEventState)
         {
             g.setColour(Colours::red);
@@ -253,7 +257,7 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MultiStateButtonAttachment)
 };
 
-class Grids : public juce::Component,  public juce::Timer , private AudioProcessorValueTreeState::Listener
+class Grids : public juce::Component,  public juce::Timer , private AudioProcessorValueTreeState::Listener,ChangeListener
 {
 public:
     Grids(TugMidiSeqAudioProcessor&,int line);
@@ -287,6 +291,13 @@ public:
       
        
     }
+    
+    void changeListenerCallback(ChangeBroadcaster *source) override
+    {
+        resized();
+
+    }
+    
     void setEnable(bool r)
     {
         gridVelSlider.setEnabled(r);
@@ -312,6 +323,7 @@ private:
     CustomRoratySlider gridVelSlider;
     CustomRoratySlider gridEventSlider;
     CustomRoratySlider gridShuffleSlider;
+    CustomRoratySlider gridDelaySlider;
     juce::ComboBox gridSpeedCombo;
     juce::ComboBox gridDurationCombo;
     juce::ArrowButton stepArrow;
@@ -375,6 +387,7 @@ private:
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridVelSliderAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridEventSliderAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridShuffleSliderAttachment;
+    std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridDelaySliderAttachment;
 
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> octaveAttachment;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Grids)
