@@ -326,7 +326,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
 }
 void GlobalPanel::paint (juce::Graphics& g)
 {
-    g.fillAll (  Colour(0xff101010));
+    g.fillAll (  Colour(0xff303030));
     g.setColour(juce::Colours::orange.withAlpha(0.7f));
     
     g.drawLine(gridAllNumberSlider.getX() -5, 0, gridAllNumberSlider.getX() - 5, getHeight());

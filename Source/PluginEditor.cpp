@@ -47,7 +47,7 @@ TugMidiSeqAudioProcessorEditor::~TugMidiSeqAudioProcessorEditor()
 void TugMidiSeqAudioProcessorEditor::paint (juce::Graphics& g)
 {
     // (Our component is opaque, so we must completely fill the background with a solid colour)
-    g.fillAll (  Colour(0xff101010));
+    g.fillAll (  Colour(0xff202020));
     auto allarea = getLocalBounds();
     g.setColour(Colours::yellow.withAlpha(0.2f));
     g.drawRect(allarea,3.0f);

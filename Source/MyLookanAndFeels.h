@@ -203,7 +203,7 @@ public:
         
         //
         setColour(juce::Slider::ColourIds::rotarySliderFillColourId, juce::Colours::lightcyan);
-        setColour(juce::Slider::ColourIds::thumbColourId, juce::Colours::lightblue);
+        setColour(juce::Slider::ColourIds::thumbColourId, juce::Colours::lightgrey);
         setColour(Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
         
 

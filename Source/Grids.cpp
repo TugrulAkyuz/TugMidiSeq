@@ -23,9 +23,13 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     myLineLabel.setText(std::to_string(myLine + 1), juce::NotificationType::dontSendNotification);
     myLineLabel.setColour(juce::Label::ColourIds::textColourId, colourarray[myLine]);
     myLineLabel.setJustificationType(Justification::right);
+    
     addAndMakeVisible(myLineLabel);
     addAndMakeVisible(octaveSlider);
     addAndMakeVisible(stepArrow);
+    addAndMakeVisible(gridNumberSlider);
+    addAndMakeVisible(gridSpeedCombo);
+    
     octaveSlider.setSliderStyle(juce::Slider::LinearVertical);
     octaveSlider.setColour(Slider::textBoxOutlineColourId , juce::Colours::black.withAlpha(0.0f));
     //octaveSlider.gette
@@ -34,8 +38,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     octaveSlider.setColour(Slider::textBoxTextColourId,  Colours::orange);
     addAndMakeVisible(midiInNote);
     midiInNote.setColour(juce::TextButton::textColourOffId, juce::Colours::black);
-    addAndMakeVisible(gridNumberSlider);
-    addAndMakeVisible(gridSpeedCombo);
+
     gridSpeedCombo.setLookAndFeel(&myLookAndFeel);
     //gridSpeedCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::orange);
     addAndMakeVisible(gridDurationCombo);
@@ -194,7 +197,8 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
 void Grids::paint (juce::Graphics& g)
 {
    
-    g.fillAll (  Colour(0xff202020));
+    //g.fillAll (  Colour(0xff404040));
+    g.fillAll (  Colours::darkgrey.withAlpha(0.0f));
     auto y = getLocalBounds().getHeight();
     auto x = getLocalBounds().getWidth();
     g.setColour(juce::Colours::orange.withAlpha(0.7f));
@@ -203,6 +207,10 @@ void Grids::paint (juce::Graphics& g)
         g.drawLine(0, 0, x, 0, 2);
     float ratio =   audioProcessor.getGridContinousRatio(myLine);
 
+    g.setColour(juce::Colours::orange.withAlpha(0.7f));
+    g.drawLine(octaveSlider.getRight(), 4,octaveSlider.getRight(), getHeight()- 4,1);
+    g.drawLine(gridNumberSlider.getX() -4  ,4,gridNumberSlider.getX() - 4, getHeight() - 4,1);
+    
     /*
     if(midiInNote.getButtonText() != "")
     {
