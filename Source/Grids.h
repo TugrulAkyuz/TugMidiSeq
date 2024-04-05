@@ -91,7 +91,8 @@ public:
     {
         juce::Colour buttonColor;
         String t = "";;
-       
+        //auto bC = Colour(0xFFB0C3CF);
+        auto bC = Colour(0xFFAFAD9F);
         // Determine the color based on the current state
         switch (currentState)
         {
@@ -99,12 +100,12 @@ public:
                 buttonColor = juce::Colours::darkgrey;
                 break;
             case State::ButtonOnState:
-                buttonColor = juce::Colours::orange;
+                buttonColor = bC;
                 t = "F";
                 break;
             case State::ButtonEventState:
               
-                buttonColor = juce::Colours::orange.withAlpha(juce::jlimit(0.1f, 1.0f, evenAlpha));
+                buttonColor = bC.withAlpha(juce::jmap(evenAlpha,0.0f, 1.0f,0.4f,1.0f ));
                 t = "R";
                 break;
         }
@@ -317,6 +318,7 @@ public:
 private:
     bool myShuffleChabged = false;
     MyLookAndFeel myLookAndFeel;
+    MyLookAndFeel myLookAndFeel2;
     TugMidiSeqAudioProcessor& audioProcessor;
     juce::OwnedArray<MultiStateButton> buttons;
     CustomRoratySlider gridNumberSlider;

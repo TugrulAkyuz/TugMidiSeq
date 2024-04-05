@@ -511,7 +511,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     sampleNumber[i] = 0;
                     stpSample[i] = -1; ;
                 }
-                if((*gridsDelayAtomic[i]*100) > sampleNumber[i])
+                 int sDelay = *gridsDelayAtomic[i]*100;
+    
+                if(sDelay > sampleNumber[i])
                     continue;
                 stpSample[i]++;
                 stpSample[i] %=stepResetIntervalForShuffle[i][steps[i]];

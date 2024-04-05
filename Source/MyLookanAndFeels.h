@@ -18,6 +18,12 @@ const Colour myTextLabelColour = juce::Colours::wheat;
 
 class MyLookAndFeel : public juce::LookAndFeel_V4
 {
+public:
+    void setdrawRotaryCenterd(bool centered)
+    {
+        myCenterdSlider = centered;
+    }
+    
 private:
  
     Label* createSliderTextBox (Slider& slider) override
@@ -34,9 +40,14 @@ private:
         l->setFont(f);
         return l;
     }
+
     void drawRotarySlider(juce::Graphics & g, int x, int y, int width, int height, float sliderPos, float rotaryStartAngle, float rotaryEndAngle, juce::Slider & slider) override
     {
-    
+        float startAngle = rotaryStartAngle;
+        if(myCenterdSlider == true)
+        {
+            startAngle  = (rotaryEndAngle + rotaryStartAngle)/2;
+        }
         auto outline = juce::Colours::grey;
         auto fill    = slider.findColour (juce::Slider::rotarySliderFillColourId);
         //auto fill    = Colours::turquoise;
@@ -71,7 +82,7 @@ private:
                                     arcRadius,
                                     arcRadius,
                                     0.0f,
-                                    rotaryStartAngle,
+                                    startAngle,
                                     toAngle,
                                     true);
             
@@ -82,8 +93,8 @@ private:
         auto thumbWidth = lineW * 2.0f;
         juce::Point<float> thumbPoint (bounds.getCentreX() + (arcRadius - 1) * std::cos (toAngle - juce::MathConstants<float>::halfPi),
                                        bounds.getCentreY() + (arcRadius - 1) * std::sin (toAngle - juce::MathConstants<float>::halfPi));
-        
-        g.setColour (slider.findColour (juce::Slider::thumbColourId));
+        g.setColour (juce::Colours::lightgrey);
+        //g.setColour (slider.findColour (juce::Slider::thumbColourId));
         // g.fillEllipse (juce::Rectangle<float> (thumbWidth, thumbWidth).withCentre (thumbPoint));
         g.drawLine(backgroundArc.getBounds().getCentreX(), backgroundArc.getBounds().getCentreY(), thumbPoint.getX(), thumbPoint.getY(),lineW);
         
@@ -132,6 +143,7 @@ private:
     }
 
 private:
+    bool myCenterdSlider = false;
     Font getCommonMenuFont()
     {
         return Font ("Times", "Regular", 10.f);

@@ -12,11 +12,11 @@
 #pragma once
 
 const juce::Colour colourarray [5] = {
-    juce::Colours::red,
-    juce::Colours::lightgreen,
-    juce::Colours::yellow,
-    juce::Colours::magenta,
-    juce::Colours::lightblue
+    juce::Colours::red.darker(),
+    juce::Colours::lightgreen.darker(),
+    juce::Colours::yellow.darker(),
+    juce::Colours::magenta.darker(),
+    juce::Colours::lightblue.darker()
 };
 
 class Satellite   : public juce::Component , public juce::Timer

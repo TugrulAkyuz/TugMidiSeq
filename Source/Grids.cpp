@@ -107,6 +107,10 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
 
         
     }
+  
+   // dynamic_cast<<#type#>>(expression)
+    myLookAndFeel2.setdrawRotaryCenterd(true);
+    gridShuffleSlider.setLookAndFeel(&myLookAndFeel2);
     
     gridNumberSlider.setColour(juce::Slider::rotarySliderFillColourId,colourarray[myLine]);
     gridVelSlider.setColour(juce::Slider::rotarySliderFillColourId,colourarray[myLine]);
@@ -234,8 +238,8 @@ void Grids::resized()
     gridShuffleSlider.setBounds( area.removeFromRight(50));
     gridEventSlider.setBounds( area.removeFromRight(50));
     gridVelSlider.setBounds( area.removeFromRight(50));
-    gridDurationCombo.setBounds(area.removeFromRight(70).reduced(5,8)/*.withHeight(area.getHeight()-10)*/);
-    gridSpeedCombo.setBounds(area.removeFromRight(70).reduced(5,8)/*.withHeight(area.getHeight()-)*/);
+    gridDurationCombo.setBounds(area.removeFromRight(56).reduced(2,8)/*.withHeight(area.getHeight()-10)*/);
+    gridSpeedCombo.setBounds(area.removeFromRight(56).reduced(2,8)/*.withHeight(area.getHeight()-)*/);
     gridNumberSlider.setBounds( area.removeFromRight(50)/*.withHeight(area.getHeight()+5)*/);
     
     
@@ -315,9 +319,13 @@ void  SubGrids::paint (juce::Graphics& g)
     Rectangle<int>  area;
     if(ratio >= 0)
     {
-        area = Rectangle<int>  (10,getHeight() -10,ratio*(getWidth() -20),2);
-
+        area = Rectangle<int>  (10,getHeight() -7,ratio*(getWidth() -20),2);
+ 
         ds.drawForRectangle(g, area);
+        
+      //  g.drawLine(10 + ratio*(getWidth() -20), getHeight() -10 , 10 + ratio*(getWidth() -20), getHeight() - 5);
+         Line<float> line(10 + ratio*(getWidth() -20),getHeight() -6, 20 + ratio*(getWidth() -20) ,getHeight() -6);
+        g.drawArrow(line, 4, 4, 5);
     
     }
     float len = audioProcessor.getGridSampleLen( myLine);

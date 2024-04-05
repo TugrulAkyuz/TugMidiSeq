@@ -327,6 +327,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
 void GlobalPanel::paint (juce::Graphics& g)
 {
     g.fillAll (  Colour(0xff303030));
+    //g.fillAll (  Colours::darkslategrey);
     g.setColour(juce::Colours::orange.withAlpha(0.7f));
     
     g.drawLine(gridAllNumberSlider.getX() -5, 0, gridAllNumberSlider.getX() - 5, getHeight());
@@ -346,8 +347,10 @@ void GlobalPanel::resized()
     gridGridAllShuffleSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridAllEventSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridAllVelSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
-    gridAllDurationCombo.setBounds(area.removeFromRight(70).reduced(2,13));
-    gridAllSpeedCombo.setBounds(area.removeFromRight(70).reduced(2,13));
+    gridAllDurationCombo.setBounds(area.removeFromRight(56).reduced(2,13));
+    
+    
+    gridAllSpeedCombo.setBounds(area.removeFromRight(56).reduced(2,13));
     gridAllNumberSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
     
     
