@@ -180,6 +180,8 @@ public:
     
     std::atomic<float> * gridsArr[numOfLine][numOfStep];
     int steps[5] = {};
+    int new_steps[5] = {};
+    
     std::atomic<float> *numOfGrid[5];
     std::atomic<float> *octave[5];
     std::atomic<float> *globalResyncBar;
@@ -218,10 +220,10 @@ public:
         if (myIsPlaying == false) return -1;
         if (stepLoopResetInterval[line] == 0) return 0;
       
-        auto x = -*gridsDelayAtomic[line]*100 + sampleNumber[line] ;
-        x = circularRange(x, 0, stepLoopResetInterval[line]);
+       // auto x = -*gridsDelayAtomic[line]*100 + sampleNumber[line] ;
+       // x = circularRange(x, 0, stepLoopResetInterval[line]);
         
-        return x/(stepLoopResetInterval[line]);
+        return sampleNumber[line]*1.0/(stepLoopResetInterval[line]);
         
     }
 
@@ -257,6 +259,8 @@ public:
     }
     
     void initPrepareValue();
+    
+    void calculateAndUpdateSetup(int myLine);
     
 private:
     int stpSample[5] = {};

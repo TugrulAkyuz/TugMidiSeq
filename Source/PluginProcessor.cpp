@@ -88,7 +88,7 @@ valueTreeState(*this, &undoManager)
         
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDDELAY] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,0,75,0));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-75,75,0));
         gridsDelayAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         //*numOfGrid[j] = 16;
@@ -389,7 +389,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 //                if(it.getNoteNumber() == currentMessage.getNoteNumber())
                 //                    it.setNoteNumber(*octave[i] + currentMessage.getNoteNumber());
                 //                i++;
-                DBG(it.getNoteNumber());
+                //DBG(it.getNoteNumber());
             }
            
             for (auto i = 0 ; i < inMidiNoteListVector.size() ;i++)
@@ -401,7 +401,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             }
             for( auto it : inMidiNoteListVector)
             {
-                DBG("ekl "+std::to_string(it.getVelocity()) );
+                //DBG("ekl "+std::to_string(it.getVelocity()) );
             }
         }
         if(currentMessage.isNoteOff())
@@ -413,9 +413,11 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             if(it == inMidiNoteList.end()) return;
             //  DBG(it->getNoteNumber());
             inMidiNoteList.erase(it);
+            /*
             for (auto const &it: inMidiNoteList)
                 DBG(it.getNoteNumber());
             DBG("");
+             */
             erasedMidi.addEvent(currentMessage, 0);
             //            for(int j = 0 ; j <  numOfLine; j++)
             //              for(int i = 0 ; i < numOfStep ; i++)
@@ -431,7 +433,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             
             for( auto it : inMidiNoteListVector)
             {
-                DBG("sil "+std::to_string(it.getVelocity()) );
+                //DBG("sil "+std::to_string(it.getVelocity()) );
             }
         }
         
@@ -487,7 +489,10 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     for(int i =  0; i  < numOfLine ; i++)
                     {
                         steps[i] = (int)(*numOfGrid[i]) -1;
-                        sampleNumber[i] = 0;
+                        
+                        int idx = (-*gridsDelayAtomic[i]*100);
+                        circularRange(idx, 0, stepLoopResetInterval[i]);
+                        sampleNumber[i] = idx;
                         stpSample[i] = stepResetIntervalForShuffle[i][steps[i]] -1;
                     }
                     
@@ -505,18 +510,21 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             
             for(int i =  0; i  < numOfLine ; i++)
             {
-                sampleNumber[i]++;
+                calculateAndUpdateSetup(i);
+                
+                
                 if(sampleNumber[i] == stepLoopResetInterval[i])
                 {
-                    sampleNumber[i] = 0;
-                    stpSample[i] = -1; ;
+                    //sampleNumber[i] = 0;
+                    //stpSample[i] = -1; ;
                 }
-                 int sDelay = *gridsDelayAtomic[i]*100;
+                
+               //  int sDelay = *gridsDelayAtomic[i]*100;
     
-                if(sDelay > sampleNumber[i])
-                    continue;
-                stpSample[i]++;
-                stpSample[i] %=stepResetIntervalForShuffle[i][steps[i]];
+              //  if(sDelay > sampleNumber[i])
+              //      continue;
+                //stpSample[i]++;
+                //stpSample[i] %=stepResetIntervalForShuffle[i][steps[i]];
                
                 if(stepmidStopSampleCounter[i] != -1)
                 {
@@ -532,8 +540,8 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 if(stpSample[i] == 0)
                 {
                     
-                    steps[i]++;
-                    steps[i] %= (int)(*numOfGrid[i]);
+                   // steps[i]++;
+                   // steps[i] %= (int)(*numOfGrid[i]);
                     
 
                   //  if(steps[i] == 0)
@@ -550,7 +558,8 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     
                     
                 }
-                
+                sampleNumber[i]++;
+                sampleNumber[i] %= stepLoopResetInterval[i];
             }
         }
         
@@ -750,11 +759,48 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         tmp.durationsample = stepmidStopSampleIntervalForShuffle[i][steps[i]]  -1;
         inRealMidiNoteList.push_back(tmp);
         
-        DBG(" Channel: "  << it.getChannel());
+        //DBG(" Channel: "  << it.getChannel());
         midiState[i] = true;
     }
     return true;
 }
+
+void TugMidiSeqAudioProcessor::calculateAndUpdateSetup(int myLine)
+{
+    
+ 
+    stpSample[myLine] %=stepResetIntervalForShuffle[myLine][new_steps[myLine]];
+    int left = 0;
+    if(sampleNumber[myLine] == 0)
+    {
+        
+    }
+          
+    for(int i = 0; i < *numOfGrid[myLine] ; i++ )
+    {
+        stpSample[myLine] =   sampleNumber[myLine] - left;
+        if(left == sampleNumber[myLine])
+        {
+            //auto is= std::to_string(i);
+            //DBG("fire " + is);
+            steps[myLine] = i;
+            stpSample[myLine] = 0;
+            return;
+        }
+        if( left < sampleNumber[myLine]  && left +  stepResetIntervalForShuffle[myLine][i] > sampleNumber[myLine])
+        {
+            //auto is= std::to_string(i);
+           // DBG("fire " + is);
+            steps[myLine] = i;
+            
+            return;
+        }
+           
+        left = left + stepResetIntervalForShuffle[myLine][i];
+    }
+   
+}
+
 
 //==============================================================================
 // This creates new instances of the plugin..
