@@ -88,7 +88,7 @@ valueTreeState(*this, &undoManager)
         
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDDELAY] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-75,75,0));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-99,99,0));
         gridsDelayAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         //*numOfGrid[j] = 16;
@@ -446,6 +446,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     midiMessages.swapWith(erasedMidi);
 
     if (positionInfo.bpm == 0) return;
+
+    delaySampleNumberForQuarter = mySampleRate*0.5/(positionInfo.bpm*1.0/60);
+    
     if (positionInfo.bpm)
     {
         initPrepareValue();
@@ -472,10 +475,11 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 midiMessages.addEvent(it->sentMidi, 0);
                 it = inRealMidiNoteList.erase(it);
             }
+            initForVariables();
         }/**ppq ye bakma code*/
         
         if(midiEffectSampelDiffBitweenCall < 0) midiEffectSampelDiffBitweenCall = 0;
-        
+        if(myIsPlaying == false) return;
         for(int s = 0 ; s < buffer.getNumSamples();  s++)/**ppq ye bakma code*/
         { 
             measureSample++;
@@ -486,19 +490,12 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 measureBar %= (int)(*globalResyncBar);
                 if(measureBar == 0)
                 {
-                    for(int i =  0; i  < numOfLine ; i++)
-                    {
-                        steps[i] = (int)(*numOfGrid[i]) -1;
-                        
-                        int idx = (-*gridsDelayAtomic[i]*100);
-                        circularRange(idx, 0, stepLoopResetInterval[i]);
-                        sampleNumber[i] = idx;
-                        stpSample[i] = stepResetIntervalForShuffle[i][steps[i]] -1;
-                    }
+                    initForVariables();
                     
                 }
             }
-            
+           
+               
             std::list<RealMidiNoteList>::iterator it;
             for (it = inRealMidiNoteList.begin(); it != inRealMidiNoteList.end(); )
             {
@@ -558,8 +555,15 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     
                     
                 }
-                sampleNumber[i]++;
-                sampleNumber[i] %= stepLoopResetInterval[i];
+                auto tmps = std::to_string(baseSampleNumber[i]);
+                
+                baseSampleNumber[i]++;
+                baseSampleNumber[i] %= stepLoopResetInterval[i];
+                int idx = (-*gridsDelayAtomic[i]*0.01*delaySampleNumberForQuarter  + baseSampleNumber[i] );
+                idx = circularRange(idx, 0, stepLoopResetInterval[i]);
+                sampleNumber[i] = idx;
+                //DBG("baseSampleNumber " + tmps + " idx = " + tmps2idx + " after idx = " + tmps3idx);
+                
             }
         }
         
@@ -787,7 +791,7 @@ void TugMidiSeqAudioProcessor::calculateAndUpdateSetup(int myLine)
             stpSample[myLine] = 0;
             return;
         }
-        if( left < sampleNumber[myLine]  && left +  stepResetIntervalForShuffle[myLine][i] > sampleNumber[myLine])
+        if( (left < sampleNumber[myLine])  && ((left +  stepResetIntervalForShuffle[myLine][i]) > sampleNumber[myLine]))
         {
             //auto is= std::to_string(i);
            // DBG("fire " + is);
@@ -801,7 +805,21 @@ void TugMidiSeqAudioProcessor::calculateAndUpdateSetup(int myLine)
    
 }
 
-
+void TugMidiSeqAudioProcessor::initForVariables()
+{
+    
+    for(int i =  0; i  < numOfLine ; i++)
+    {
+        steps[i] = (int)(*numOfGrid[i]) -1;
+        baseSampleNumber[i] = 0;
+        //int idx = (-*gridsDelayAtomic[i]*0.01f*stepResetIntervalForShuffle[i][steps[i]] + baseSampleNumber[i]);
+        int idx = (-*gridsDelayAtomic[i]*0.01*delaySampleNumberForQuarter  + baseSampleNumber[i] );
+        idx = circularRange(idx, 0, stepLoopResetInterval[i]);
+        sampleNumber[i] = idx;
+       
+        stpSample[i] = stepResetIntervalForShuffle[i][steps[i]] -1;
+    }
+}
 //==============================================================================
 // This creates new instances of the plugin..
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

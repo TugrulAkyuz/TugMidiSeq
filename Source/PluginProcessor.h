@@ -191,9 +191,12 @@ public:
     int measureBar = 0;
     double  mySampleRate = 0;
     int  sampleNumber[5] ={};
+    int  baseSampleNumber[5] ={};
     int stepLoopResetInterval[5];
     bool midiState[5] = {};
     bool myIsPlaying  = false;
+    
+    int delaySampleNumberForQuarter;
     
     float getDelayRatio(int index)
     {
@@ -295,7 +298,7 @@ private:
     juce::MidiBuffer myInnmidiBuffer;
     std::list<juce::MidiMessage> inMidiNoteList;
     std::vector<juce::MidiMessage> inMidiNoteListVector;
-    
+    void initForVariables();
     struct RealMidiNoteList
     {
         juce::MidiMessage sentMidi;

@@ -83,11 +83,11 @@ void Satellite::paint (juce::Graphics& g)
  
         if(audioProcessor.stepLoopResetInterval[i] == 0) return;
         float angle = audioProcessor.sampleNumber[i]*2.0*juce::double_Pi/(audioProcessor.stepLoopResetInterval[i]);
-        if (audioProcessor.myIsPlaying == false) angle = 0;
+       // if (audioProcessor.myIsPlaying == false) angle = 0;
         float x =  center_x+r[i]*sin(angle);
         float y =  center_y-r[i]*cos(angle);
         juce::String tmp = std::to_string(i+1);
-        if(audioProcessor.midiState[i] == false)
+        if(audioProcessor.midiState[i] == false  || audioProcessor.myIsPlaying == false)
         {
 
             g.setColour(juce::Colours::lightgrey);

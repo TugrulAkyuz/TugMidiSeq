@@ -85,7 +85,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
             for(MultiStateButton * b : buttons)
             {
                 stepArray[i] = (b->getToggleState());
-                int x = stepArray[i];
+        
                 i++;
             }
             subGrids->rP();
@@ -111,6 +111,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
    // dynamic_cast<<#type#>>(expression)
     myLookAndFeel2.setdrawRotaryCenterd(true);
     gridShuffleSlider.setLookAndFeel(&myLookAndFeel2);
+    gridDelaySlider.setLookAndFeel(&myLookAndFeel2);
     
     gridNumberSlider.setColour(juce::Slider::rotarySliderFillColourId,colourarray[myLine]);
     gridVelSlider.setColour(juce::Slider::rotarySliderFillColourId,colourarray[myLine]);
@@ -209,7 +210,7 @@ void Grids::paint (juce::Graphics& g)
     g.drawLine(0, y, x, y, 2);
     if(myLine == 4)
         g.drawLine(0, 0, x, 0, 2);
-    float ratio =   audioProcessor.getGridContinousRatio(myLine);
+   
 
     g.setColour(juce::Colours::orange.withAlpha(0.7f));
     g.drawLine(octaveSlider.getRight(), 4,octaveSlider.getRight(), getHeight()- 4,1);
@@ -269,7 +270,7 @@ void Grids::resized()
     float sumButton =  0 ;
     int totalGridWidth = griidbounds.getWidth();
     totalGridWidth = totalGridWidth - 1;
-    float delayRatio = audioProcessor.getDelayRatio(myLine);
+    
     for ( int i = 0; i < n;i++)
     {
         auto r = audioProcessor.getSfuffleRatios(myLine,i);

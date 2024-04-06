@@ -89,7 +89,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     gridGridAllShuffleSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridAllDelaySlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridGridAllShuffleSlider.setRange(-75, 75,1);
-    gridAllDelaySlider.setRange(0, 75,1);
+    gridAllDelaySlider.setRange(-99,99,1);
     
     gridAllNumberSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridAllVelSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
