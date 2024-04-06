@@ -649,7 +649,7 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
             stepResetInterval[i] = first / pow(2,index); // dviding  "first" you get number of sample  for musical note time values
             stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
             float shuffleTmp = (*gridsShuffleAtomic[i] + *shuffleAtomic)/100;
-            shuffleTmp = juce::jlimit(-1.0f, 1.0f, shuffleTmp);
+            shuffleTmp = juce::jlimit(-0.99f, 0.99f, shuffleTmp);
             long tmpTotal = stepLoopResetInterval[i];
             for(int s = 0 ; s < *numOfGrid[i] ; s++)
             {

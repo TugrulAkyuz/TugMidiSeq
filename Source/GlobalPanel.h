@@ -155,6 +155,7 @@ private:
     int myMeasure;
     Grids *otherg[5] = {};
     MyLookAndFeel myLookAndFeel;
+    MyLookAndFeel myLookAndFeel2;
     TugMidiSeqAudioProcessor& audioProcessor;
     Component  associatedComponent;
     CustomRoratySlider gridAllNumberSlider;

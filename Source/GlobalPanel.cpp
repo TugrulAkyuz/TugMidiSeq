@@ -89,7 +89,10 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     gridGridAllShuffleSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridAllDelaySlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridGridAllShuffleSlider.setRange(-75, 75,1);
+    myLookAndFeel2.setdrawRotaryCenterd(true);
+    gridGridAllShuffleSlider.setLookAndFeel(&myLookAndFeel2);
     gridAllDelaySlider.setRange(-99,99,1);
+    gridAllDelaySlider.setLookAndFeel(&myLookAndFeel2);
     
     gridAllNumberSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     gridAllVelSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
@@ -102,7 +105,9 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
     gridAllVelSlider.setValue(100,juce::dontSendNotification);
     gridAllEventSlider.setValue(50,juce::dontSendNotification);
 
-   
+    gridAllShuffleSlider.setColour(juce::Slider::rotarySliderFillColourId,Colours::orange);
+    gridAllShuffleSlider.setLookAndFeel(&myLookAndFeel2);
+    loopBarlenghtSlider.setColour(juce::Slider::rotarySliderFillColourId,Colours::orange);
     
     //loopBarCounterLabel.setColour(Label::ColourIds::backgroundColourId, Colours::yellow);
     loopBarCounterLabel.setColour(Label::ColourIds::textColourId, Colours::yellowgreen);
