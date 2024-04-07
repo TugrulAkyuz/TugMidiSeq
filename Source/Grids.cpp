@@ -84,9 +84,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
             int i = 0;
             for(MultiStateButton * b : buttons)
             {
-                stepArray[i] = (b->getToggleState());
-        
-                i++;
+    
             }
             subGrids->rP();
         };
@@ -104,8 +102,16 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
       
         st->parameterChanged(tmp_s, 100*v);
         
-
-        
+       
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[VELGRIDBUTTON]<< line << i;
+        /*
+        addAndMakeVisible (velButtons.add (new CustomRoratySlider ()));
+        CustomRoratySlider *  st_vel = velButtons.getLast();
+        st_vel->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+        st_vel->setLookAndFeel(&myLookAndFeel);
+        velButtonAttachmentArray.add( std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s,*st_vel));
+         */
     }
   
    // dynamic_cast<<#type#>>(expression)
@@ -304,10 +310,33 @@ void Grids::resized()
             fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth(w_tmp-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
         }
     }
+    fb.performLayout (griidbounds.toFloat());
+ /*
+    for ( int i = 0; i < n;i++)
+    {
+        auto r = audioProcessor.getSfuffleRatios(myLine,i);
+         w_tmp = w*r;
+        sumButton =  sumButton + w_tmp ;
+        
+        if(sumButton  > totalGridWidth)
+            w_tmp = w_tmp  - (sumButton -totalGridWidth);
+        
+        if(step != i || step == -1)
+        {
+        velButtons[i]->setVisible(true);
+
+            
+       
+       // fb.items.add (juce::FlexItem (*buttons[i]).withMinWidth (w_tmp-2*marjin).withMinHeight ((float) griidbounds.getHeight() -2 ).withMargin(marjin));
+        fb.items.add(juce::FlexItem(*velButtons[i]).withMinWidth(w_tmp - 2 * marjin).withMinHeight((float)griidbounds.getHeight() - 2).withMargin(marjin));
+        
+        }
+        
+    }
+  */
      
     //fb.performLayout (griidbounds.toFloat().translated(getWidth()* audioProcessor.getDelayRatio(myLine), 0));
     fb.performLayout (griidbounds.toFloat());
-
 
 }
 

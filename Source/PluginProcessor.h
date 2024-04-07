@@ -18,11 +18,11 @@ using namespace juce;
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON
 };
 
 const std::vector <juce::String> myNotetUnit =
@@ -179,6 +179,8 @@ public:
     void deletePreset(int);
     
     std::atomic<float> * gridsArr[numOfLine][numOfStep];
+    std::atomic<float> * gridVelArrAtomic[numOfLine][numOfStep];
+    
     int steps[5] = {};
     int new_steps[5] = {};
     
@@ -197,6 +199,11 @@ public:
     bool myIsPlaying  = false;
     
     int delaySampleNumberForQuarter;
+    
+    float getVelButton(int line, int step)
+    {
+        return *gridVelArrAtomic[line][step]/127;
+    }
     
     float getDelayRatio(int index)
     {

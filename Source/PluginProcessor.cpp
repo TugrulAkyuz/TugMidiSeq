@@ -50,6 +50,10 @@ valueTreeState(*this, &undoManager)
             
             gridsArr[j][i] = valueTreeState.getRawParameterValue(grid_block);
             
+            grid_block.clear();
+            grid_block <<valueTreeNames[VELGRIDBUTTON]<< j << i;
+            valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{grid_block,1}, grid_block,0,127,100));
+            gridVelArrAtomic[j][i] = valueTreeState.getRawParameterValue(grid_block);
         }
         tmp_s.clear();
         tmp_s << valueTreeNames[SPEEED] << j;

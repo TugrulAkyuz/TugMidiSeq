@@ -78,13 +78,46 @@ public:
     MultiStateButton() : juce::Button("MultiStateButton")
     {
         setClickingTogglesState(true);
-       
+        //setInterceptsMouseClicks (false, true);
+      
     }
     ~MultiStateButton()
     {
        
         myState->removeParameterListener(myParameterID, this);
 
+    }
+  
+   void  mouseDown (const MouseEvent&) override
+    {
+        
+        if (juce::ModifierKeys::currentModifiers.isShiftDown())
+        {
+          //  setInterceptsMouseClicks(false, false);
+           // shiftPressed = true;
+            return;
+        }
+        //setInterceptsMouseClicks(true, false);
+        
+    }
+    void  mouseUp (const MouseEvent&) override
+    {
+      //  shiftPressed = false;
+       // setInterceptsMouseClicks(true, false);
+    }
+    
+    void mouseMove(const MouseEvent& e) override
+    {
+        if(shiftPressed == true)
+        {
+            
+        }
+       
+    }
+    void mouseExit(const MouseEvent& e) override
+    {
+        shiftPressed = false;
+        //setInterceptsMouseClicks(true, false);
     }
 
     void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override
@@ -147,8 +180,40 @@ public:
             //p.cubicTo(getWidth()/3, 0, <#float controlPoint2X#>, <#float controlPoint2Y#>, <#float endPointX#>, <#float endPointY#>)
         }
         //juce::Button::paintButton(g, isMouseOverButton, isButtonDown);
+       // if(shiftPressed == true )
+       //     showVelocity(g,0.5);
     }
 
+    void showVelocity(juce::Graphics& g,float value)
+    {
+        juce::Path backgroundArc;
+        
+       // g.setColour(Colours::black);
+        
+        backgroundArc.addCentredArc(g.getClipBounds().getCentreX(),
+                                    g.getClipBounds().getCentreY(),
+                                    g.getClipBounds().getCentreX(),
+                                    g.getClipBounds().getCentreY(),
+            0.0f,
+            -3 * 3.14 / 4,
+            value * 6 * 3.14 / 4 - 3 * 3.14 / 4,
+            true);
+        PathStrokeType stroke(3.0f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded);
+        g.strokePath(backgroundArc, stroke);
+
+        backgroundArc.addCentredArc(g.getClipBounds().getCentreX(),
+                                    g.getClipBounds().getCentreY(),
+                                    g.getClipBounds().getCentreX(),
+                                    g.getClipBounds().getCentreY(),
+            0.0f,
+            -3 * 3.14 / 4,
+            1.0 * 6 * 3.14 / 4 - 3 * 3.14 / 4,
+            true);
+        stroke.setStrokeThickness(1.5f);
+        g.setColour(Colours::yellow.withAlpha(0.5f));
+        g.strokePath(backgroundArc, stroke);
+    }
+    
     State getCurrentState() const
     {
         return currentState;
@@ -189,6 +254,7 @@ public:
         repaint();
     }
 private:
+    bool shiftPressed = false;
     juce::String myParameterID;
     juce::AudioProcessorValueTreeState *myState;
     State currentState = State::ButtonOffState;
@@ -221,6 +287,7 @@ public:
       
         if (clickedButton == &button)
         {
+
             auto ctrl_down = juce::ModifierKeys::getCurrentModifiers().isCtrlDown();
             auto currentState = button.getCurrentState();
             MultiStateButton::State newValue;
@@ -242,7 +309,6 @@ private:
     juce::AudioProcessorValueTreeState& state;
     juce::String parameterID;
     MultiStateButton& button;
-
     void updateButtonStateFromParameter()
     {
         auto* parameter = state.getParameter(parameterID);
@@ -321,6 +387,7 @@ private:
     MyLookAndFeel myLookAndFeel2;
     TugMidiSeqAudioProcessor& audioProcessor;
     juce::OwnedArray<MultiStateButton> buttons;
+    juce::OwnedArray<CustomRoratySlider> velButtons;
     CustomRoratySlider gridNumberSlider;
     CustomRoratySlider gridVelSlider;
     CustomRoratySlider gridEventSlider;
@@ -381,8 +448,8 @@ private:
         }
     }
     
-    bool stepArray [32];
-   juce::OwnedArray    <MultiStateButtonAttachment> buttonAttachmentArray;
+    juce::OwnedArray    <MultiStateButtonAttachment> buttonAttachmentArray;
+    juce::OwnedArray  <AudioProcessorValueTreeState::SliderAttachment> velButtonAttachmentArray;
     std::unique_ptr < AudioProcessorValueTreeState::ComboBoxAttachment>  comBoxSpeedAtaachment;
     std::unique_ptr < AudioProcessorValueTreeState::ComboBoxAttachment>  comBoxDurationAtaachment;
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridNumberSliderAttachment;
