@@ -15,6 +15,7 @@ using namespace juce;
 
 #include "SynthVoice.h"
 
+extern ChangeBroadcaster myGridChangeListener;
 
 const juce::StringArray valueTreeNames = 
 {
@@ -162,6 +163,7 @@ public:
         {
             valueTreeState.getParameterAsValue(s+std::to_string(i)).setValue(v);
         }
+        myGridChangeListener.sendChangeMessage();
     }
     void randomizeGrids(int index)
     {

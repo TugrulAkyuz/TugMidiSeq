@@ -67,7 +67,7 @@ valueTreeState(*this, &undoManager)
         gridsDurationAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDNUM] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,32,16));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,2,32,16));
         numOfGrid[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         tmp_s.clear();
