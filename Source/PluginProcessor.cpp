@@ -226,6 +226,11 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
                 tmp_s.clear();
                 tmp_s << valueTreeNames[BLOCK] << i << j;
                 valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).grids[i][j]);
+                
+                tmp_s.clear();
+                tmp_s << valueTreeNames[VELGRIDBUTTON] << i << j;
+                valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridVelArr[i][j]);
+                
             }
             tmp_s.clear();
             tmp_s << valueTreeNames[SPEEED] << i;
@@ -756,8 +761,12 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
             it2 = inRealMidiNoteList.erase(it2);
         }
         
+        float velTmp = *gridsVelAtomic[i]/ 90.0f;
+        velTmp = jlimit(0.0f,1.0f,velTmp**gridVelArrAtomic[i][steps[i]]/ 127.0f);
         if(*GlobalInOrFixedAtomic == 0)
-            it.setVelocity(*gridsVelAtomic[i]/ 127.0f);
+           it.setVelocity(velTmp);
+    
+        
         
         if (myIsPlaying == false) return false;
         midiMessages.addEvent(it, 0);

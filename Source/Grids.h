@@ -65,6 +65,7 @@ private:
 
 
 
+
 class MultiStateButton : public juce::Button ,  private AudioProcessorValueTreeState::Listener
 {
 public:
@@ -75,7 +76,8 @@ public:
         ButtonEventState
     };
 
-    MultiStateButton() : juce::Button("MultiStateButton")
+    MultiStateButton(TugMidiSeqAudioProcessor& p, int line , int step) : juce::Button("MultiStateButton"),
+    audioProcesor(p),myLine(line), myStep(step)
     {
         setClickingTogglesState(true);
         //setInterceptsMouseClicks (false, true);
@@ -88,24 +90,45 @@ public:
 
     }
   
-   void  mouseDown (const MouseEvent&) override
+   void  mouseDown (const MouseEvent& e) override
     {
-        
+        shiftPressed = false;
         if (juce::ModifierKeys::currentModifiers.isShiftDown())
         {
           //  setInterceptsMouseClicks(false, false);
-           // shiftPressed = true;
-            return;
+            shiftPressed = true;
+            y = e.getPosition().getY();
+           // return;
         }
         //setInterceptsMouseClicks(true, false);
+        Button::mouseDown(e);
+    }
+    void mouseDrag (const MouseEvent& e) override
+    {
+        if(shiftPressed == false) return;
+       
+        auto p = e.getPosition().getY();
+        float z = y - p ;
+
+        y = p ;
+        String tmp_s ;
+        tmp_s <<valueTreeNames[VELGRIDBUTTON]<< myLine << myStep;
+        float value = audioProcesor.getVelButton(myLine,myStep) + z/127;
+        auto s = std::to_string(z);
+        DBG(value);
+        value = jlimit(0.0f, 1.0f, value);
+        audioProcesor.valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(value);
         
     }
-    void  mouseUp (const MouseEvent&) override
+    void  mouseUp (const MouseEvent& e) override
     {
       //  shiftPressed = false;
        // setInterceptsMouseClicks(true, false);
+        if(shiftPressed == false)
+            Button::mouseUp(e);
+
     }
-    
+   
     void mouseMove(const MouseEvent& e) override
     {
         if(shiftPressed == true)
@@ -114,18 +137,21 @@ public:
         }
        
     }
+
     void mouseExit(const MouseEvent& e) override
     {
         shiftPressed = false;
         //setInterceptsMouseClicks(true, false);
     }
 
+   
     void paintButton(juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override
     {
         juce::Colour buttonColor;
-        String t = "";;
+       
         //auto bC = Colour(0xFFB0C3CF);
-        auto bC = Colour(0xFFAFAD9F);
+        //auto bC = Colour(0xFFAFAD9F);
+        auto bC = Colours::white;
         // Determine the color based on the current state
         switch (currentState)
         {
@@ -133,13 +159,8 @@ public:
                 buttonColor = juce::Colours::darkgrey;
                 break;
             case State::ButtonOnState:
-                buttonColor = bC;
-                t = "F";
-                break;
             case State::ButtonEventState:
-              
-                buttonColor = bC.withAlpha(juce::jmap(evenAlpha,0.0f, 1.0f,0.4f,1.0f ));
-                t = "R";
+                buttonColor = bC.withAlpha(jmap( audioProcesor.getVelButton(myLine, myStep, true),0.0f, 1.0f,0.4f,1.0f ));
                 break;
         }
         
@@ -159,41 +180,47 @@ public:
         if(currentState == State::ButtonOnState)
         {
             Line <float> l  (getWidth()/3,getHeight()/2,3*getWidth()/4,getHeight()/2);
-            g.drawArrow(l, 2, 3, 4);
+           // g.drawArrow(l, 2, 3, 4);
         }
         if(currentState == State::ButtonEventState)
         {
             juce::Path p;
             int  y = getHeight()/2;
-            float effet = sin(evenAlpha*3.14)*y/2;
+            float effet = cos(evenAlpha*3.14/2)*y/2;
             p.startNewSubPath(getWidth()/5, y + effet);
-            p.lineTo(2*getWidth()/5, y + effet);
-            p.lineTo(3*getWidth()/5, y - effet);
+            p.lineTo(1.5*getWidth()/5, y + effet);
+            p.lineTo(3.5*getWidth()/5, y - effet);
             p.lineTo(4*getWidth()/5, y - effet);
             g.strokePath(p, PathStrokeType(2.0f));
             p.clear();
             p.startNewSubPath(getWidth()/5, y - effet);
-            p.lineTo(2*getWidth()/5, y - effet);
-            p.lineTo(3*getWidth()/5, y + effet);
+            p.lineTo(1.5*getWidth()/5, y - effet);
+            p.lineTo(3.5*getWidth()/5, y + effet);
             p.lineTo(4*getWidth()/5, y + effet);
             g.strokePath(p, PathStrokeType(2.0f));
             //p.cubicTo(getWidth()/3, 0, <#float controlPoint2X#>, <#float controlPoint2Y#>, <#float endPointX#>, <#float endPointY#>)
         }
         //juce::Button::paintButton(g, isMouseOverButton, isButtonDown);
-       // if(shiftPressed == true )
-       //     showVelocity(g,0.5);
+        if(shiftPressed == true )
+            showVelocity(g,audioProcesor.getVelButton(myLine,myStep));
     }
 
     void showVelocity(juce::Graphics& g,float value)
     {
         juce::Path backgroundArc;
         
-       // g.setColour(Colours::black);
+         //g.setColour(Colours::darkgrey);
+        //g.fillAll();
+        Colour tmpC = Colours::darkslategrey;
+        g.setColour(tmpC);
+        int centerX = g.getClipBounds().getCentreX();
+        int centerY = g.getClipBounds().getCentreY();
+        g.drawLine(centerX, centerY, (centerX) - cos(value * 6 * 3.14 / 4 - 1 * 3.14 / 4  )*(centerX-2), (centerY) -  sin(value * 6 * 3.14 / 4  - 1 * 3.14 / 4)*(centerY-2), 3);
         
-        backgroundArc.addCentredArc(g.getClipBounds().getCentreX(),
-                                    g.getClipBounds().getCentreY(),
-                                    g.getClipBounds().getCentreX(),
-                                    g.getClipBounds().getCentreY(),
+        backgroundArc.addCentredArc(centerX,
+                                    centerY,
+                                    centerX-2,
+                                    centerY-2,
             0.0f,
             -3 * 3.14 / 4,
             value * 6 * 3.14 / 4 - 3 * 3.14 / 4,
@@ -201,17 +228,18 @@ public:
         PathStrokeType stroke(3.0f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded);
         g.strokePath(backgroundArc, stroke);
 
-        backgroundArc.addCentredArc(g.getClipBounds().getCentreX(),
-                                    g.getClipBounds().getCentreY(),
-                                    g.getClipBounds().getCentreX(),
-                                    g.getClipBounds().getCentreY(),
+        backgroundArc.addCentredArc(centerX,
+                                    centerY,
+                                    centerX-2,
+                                    centerY-2,
             0.0f,
             -3 * 3.14 / 4,
             1.0 * 6 * 3.14 / 4 - 3 * 3.14 / 4,
             true);
         stroke.setStrokeThickness(1.5f);
-        g.setColour(Colours::yellow.withAlpha(0.5f));
+        g.setColour(tmpC.withAlpha(0.5f));
         g.strokePath(backgroundArc, stroke);
+
     }
     
     State getCurrentState() const
@@ -254,11 +282,17 @@ public:
         repaint();
     }
 private:
+    
     bool shiftPressed = false;
     juce::String myParameterID;
+    TugMidiSeqAudioProcessor& audioProcesor;
+    int myLine, myStep;
     juce::AudioProcessorValueTreeState *myState;
     State currentState = State::ButtonOffState;
-    float evenAlpha =1.0;;
+    float y;
+    float evenAlpha =1.0;
+    
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MultiStateButton)
     
 };

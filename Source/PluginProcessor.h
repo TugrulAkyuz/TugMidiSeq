@@ -54,6 +54,7 @@ public:
     
     juce::String myProgramname;
     int grids[numOfLine][numOfStep];
+    int gridVelArr[numOfLine][numOfStep];
     int numOfGrid[numOfLine];
     int octave[numOfLine];
     int gridsSpeed[numOfLine];
@@ -200,9 +201,21 @@ public:
     
     int delaySampleNumberForQuarter;
     
-    float getVelButton(int line, int step)
+    float getVelButton(int line, int step, bool total = false)
     {
-        return *gridVelArrAtomic[line][step]/127;
+        if(*GlobalInOrFixedAtomic != 0)
+            return 1.0f;
+        if(total == false)
+            return *gridVelArrAtomic[line][step]/ 127.0f;
+        float velTmp = *gridsVelAtomic[line]/ 90.0f;
+        velTmp = jlimit(0.0f,1.0f,velTmp**gridVelArrAtomic[line][step]/ 127.0f);
+        return velTmp;
+    }
+    float getGridButtonState(int line, int step)
+    {
+        
+        return *gridsArr[line][step];
+        
     }
     
     float getDelayRatio(int index)

@@ -12,7 +12,7 @@
 #include "Satellite.h"
 
 
-GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
+GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , velUsageButton("VelButton")
 {
     startTimer(100);
 
@@ -144,13 +144,13 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p)
         {
             for(auto i = 0; i < 5 ;i++)
             otherg[i]->setEnable(true);
-            velUsageButton.setButtonText("Fixed Vel");
+            velUsageButton.setButtonText("Own Vel");
         }
         else
         {
             for(auto i = 0; i < 5 ;i++)
             otherg[i]->setEnable(false);
-            velUsageButton.setButtonText("In Vel");
+            velUsageButton.setButtonText("Midi Vel");
         }
     };
    // resetButton.setLookAndFeel(&myLookAndFeel);

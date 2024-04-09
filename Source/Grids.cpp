@@ -74,7 +74,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     juce::String  tmp_s;
     for (int i = 0; i < numOfStep; ++i)
     {
-        addAndMakeVisible (buttons.add (new MultiStateButton ()));
+        addAndMakeVisible (buttons.add (new MultiStateButton (audioProcessor , myLine, i)));
         buttons.getLast()->setClickingTogglesState(true);
         buttons.getLast()->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::grey);
         buttons.getLast()->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::orange);
@@ -362,32 +362,29 @@ void  SubGrids::paint (juce::Graphics& g)
     int  s_x = 0;
     Rectangle<int> area2;
     bool passed = false;
+  
+    auto evetProb = audioProcessor.getEventRandom(myLine);
+    
     for(int i = ownerGrid.getParam(GETNUMOF) - 1 ; i >= 0; i--)
     {
         s_x = ownerGrid.getParam(GETCOORDOFBUTTON,i);
         auto sr = audioProcessor.getSfuffleRatios(myLine,  i);
         if(s_x != -1)
         {
-            
-            g.setColour(colourarray[myLine].withAlpha(0.6f));
+            auto bState = audioProcessor.getGridButtonState(myLine,i);
+            if(bState != 2) evetProb = 1;
+            g.setColour(colourarray[myLine].withAlpha(evetProb*0.8f));
             area2 = Rectangle<int> (s_x, 4 ,  (int)(0.95*len*sr*getWidth()), 5);
             g.fillRect(area2);
             if(area.getRight() < area2.getRight() && area.getRight() > area2.getX()  && audioProcessor.midiState[myLine] == true && passed == false)
             {
-                /*
-                ColourGradient gf(colourarray[myLine],  area2.getCentreX(),  area2.getCentreY(), colourarray[myLine].withAlpha(0.0f), area2.getX()-10,-2, true);
-                g.setGradientFill(gf);
-                
-                g.fillRect(area2.expanded(20, 2));
-                 */
                 g.setColour(colourarray[myLine].withAlpha(1.0f));
                 g.fillRect(area2);
                 passed = true;
                 
                 
             }
-         //   g.setColour(colourarray[myLine].withAlpha(0.6f));
-         //   g.drawRect(area2);
+
         }
 
     }

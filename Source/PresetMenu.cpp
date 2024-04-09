@@ -21,47 +21,51 @@ void TugMidiSeqAudioProcessor::resetAllParam()
         {
             tmp_s.clear();
             tmp_s << valueTreeNames[BLOCK] << j << i;
-            valueTreeState.getParameterAsValue(tmp_s).setValue(0);
+            valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
+            
+            tmp_s.clear();
+            tmp_s << valueTreeNames[VELGRIDBUTTON] << j << i;
+            valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
         }
         tmp_s.clear();
         tmp_s << valueTreeNames[SPEEED] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(13);
+        valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
         tmp_s.clear();
         tmp_s << valueTreeNames[DUR] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(13);
+        valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDNUM] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(16);
+        valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
         tmp_s.clear();
         tmp_s << valueTreeNames[OCTAVE] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(0);
+        valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
         tmp_s.clear();
         tmp_s << valueTreeNames[VEL] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(90);
+        valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
         tmp_s.clear();
         tmp_s << valueTreeNames[EVENT] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(50);
+        valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
         
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDDELAY] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(0);
+        valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
         
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDSHUFFLE] << j;
-        valueTreeState.getParameterAsValue(tmp_s).setValue(0);
+        valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
         
     }
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOBALRESTBAR];
-    valueTreeState.getParameterAsValue(tmp_s).setValue(1);
+    valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
     
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOABLINORFIXVEL];
-    valueTreeState.getParameterAsValue(tmp_s).setValue(0);
+    valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
     
     tmp_s.clear();
     tmp_s << valueTreeNames[SHUFFLE];
-    valueTreeState.getParameterAsValue(tmp_s).setValue(0);
+    valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
     
     //    tmp_s.clear();
     //    tmp_s << valueTreeNames[INBUILTSYNTH];
@@ -69,11 +73,11 @@ void TugMidiSeqAudioProcessor::resetAllParam()
     
     tmp_s.clear();
     tmp_s << valueTreeNames[SORTEDORFIRST];
-    valueTreeState.getParameterAsValue(tmp_s).setValue(0);
+    valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
     
     // mySynth.clearSounds();
     
-    initPrepareValue();
+    //initPrepareValue();
     
     myGridChangeListener.sendChangeMessage();
 }
@@ -103,6 +107,13 @@ void  TugMidiSeqAudioProcessor::writePresetToFileJSON()
                 tmp_s <<valueTreeNames[BLOCK]<< i << j;
                 auto v = myProgram.at(p).grids[i][j];
                 newObj.getDynamicObject()->setProperty(tmp_s,v);
+                
+                
+                tmp_s.clear();
+                tmp_s <<valueTreeNames[VELGRIDBUTTON]<< i << j;
+                v = myProgram.at(p).gridVelArr[i][j];
+                newObj.getDynamicObject()->setProperty(tmp_s,v);
+                
             }
             
             tmp_s.clear();
@@ -215,6 +226,15 @@ void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
                 tmp_s <<valueTreeNames[BLOCK]<< i << j;
                 v = preset.getProperty(tmp_s, var());
                 p.grids[i][j] = v;
+                
+                tmp_s.clear();
+                tmp_s <<valueTreeNames[VELGRIDBUTTON]<< i << j;
+                if (preset.hasProperty(tmp_s))
+                   v = preset.getProperty(tmp_s, var());
+                else
+                    v =  90;
+                p.gridVelArr[i][j] = v;
+                
             }
             tmp_s.clear();
             tmp_s <<valueTreeNames[SPEEED]<< i;
@@ -304,6 +324,12 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
             tmp_s <<valueTreeNames[BLOCK]<< i << j;
             
             paramProg.grids[i][j] = *valueTreeState.getRawParameterValue(tmp_s);
+            
+            tmp_s.clear();
+            tmp_s <<valueTreeNames[VELGRIDBUTTON]<< i << j;
+            
+            paramProg.gridVelArr[i][j] = *valueTreeState.getRawParameterValue(tmp_s);
+            
         }
         tmp_s.clear();
         tmp_s <<valueTreeNames[SPEEED]<< i;
