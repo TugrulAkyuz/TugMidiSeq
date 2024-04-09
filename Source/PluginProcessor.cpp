@@ -485,6 +485,8 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 it = inRealMidiNoteList.erase(it);
             }
             initForVariables();
+            inMidiNoteListVector.clear();
+            inMidiNoteList.clear();
         }/**ppq ye bakma code*/
         
         if(midiEffectSampelDiffBitweenCall < 0) midiEffectSampelDiffBitweenCall = 0;
