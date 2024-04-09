@@ -363,7 +363,7 @@ void  SubGrids::paint (juce::Graphics& g)
     Rectangle<int> area2;
     bool passed = false;
   
-    auto evetProb = audioProcessor.getEventRandom(myLine);
+    auto eventProb = audioProcessor.getEventRandom(myLine);
     
     for(int i = ownerGrid.getParam(GETNUMOF) - 1 ; i >= 0; i--)
     {
@@ -371,9 +371,10 @@ void  SubGrids::paint (juce::Graphics& g)
         auto sr = audioProcessor.getSfuffleRatios(myLine,  i);
         if(s_x != -1)
         {
+            float tmpEvent = eventProb;
             auto bState = audioProcessor.getGridButtonState(myLine,i);
-            if(bState != 2) evetProb = 1;
-            g.setColour(colourarray[myLine].withAlpha(evetProb*0.8f));
+            if(bState != 2) tmpEvent = 1;
+            g.setColour(colourarray[myLine].withAlpha(tmpEvent*0.8f));
             area2 = Rectangle<int> (s_x, 4 ,  (int)(0.95*len*sr*getWidth()), 5);
             g.fillRect(area2);
             if(area.getRight() < area2.getRight() && area.getRight() > area2.getX()  && audioProcessor.midiState[myLine] == true && passed == false)
