@@ -11,7 +11,7 @@
 
 #include "Grids.h"
  
-extern ChangeBroadcaster myGridChangeListener;
+
 
 
 Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepArrow("",

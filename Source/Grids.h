@@ -13,6 +13,8 @@
 #include "Satellite.h"
 #pragma once
 
+extern ChangeBroadcaster myGridChangeListener;
+
 enum  {
     SELECTEDGRID,
     FOLLOWGRID
@@ -380,7 +382,7 @@ public:
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDSHUFFLE] << myLine;
         audioProcessor.valueTreeState.removeParameterListener(tmp_s, this);
-    
+        myGridChangeListener.removeChangeListener(this);
         setLookAndFeel (nullptr);
     }
     void  paint (juce::Graphics& g) override;
