@@ -278,7 +278,8 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
     tmp_s.clear();
     tmp_s << valueTreeNames[SHUFFLE];
     valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).shuffle);
-    
+
+    myGridChangeListener.sendChangeMessage();
 }
 
 const juce::String TugMidiSeqAudioProcessor::getProgramName (int index)
