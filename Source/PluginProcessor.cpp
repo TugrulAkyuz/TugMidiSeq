@@ -703,6 +703,7 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
             
             stepmidStopSampleInterval[i] = first / pow(2,index);
+            /*
             tmpTotal = stepLoopResetInterval[i];
             for(int s = 0 ; s < *numOfGrid[i] ; s++)
             {
@@ -720,6 +721,41 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
                     if(tmpTotal <0 )
                         stepmidStopSampleIntervalForShuffle[i][s]  =  stepmidStopSampleIntervalForShuffle[i][s]  + tmpTotal  ;
                 }
+            }
+             */
+            int prevmidistep = -1;
+            float  shuffCoef[2];
+            shuffCoef[0] = 1 + shuffleTmp;
+            shuffCoef[1] = 1 - shuffleTmp;
+            
+            int sum = 0;
+            for(int s = 0 ; s < *numOfGrid[i] ; s++)
+            {
+   
+                stepmidStopSampleIntervalForShuffle[i][s] = stepmidStopSampleInterval[i]*shuffCoef[s%2];
+                sum =  sum + stepResetIntervalForShuffle[i][s];
+                if(prevmidistep != -1)
+                {
+                    if( *gridsArr[i][s] != 0)
+                    {
+                        
+                        if(stepmidStopSampleIntervalForShuffle[i][prevmidistep] > sum)
+                            stepmidStopSampleIntervalForShuffle[i][prevmidistep] = sum - stepResetIntervalForShuffle[i][prevmidistep];
+                        sum = stepResetIntervalForShuffle[i][s];
+                        prevmidistep = s;
+                        continue;
+                    }
+                }
+                
+                if(*gridsArr[i][s] != 0)
+                {
+                    prevmidistep = s;
+                    sum = stepResetIntervalForShuffle[i][s];
+                   
+                }
+                    
+           
+                
             }
             
         }
