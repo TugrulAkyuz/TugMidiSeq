@@ -153,7 +153,7 @@ public:
        
         //auto bC = Colour(0xFFB0C3CF);
         //auto bC = Colour(0xFFAFAD9F);
-        auto bC = Colours::white;
+        auto bC = Colours::lightgoldenrodyellow;
         // Determine the color based on the current state
         switch (currentState)
         {
