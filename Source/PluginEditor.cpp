@@ -51,6 +51,13 @@ void TugMidiSeqAudioProcessorEditor::paint (juce::Graphics& g)
     auto allarea = getLocalBounds();
     g.setColour(Colours::yellow.withAlpha(0.2f));
     g.drawRect(allarea,3.0f);
+    String ver;
+    g.setColour(Colours::grey);
+    ver << "Ver: " << ProjectInfo::versionString;
+ //   g.drawText(ver, 0, getHeight() -15 , 80, 15, Justification::centred);
+    juce::Font myFont("Arial", 10, juce::Font::plain);
+    g.setFont(myFont);
+    g.drawFittedText(ver, getWidth() - 60, 5 , 70, 15, Justification::centred ,1);
  
 }
 
