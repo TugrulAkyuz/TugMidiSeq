@@ -4,7 +4,7 @@
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
               pluginManufacturer="2Rule" pluginCharacteristicsValue="pluginIsSynth,pluginProducesMidiOut,pluginWantsMidiIn"
               pluginFormats="buildAU,buildStandalone,buildVST3" bundleIdentifier="2Rule.TugMidiSeq"
-              version="2.2.0" pluginAUMainType="'aumu'" companyName="2Rule"
+              version="2.2.1" pluginAUMainType="'aumu'" companyName="2Rule"
               companyWebsite="https://akyuz5.wixsite.com/mysite" companyEmail="tugrulvega@gmail.com">
   <MAINGROUP id="soeMpr" name="TugMidiSeq">
     <GROUP id="{8DE839C0-F477-F119-F4B1-66A417831F51}" name="PNGs"/>
