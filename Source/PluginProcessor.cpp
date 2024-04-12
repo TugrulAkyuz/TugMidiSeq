@@ -451,7 +451,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         
     }
     //midiMessages.swapWith(processedMidiBuffer);
-    if(myIsPlaying == true)
+    if(positionInfo.isPlaying == true)
     {
         midiMessages.clear();
         midiMessages.swapWith(erasedMidi);
