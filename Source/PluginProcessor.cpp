@@ -475,7 +475,8 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         auto  x = positionInfo.ppqPosition; /**ppq ye bakma code*/
         midiEffectSampelDiffBitweenCall = 60*mySampleRate*( x- prevtimeInSamples)/myBpm;/**ppq ye bakma code*/
         prevtimeInSamples = positionInfo.ppqPosition;;/**ppq ye bakma code*/
-        
+        if(positionInfo.isPlaying == false)
+            initForVariables();
         if(myIsPlaying == true &&  positionInfo.isPlaying == false )/**ppq ye bakma code*/
         {
             std::list<RealMidiNoteList>::iterator it;
@@ -485,7 +486,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 midiMessages.addEvent(it->sentMidi, 0);
                 it = inRealMidiNoteList.erase(it);
             }
-            initForVariables();
+           
              
             //inMidiNoteListVector.clear();
             inMidiNoteList.clear();
