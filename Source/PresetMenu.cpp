@@ -54,6 +54,10 @@ void TugMidiSeqAudioProcessor::resetAllParam()
         tmp_s << valueTreeNames[GRIDSHUFFLE] << j;
         valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
         
+        tmp_s.clear();
+        tmp_s << valueTreeNames[GRIDMIDIROUTE] << j;
+        valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
+        
     }
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOBALRESTBAR];
@@ -157,6 +161,10 @@ void  TugMidiSeqAudioProcessor::writePresetToFileJSON()
             v = myProgram.at(p).gridsDelay[i];
             newObj.getDynamicObject()->setProperty(tmp_s,v);
             
+            tmp_s.clear();
+            tmp_s <<valueTreeNames[GRIDMIDIROUTE]<< i;
+            v = myProgram.at(p).gridsMidiRoute[i];
+            newObj.getDynamicObject()->setProperty(tmp_s,v);
         }
         tmp_s.clear();
         tmp_s << valueTreeNames[GLOBALRESTBAR];
@@ -277,6 +285,11 @@ void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
             v = preset.getProperty(tmp_s, var());
             p.gridsDelay[i] = v;
             
+            tmp_s.clear();
+            tmp_s <<valueTreeNames[GRIDMIDIROUTE]<< i;
+            v = preset.getProperty(tmp_s, var());
+            p.gridsMidiRoute[i] = v;
+            
         }
         tmp_s.clear();
         tmp_s << valueTreeNames[GLOBALRESTBAR];
@@ -369,7 +382,13 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
         tmp_s.clear();
         tmp_s <<valueTreeNames[GRIDDELAY]<< i;
         
-        paramProg.gridsDelay[i] = *valueTreeState.getRawParameterValue(tmp_s);;
+        paramProg.gridsDelay[i] = *valueTreeState.getRawParameterValue(tmp_s);
+        
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[GRIDMIDIROUTE]<< i;
+        
+        paramProg.gridsMidiRoute[i] = *valueTreeState.getRawParameterValue(tmp_s);;
+        
         
     }
     

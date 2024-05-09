@@ -94,6 +94,11 @@ valueTreeState(*this, &undoManager)
         tmp_s << valueTreeNames[GRIDDELAY] << j;
         valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-99,99,0));
         gridsDelayAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
+       
+        tmp_s.clear();
+        tmp_s << valueTreeNames[GRIDMIDIROUTE] << j;
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,0,numOfLine-1,0));
+        gridsMidiRouteAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         //*numOfGrid[j] = 16;
         //*gridsSpeedAtomic[j] = 16;
@@ -153,6 +158,15 @@ valueTreeState(*this, &undoManager)
     positionInfo.bpm = 120;
     mySampleRate = 44100;
     initPrepareValue();
+    
+    for(auto i = 0; i < numOfLine; i++)
+    {
+        midiProcessor[i] = std::make_unique<MidiProcessor>(i);
+   
+    }
+     
+    
+    
 }
 
 TugMidiSeqAudioProcessor::~TugMidiSeqAudioProcessor()
@@ -257,6 +271,10 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
             tmp_s.clear();
             tmp_s << valueTreeNames[GRIDDELAY] << i;
             valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsDelay[i]);
+            
+            tmp_s.clear();
+            tmp_s << valueTreeNames[GRIDMIDIROUTE] << i;
+            valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsMidiRoute[i]);
             
         }
     tmp_s.clear();
@@ -386,6 +404,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     //myInnmidiBuffer.clear();
     while(it.getNextEvent(currentMessage,samplePos))
     {
+        
         if(currentMessage.isNoteOn())
         {
             //myInnmidiBuffer.addEvent(currentMessage,samplePos );
@@ -428,7 +447,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 DBG(it.getNoteNumber());
             DBG("");
              */
-            erasedMidi.addEvent(currentMessage, 0);
+            erasedMidi.addEvent(currentMessage, currentMessage.getTimeStamp());
             //            for(int j = 0 ; j <  numOfLine; j++)
             //              for(int i = 0 ; i < numOfStep ; i++)
             //            DBG(*gridsArr[j][i]);
@@ -484,6 +503,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             {
                 it->sentMidi.setVelocity(0.0f);
                 midiMessages.addEvent(it->sentMidi, 0);
+                midiProcessor[it->lineNo]->sendMidiMessage(it->sentMidi);
                 it = inRealMidiNoteList.erase(it);
             }
            
@@ -524,7 +544,8 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             {
                 if(it->durationsample != 0) { it->durationsample--; it++ ; continue;}
                 it->sentMidi.setVelocity(0.0f);
-                midiMessages.addEvent(it->sentMidi, 0);
+                midiMessages.addEvent(it->sentMidi, s);
+                midiProcessor[it->lineNo]->sendMidiMessage(it->sentMidi);
                 it = inRealMidiNoteList.erase(it);
             }
             
@@ -571,7 +592,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                        || (*gridsArr[i][steps[i]] == 2
                            && juce::Random::getSystemRandom().nextInt(100) < *gridsEventAtomic[i]))
                     {
-                        subComputrFunc( i,midiMessages);
+                        subComputrFunc( i,midiMessages, s);
                     }
                     
                     
@@ -776,8 +797,10 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
     
 }
 
-bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessages)
+bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessages,int s)
 {
+    
+    int midRouteIndex = *gridsMidiRouteAtomic[i];
     bool  sortedofirs_Bool = inMidiNoteList.size() > i;
     if(*sortedOrFirstEmptySelectAtomic == true)
         sortedofirs_Bool = true;
@@ -807,7 +830,8 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         if(it2 != inRealMidiNoteList.end())
         {
             it2->sentMidi.setVelocity(0.0f);
-            midiMessages.addEvent(it2->sentMidi, 0);
+            midiMessages.addEvent(it2->sentMidi, s);
+            midiProcessor[it2->lineNo]->sendMidiMessage(it2->sentMidi);
             it2 = inRealMidiNoteList.erase(it2);
         }
         
@@ -819,10 +843,13 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         
         
         if (myIsPlaying == false) return false;
-        midiMessages.addEvent(it, 0);
+        midiMessages.addEvent(it, s);
+        midiProcessor[midRouteIndex]->sendMidiMessage(it);
+        
         stepmidStopSampleCounter[i] = 1;
         RealMidiNoteList tmp;
         tmp.sentMidi = it;
+        tmp.lineNo = midRouteIndex;
         tmp.durationsample = stepmidStopSampleIntervalForShuffle[i][steps[i]]  -1;
         inRealMidiNoteList.push_back(tmp);
         
@@ -883,6 +910,8 @@ void TugMidiSeqAudioProcessor::initForVariables()
         stpSample[i] = stepResetIntervalForShuffle[i][steps[i]] -1;
     }
 }
+
+
 //==============================================================================
 // This creates new instances of the plugin..
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

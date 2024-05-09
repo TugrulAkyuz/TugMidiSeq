@@ -48,7 +48,7 @@ private:
         {
             startAngle  = (rotaryEndAngle + rotaryStartAngle)/2;
         }
-        auto outline = juce::Colours::grey;
+        auto outline = juce::Colours::darkgrey.withAlpha(0.7f);
         auto fill    = slider.findColour (juce::Slider::rotarySliderFillColourId);
         //auto fill    = Colours::turquoise;
         
@@ -121,17 +121,17 @@ private:
         g.setColour (Colour(20,20,20));
         g.fillRoundedRectangle (boxBounds.toFloat(), cornerSize);
 
-        g.setColour (juce::Colours::lightgrey.withAlpha(0.7f));
+        g.setColour (juce::Colours::darkgrey.withAlpha(0.7f));
         g.drawRoundedRectangle (boxBounds.toFloat().reduced (0.5f, 0.5f), cornerSize, 1.0f);
 
-        Rectangle<int> arrowZone (width - 15, 0, 15, height);
+        Rectangle<int> arrowZone (width - 12, 0, 12, height);
         Path path;
         path.startNewSubPath ((float) arrowZone.getX() + 3.0f, (float) arrowZone.getCentreY() - 2.0f);
         path.lineTo ((float) arrowZone.getCentreX(), (float) arrowZone.getCentreY() + 3.0f);
         path.lineTo ((float) arrowZone.getRight() - 3.0f, (float) arrowZone.getCentreY() - 2.0f);
 
         g.setColour (juce::Colours::lightgrey);
-        g.strokePath (path, PathStrokeType (2.0f));
+        g.strokePath (path, PathStrokeType (1.0f));
     }
     void  positionComboBoxText (ComboBox& box, Label& label) override
     {
@@ -217,6 +217,7 @@ public:
         setColour(juce::Slider::ColourIds::rotarySliderFillColourId, juce::Colours::lightcyan);
         setColour(juce::Slider::ColourIds::thumbColourId, juce::Colours::lightgrey);
         setColour(Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+        
         
 
         

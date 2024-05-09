@@ -26,6 +26,11 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     inBuiltSynthButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
     inBuiltSynthButton.setColour(TextButton::ColourIds::buttonOnColourId, Colours::orange);
     inBuiltSynthButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
+    
+    inBuiltSynthButton.setColour(ComboBox::outlineColourId, Colours::darkgrey);
+    velUsageButton.setColour(ComboBox::outlineColourId, Colours::darkgrey);
+    sortedOrFirstEmptySelectButton.setColour(ComboBox::outlineColourId, Colours::darkgrey);
+    
     velUsageButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
     velUsageButton.setColour(TextButton::ColourIds::textColourOnId, Colours::orange);
     velUsageButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
@@ -48,7 +53,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
         randomButton.getLast()->setButtonText("Rnd "+std::to_string(5-i));
         randomButton.getLast()->setColour(TextButton::ColourIds::textColourOffId, colourarray[4-i]);
         randomButton.getLast()->setColour(TextButton::ColourIds::buttonColourId, Colours::black);
-        
+        randomButton.getLast()->setColour(ComboBox::outlineColourId, Colours::darkgrey);
         
     }
     
@@ -123,9 +128,11 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     deleteButton.setButtonText("Delete");
     deleteButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
     deleteButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
+    deleteButton.setColour(ComboBox::outlineColourId, Colours::darkgrey);
     writeButton.setButtonText("Save");
     writeButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
     writeButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
+    writeButton.setColour(ComboBox::outlineColourId, Colours::darkgrey);
     
     
     /*
@@ -333,7 +340,7 @@ void GlobalPanel::paint (juce::Graphics& g)
 {
     g.fillAll (  Colour(0xff303030));
     //g.fillAll (  Colours::darkslategrey);
-    g.setColour(juce::Colours::orange.withAlpha(0.7f));
+    g.setColour(juce::Colours::grey.withAlpha(0.7f));
     
     g.drawLine(gridAllNumberSlider.getX() -5, 0, gridAllNumberSlider.getX() - 5, getHeight());
     g.drawLine(gridAllDelaySlider.getRight() + 4, 0, gridAllDelaySlider.getRight() +  4, getHeight());
@@ -347,7 +354,7 @@ void GlobalPanel::resized()
     auto top_area = xarea.removeFromTop(13);
     auto rightarea = area.removeFromRight(200);
  
- 
+    area.removeFromRight(40);
     gridAllDelaySlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridGridAllShuffleSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridAllEventSlider.setBounds(area.removeFromRight(50).reduced(3, 5));

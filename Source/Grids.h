@@ -394,7 +394,7 @@ public:
       
        
     }
-    
+
     void changeListenerCallback(ChangeBroadcaster *source) override
     {
         resized();
@@ -433,6 +433,8 @@ private:
     juce::ComboBox gridDurationCombo;
     juce::ArrowButton stepArrow;
     
+    juce::ComboBox gridMidiRouteCombo;
+    
     juce::TextButton midiInNote;
     juce::Slider octaveSlider;
     juce::Label myLineLabel;
@@ -445,6 +447,7 @@ private:
     int myMidiNote;
     void timerCallback() override
     {
+        repaint();
         int st = audioProcessor.getSteps(myLine);
         if(step != st)
         {
@@ -493,6 +496,7 @@ private:
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridEventSliderAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridShuffleSliderAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridDelaySliderAttachment;
+    std::unique_ptr < AudioProcessorValueTreeState::ComboBoxAttachment>  gridMidiRouteAttachment;
 
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> octaveAttachment;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Grids)

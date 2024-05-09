@@ -19,11 +19,11 @@ extern ChangeBroadcaster myGridChangeListener;
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE
 };
 
 const std::vector <juce::String> myNotetUnit =
@@ -64,6 +64,7 @@ public:
     int gridsEvent[numOfLine];
     int gridsShuffle[numOfLine];
     int gridsDelay[numOfLine];
+    int gridsMidiRoute[numOfLine];
     int globalResyncBar;
     bool GlobalInOrFixedVel;
     bool inBuiltSynth;
@@ -72,7 +73,49 @@ public:
     
 };
 
+class MidiProcessor : public juce::MidiInputCallback
+{
+public:
+    MidiProcessor(int i)
+    {
+        // Obtain a MidiOutput instance through one of the static methods
+        midiOutput = juce::MidiOutput::createNewDevice("TMS midi " + std::to_string(i + 1));
+        if (midiOutput != nullptr)
+            midiOutput->startBackgroundThread(); // Start the MIDI output thread if needed
+       // midiInput = juce::MidiInput::createNewDevice("TMS midi " + std::to_string(i + 1), this);
+ // Start the MIDI output thread if needed
+    }
 
+    ~MidiProcessor()
+    {
+        if (midiOutput != nullptr)
+            midiOutput->stopBackgroundThread(); // Stop the MIDI output thread if needed
+    }
+    
+    void sendMidiMessage(const juce::MidiMessage& message)
+    {
+       
+        if (midiOutput != nullptr)
+            midiOutput->sendMessageNow(message);
+       // MidiMessage message2 = MidiMessage::noteOn( 1, 64, 1.0f );
+       // midiOutput->sendMessageNow( message2 );
+    }
+
+    void handleIncomingMidiMessage(juce::MidiInput* source, const juce::MidiMessage& message) override
+    {
+        // Process the incoming MIDI message here (if needed)
+ 
+        
+    }
+
+private:
+
+
+    // Define the pointer to MidiInputCallback
+    MidiInputCallback* midiInputCallback;
+    std::unique_ptr<juce::MidiOutput> midiOutput;
+    std::unique_ptr<juce::MidiInput> midiInput;
+};
 //==============================================================================
 /**
  */
@@ -116,7 +159,7 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
     
-    bool subComputrFunc(int i,juce::MidiBuffer& midiMessages);
+    bool subComputrFunc(int i,juce::MidiBuffer& midiMessages ,int sample);
     
     void  writePresetToFileJSON();
     
@@ -288,6 +331,8 @@ public:
     void calculateAndUpdateSetup(int myLine);
     
 private:
+    std::unique_ptr<MidiProcessor> midiProcessor[5];
+    
     int stpSample[5] = {};
     juce::AudioPlayHead::CurrentPositionInfo positionInfo;
     int stepResetInterval[5] = {};
@@ -310,7 +355,8 @@ private:
     std::atomic<float> *gridsEventAtomic[numOfLine];
     std::atomic<float> *gridsShuffleAtomic[numOfLine];
     std::atomic<float> *gridsDelayAtomic[numOfLine];
-    std::atomic<float> * GlobalInOrFixedAtomic;;
+    std::atomic<float> *gridsMidiRouteAtomic[numOfLine];
+    std::atomic<float> *GlobalInOrFixedAtomic;;
     std::atomic<float> *inBuiltSynthAtomic;
     std::atomic<float> *sortedOrFirstEmptySelectAtomic;
     std::atomic<float> *shuffleAtomic;
@@ -325,6 +371,7 @@ private:
     {
         juce::MidiMessage sentMidi;
         int durationsample;
+        int lineNo;
     };
     std::list<RealMidiNoteList> inRealMidiNoteList;
     int preset_idex = 0;

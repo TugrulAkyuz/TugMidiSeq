@@ -29,6 +29,8 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     addAndMakeVisible(stepArrow);
     addAndMakeVisible(gridNumberSlider);
     addAndMakeVisible(gridSpeedCombo);
+    addAndMakeVisible(gridMidiRouteCombo);
+    
     
     octaveSlider.setSliderStyle(juce::Slider::LinearVertical);
     octaveSlider.setColour(Slider::textBoxOutlineColourId , juce::Colours::black.withAlpha(0.0f));
@@ -40,6 +42,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     midiInNote.setColour(juce::TextButton::textColourOffId, juce::Colours::black);
 
     gridSpeedCombo.setLookAndFeel(&myLookAndFeel);
+    gridMidiRouteCombo.setLookAndFeel(&myLookAndFeel);
     //gridSpeedCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::orange);
     addAndMakeVisible(gridDurationCombo);
     gridDurationCombo.setLookAndFeel(&myLookAndFeel);
@@ -182,7 +185,6 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     tmp_s << valueTreeNames[SPEEED]<<line;
     comBoxSpeedAtaachment = std::make_unique <AudioProcessorValueTreeState::ComboBoxAttachment>(audioProcessor.valueTreeState, tmp_s, gridSpeedCombo);
 
-    
      i= 1;
     for(auto s: myNotetUnit)
     {
@@ -199,6 +201,18 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     //Slider::ColourIds::thumbColourId
     //octaveSlider.setRange(-2, 2,1);
    // octaveSlider.setValue(0);
+    
+    for(i = 1 ; i <= numOfLine; i++)
+    {
+        gridMidiRouteCombo.addItem(std::to_string(i),i);
+    }
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[GRIDMIDIROUTE]<<line;
+    gridMidiRouteAttachment = std::make_unique <AudioProcessorValueTreeState::ComboBoxAttachment>(audioProcessor.valueTreeState, tmp_s, gridMidiRouteCombo);
+
+
+    
    
     audioProcessor.valueTreeState.addParameterListener(valueTreeNames[SHUFFLE], this);
  
@@ -212,15 +226,29 @@ void Grids::paint (juce::Graphics& g)
     g.fillAll (  Colours::darkgrey.withAlpha(0.0f));
     auto y = getLocalBounds().getHeight();
     auto x = getLocalBounds().getWidth();
-    g.setColour(juce::Colours::orange.withAlpha(0.7f));
+    g.setColour(juce::Colours::grey.withAlpha(0.7f));
     g.drawLine(0, y, x, y, 2);
     if(myLine == 4)
         g.drawLine(0, 0, x, 0, 2);
    
 
-    g.setColour(juce::Colours::orange.withAlpha(0.7f));
+    g.setColour(juce::Colours::grey.withAlpha(0.7f));
     g.drawLine(octaveSlider.getRight(), 4,octaveSlider.getRight(), getHeight()- 4,1);
     g.drawLine(gridNumberSlider.getX() -4  ,4,gridNumberSlider.getX() - 4, getHeight() - 4,1);
+ 
+     x= gridMidiRouteCombo.getX();
+     y = getLocalBounds().getY();
+    if(audioProcessor.midiState[myLine] == true)
+    {
+
+        g.setColour(Colours::lightgreen);
+        g.fillEllipse(x, y + 2, 5, 5);
+    }
+    else
+    {
+        g.setColour(Colours::darkgreen);
+        g.fillEllipse(x, y + 2, 5, 5);
+    }
     
     /*
     if(midiInNote.getButtonText() != "")
@@ -241,6 +269,7 @@ void Grids::resized()
     float marjin =  1;
  
     auto area = getLocalBounds();
+    gridMidiRouteCombo.setBounds( area.removeFromRight(40).reduced(2,8));
     gridDelaySlider.setBounds( area.removeFromRight(50));
     gridShuffleSlider.setBounds( area.removeFromRight(50));
     gridEventSlider.setBounds( area.removeFromRight(50));

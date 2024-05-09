@@ -36,7 +36,7 @@ TugMidiSeqAudioProcessorEditor::TugMidiSeqAudioProcessorEditor (TugMidiSeqAudioP
     }
     for(auto i =  0; i < 5; i++ )
         globalPanel.setGridComp(grids[i],i);
-    setSize (1172, 276);
+    setSize (1172 + 40, 276);
 }
 
 TugMidiSeqAudioProcessorEditor::~TugMidiSeqAudioProcessorEditor()
@@ -79,7 +79,8 @@ void TugMidiSeqAudioProcessorEditor::resized()
     topInLabel[7]->setBounds(label_area.removeFromLeft(50));
     topInLabel[8]->setBounds(label_area.removeFromLeft(50));
     topInLabel[9]->setBounds(label_area.removeFromLeft(50));
-    topInLabel[10]->setBounds(label_area);
+    topInLabel[10]->setBounds(label_area.removeFromLeft(40));
+    topInLabel[11]->setBounds(label_area);
  
 
     auto area = allarea.removeFromTop(200);
