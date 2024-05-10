@@ -202,7 +202,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     //octaveSlider.setRange(-2, 2,1);
    // octaveSlider.setValue(0);
     
-    for(i = 1 ; i <= numOfLine; i++)
+    for(i = 1 ; i <= 16; i++)
     {
         gridMidiRouteCombo.addItem(std::to_string(i),i);
     }

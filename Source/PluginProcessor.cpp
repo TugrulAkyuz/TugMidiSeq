@@ -97,7 +97,7 @@ valueTreeState(*this, &undoManager)
        
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDMIDIROUTE] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,0,numOfLine-1,0));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,16,1));
         gridsMidiRouteAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         //*numOfGrid[j] = 16;
@@ -159,11 +159,15 @@ valueTreeState(*this, &undoManager)
     mySampleRate = 44100;
     initPrepareValue();
     
+    
+    midiProcessor = std::make_unique<MidiProcessor>();
+    /*
     for(auto i = 0; i < numOfLine; i++)
     {
         midiProcessor[i] = std::make_unique<MidiProcessor>(i);
    
     }
+     */
      
     
     
@@ -502,8 +506,10 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             for (it = inRealMidiNoteList.begin(); it != inRealMidiNoteList.end(); )
             {
                 it->sentMidi.setVelocity(0.0f);
+                it->sentMidi.setChannel(it->lineNo);
                 midiMessages.addEvent(it->sentMidi, 0);
-                midiProcessor[it->lineNo]->sendMidiMessage(it->sentMidi);
+                //midiProcessor->sendMidiMessage(it->sentMidi,it->lineNo);
+                //midiProcessor->sendMidiBuffer(midiMessages,mySampleRate);
                 it = inRealMidiNoteList.erase(it);
             }
            
@@ -544,8 +550,10 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             {
                 if(it->durationsample != 0) { it->durationsample--; it++ ; continue;}
                 it->sentMidi.setVelocity(0.0f);
+                it->sentMidi.setChannel(it->lineNo);
                 midiMessages.addEvent(it->sentMidi, s);
-                midiProcessor[it->lineNo]->sendMidiMessage(it->sentMidi);
+                //midiProcessor->sendMidiMessage(it->sentMidi,it->lineNo);
+                //midiProcessor->sendMidiBuffer(midiMessages,mySampleRate);
                 it = inRealMidiNoteList.erase(it);
             }
             
@@ -618,7 +626,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
             buffer.clear (i, 0, buffer.getNumSamples());
         
-    
+    midiProcessor->sendMidiBuffer(midiMessages,mySampleRate);
 }
 
 //==============================================================================
@@ -830,8 +838,10 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         if(it2 != inRealMidiNoteList.end())
         {
             it2->sentMidi.setVelocity(0.0f);
+            it2->sentMidi.setChannel(it2->lineNo);
             midiMessages.addEvent(it2->sentMidi, s);
-            midiProcessor[it2->lineNo]->sendMidiMessage(it2->sentMidi);
+            //midiProcessor->sendMidiMessage(it2->sentMidi,it2->lineNo);
+           // midiProcessor->sendMidiBuffer(midiMessages,mySampleRate);
             it2 = inRealMidiNoteList.erase(it2);
         }
         
@@ -843,8 +853,10 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         
         
         if (myIsPlaying == false) return false;
+        it.setChannel(midRouteIndex);
         midiMessages.addEvent(it, s);
-        midiProcessor[midRouteIndex]->sendMidiMessage(it);
+        //midiProcessor->sendMidiBuffer(midiMessages,mySampleRate);
+        //midiProcessor->sendMidiMessage(it,midRouteIndex);
         
         stepmidStopSampleCounter[i] = 1;
         RealMidiNoteList tmp;

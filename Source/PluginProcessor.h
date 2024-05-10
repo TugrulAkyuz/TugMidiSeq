@@ -76,10 +76,10 @@ public:
 class MidiProcessor : public juce::MidiInputCallback
 {
 public:
-    MidiProcessor(int i)
+    MidiProcessor()
     {
         // Obtain a MidiOutput instance through one of the static methods
-        midiOutput = juce::MidiOutput::createNewDevice("TMS midi " + std::to_string(i + 1));
+        midiOutput = juce::MidiOutput::createNewDevice("TMS midi ");
         if (midiOutput != nullptr)
             midiOutput->startBackgroundThread(); // Start the MIDI output thread if needed
        // midiInput = juce::MidiInput::createNewDevice("TMS midi " + std::to_string(i + 1), this);
@@ -91,12 +91,19 @@ public:
         if (midiOutput != nullptr)
             midiOutput->stopBackgroundThread(); // Stop the MIDI output thread if needed
     }
-    
-    void sendMidiMessage(const juce::MidiMessage& message)
+    void sendMidiBuffer(const MidiBuffer &buffer, int samplerate)
     {
-       
+        if (midiOutput != nullptr)
+            midiOutput->sendBlockOfMessages(buffer, Time::getMillisecondCounter(), samplerate);
+    }
+    
+    void sendMidiMessage( juce::MidiMessage& message,int ch)
+    {
+        return;
+        message.setChannel(ch + 1);
         if (midiOutput != nullptr)
             midiOutput->sendMessageNow(message);
+
        // MidiMessage message2 = MidiMessage::noteOn( 1, 64, 1.0f );
        // midiOutput->sendMessageNow( message2 );
     }
@@ -331,7 +338,7 @@ public:
     void calculateAndUpdateSetup(int myLine);
     
 private:
-    std::unique_ptr<MidiProcessor> midiProcessor[5];
+    std::unique_ptr<MidiProcessor> midiProcessor;
     
     int stpSample[5] = {};
     juce::AudioPlayHead::CurrentPositionInfo positionInfo;
