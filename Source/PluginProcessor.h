@@ -99,7 +99,7 @@ public:
     
     void sendMidiMessage( juce::MidiMessage& message,int ch)
     {
-        return;
+        
         message.setChannel(ch + 1);
         if (midiOutput != nullptr)
             midiOutput->sendMessageNow(message);
@@ -241,7 +241,7 @@ public:
     std::atomic<float> *octave[5];
     std::atomic<float> *globalResyncBar;
     float myBpm;
-    float myBps;
+    double myBps;
     int measureSample = 0;
     int measureBar = 0;
     double  mySampleRate = 0;
@@ -338,6 +338,9 @@ public:
     void calculateAndUpdateSetup(int myLine);
     
 private:
+    
+    void midiHandling(juce::MidiBuffer& midiMessages,int sampleOffset);
+    
     std::unique_ptr<MidiProcessor> midiProcessor;
     
     int stpSample[5] = {};
@@ -373,6 +376,8 @@ private:
     juce::MidiBuffer myInnmidiBuffer;
     std::list<juce::MidiMessage> inMidiNoteList;
     std::vector<juce::MidiMessage> inMidiNoteListVector;
+    //std::list<juce::MidiMessage> inMidiNoteListTmp;
+    //std::vector<juce::MidiMessage> inMidiNoteListVectorTmp;
     void initForVariables();
     struct RealMidiNoteList
     {

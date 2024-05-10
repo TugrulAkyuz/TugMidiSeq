@@ -269,7 +269,7 @@ void Grids::resized()
     float marjin =  1;
  
     auto area = getLocalBounds();
-    gridMidiRouteCombo.setBounds( area.removeFromRight(40).reduced(2,8));
+    gridMidiRouteCombo.setBounds( area.removeFromRight(40).reduced(0,8));
     gridDelaySlider.setBounds( area.removeFromRight(50));
     gridShuffleSlider.setBounds( area.removeFromRight(50));
     gridEventSlider.setBounds( area.removeFromRight(50));
