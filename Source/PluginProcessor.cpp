@@ -414,7 +414,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     juce::MidiBuffer midiMessagesStack;
     midiMessagesStack = midiMessages;
     playHead->getCurrentPosition(positionInfo);
-    
+
     
     //midiMessages.swapWith(processedMidiBuffer);
 
@@ -472,11 +472,14 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         
         if(midiEffectSampelDiffBitweenCall < 0) midiEffectSampelDiffBitweenCall = 0;
         if(myIsPlaying == false)
+        {
+            midiHandling(midiMessagesStack,0,false);
+            if(*channelOnAtamic == true)
+                midiProcessor->sendMidiBuffer(midiMessages, mySampleRate);
             return;
+        }
         for(int s = 0 ; s < buffer.getNumSamples();  s++)/**ppq ye bakma code*/
         {
-  
-
   
             
             measureSample++;
@@ -504,6 +507,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 //midiProcessor->sendMidiBuffer(midiMessages,mySampleRate);
                 it = inRealMidiNoteList.erase(it);
             }
+      
             midiHandling(midiMessagesStack,s);
             for(int i =  0; i  < numOfLine ; i++)
             {
@@ -535,10 +539,22 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 auto tmps = std::to_string(baseSampleNumber[i]);
                 
                 baseSampleNumber[i]++;
+                if(baseSampleNumber[i] == 3)
+                {
+                    gauge[i] = gauge[i] + remaining[i];
+                    if(gauge[i] >= 1)
+                    {
+                        gauge[i] = gauge[i] - 1 ;
+                        baseSampleNumber[i]++;
+                        DBG("----------");
+                    }
+                }
                 baseSampleNumber[i] %= stepLoopResetInterval[i];
+                 
                 int idx = (-*gridsDelayAtomic[i]*0.01*delaySampleNumberForQuarter  + baseSampleNumber[i] );
+  
                 idx = circularRange(idx, 0, stepLoopResetInterval[i]);
-                sampleNumber[i] = idx;
+                sampleNumber[i] = idx  ;
                 //DBG("baseSampleNumber " + tmps + " idx = " + tmps2idx + " after idx = " + tmps3idx);
                 
             }
@@ -623,8 +639,11 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
             if(index%3 == 0) {  index = (index+1) / 3;}
             else if((index -1)%3 == 0) { index = (index) / 3;first = 2*first/3;}
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
-            stepResetInterval[i] = first / pow(2,index); // dviding  "first" you get number of sample  for musical note time values
-            stepLoopResetInterval[i] = stepResetInterval[i]**numOfGrid[i];
+            
+            double tmp = (first / pow(2,index));
+            stepResetInterval[i] = tmp + 1; // dviding  "first" you get number of sample  for musical note time values
+            remaining[i] =  tmp + 1 - stepResetInterval[i];
+            stepLoopResetInterval[i] = tmp**numOfGrid[i] + 1;
             float shuffleTmp = (*gridsShuffleAtomic[i] + *shuffleAtomic)/100;
             shuffleTmp = juce::jlimit(-0.99f, 0.99f, shuffleTmp);
             long tmpTotal = stepLoopResetInterval[i];
@@ -831,7 +850,7 @@ void TugMidiSeqAudioProcessor::calculateAndUpdateSetup(int myLine)
     }
    
 }
-void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int sampleOffset)
+void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int sampleOffset, bool sampleBased )
 {
     MidiBuffer::Iterator it(midiMessages);
     
@@ -841,6 +860,7 @@ void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int 
     //myInnmidiBuffer.clear();
     while(it.getNextEvent(currentMessage,samplePos))
     {
+        if(sampleBased == false) { samplePos = 0 ; sampleOffset = 0;}
         if(samplePos == sampleOffset)
         {
             if(currentMessage.isNoteOn())
@@ -900,7 +920,7 @@ void TugMidiSeqAudioProcessor::initForVariables()
         idx = circularRange(idx, 0, stepLoopResetInterval[i]);
         sampleNumber[i] = idx;
        
-        stpSample[i] = stepResetIntervalForShuffle[i][steps[i]] -1;
+        stpSample[i] = stepResetIntervalForShuffle[i][steps[i]];
     }
 }
 

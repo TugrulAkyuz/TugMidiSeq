@@ -346,7 +346,7 @@ public:
     
 private:
     
-    void midiHandling(juce::MidiBuffer& midiMessages,int sampleOffset);
+    void midiHandling(juce::MidiBuffer& midiMessages,int sampleOffset, bool sampelBased = true);
     
     std::unique_ptr<MidiProcessor> midiProcessor;
     
@@ -404,6 +404,8 @@ private:
     Synthesiser   mySynth;
     SynthVoice*  myVoice;
     SynthSound    *synthSound;
+    float remaining[numOfLine] = {};
+    float gauge[numOfLine] = {};
     //juce::AudioProcessorValueTreeState::ParameterLayout createAllParameters();
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TugMidiSeqAudioProcessor)
