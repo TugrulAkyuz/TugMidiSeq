@@ -139,6 +139,12 @@ valueTreeState(*this, &undoManager)
     valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-75,75,0));
     shuffleAtomic = valueTreeState.getRawParameterValue(tmp_s);
     
+    tmp_s.clear();
+    tmp_s << valueTreeNames[CHANNON];
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s,false));
+    channelOnAtamic = valueTreeState.getRawParameterValue(tmp_s);
+    
+    
     valueTreeState.state = juce::ValueTree("midiSeq"); // do not forget for valuetree
     
     
@@ -304,6 +310,10 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
     tmp_s.clear();
     tmp_s << valueTreeNames[SHUFFLE];
     valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).shuffle);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[CHANNON];
+    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).channelOn);
 
     myGridChangeListener.sendChangeMessage();
 }
@@ -497,26 +507,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             midiHandling(midiMessagesStack,s);
             for(int i =  0; i  < numOfLine ; i++)
             {
-                /*
-                for( auto it : inMidiNoteListTmp)
-                {
-                    if(it.getTimeStamp() == s)
-                    {
-                        it.setTimeStamp(-1);
-                        auto it1 = std::next(inMidiNoteList.begin(), i);
-                        *it1 = it;
-                    }
-                }
-                for( auto it : inMidiNoteListVectorTmp)
-                {
-                    if(it.getTimeStamp() == s)
-                    {
-                        it.setTimeStamp(-1);
-                        inMidiNoteListVector.at(i) = it;
 
-                    }
-                }
-                */
                 calculateAndUpdateSetup(i);
                 
                
@@ -533,16 +524,12 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 }
                 if(stpSample[i] == 0)
                 {
-                    
-
-                    
                     if(*gridsArr[i][steps[i]] == 1
                        || (*gridsArr[i][steps[i]] == 2
                            && juce::Random::getSystemRandom().nextInt(100) < *gridsEventAtomic[i]))
                     {
                         subComputrFunc( i,midiMessages, s);
                     }
-   
                     
                 }
                 auto tmps = std::to_string(baseSampleNumber[i]);
@@ -563,8 +550,8 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     if(*inBuiltSynthAtomic == false)
         for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
             buffer.clear (i, 0, buffer.getNumSamples());
-        
-    midiProcessor->sendMidiBuffer(midiMessages,mySampleRate);
+    if(*channelOnAtamic == true)
+       midiProcessor->sendMidiBuffer(midiMessages,mySampleRate);
 }
 
 //==============================================================================

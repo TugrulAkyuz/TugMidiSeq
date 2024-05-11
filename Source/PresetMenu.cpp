@@ -79,6 +79,10 @@ void TugMidiSeqAudioProcessor::resetAllParam()
     tmp_s << valueTreeNames[SORTEDORFIRST];
     valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
     
+    tmp_s.clear();
+    tmp_s << valueTreeNames[CHANNON];
+    valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
+    
     // mySynth.clearSounds();
     
     //initPrepareValue();
@@ -188,9 +192,14 @@ void  TugMidiSeqAudioProcessor::writePresetToFileJSON()
         
         tmp_s.clear();
         tmp_s << valueTreeNames[SHUFFLE];
-        v  = myProgram.at(p).shuffle;
+        v  = myProgram.at(p).channelOn;
         newObj.getDynamicObject()->setProperty(tmp_s,v);
         
+    
+        tmp_s.clear();
+        tmp_s << valueTreeNames[CHANNON];
+        v  = myProgram.at(p).shuffle;
+        newObj.getDynamicObject()->setProperty(tmp_s,v);
         
         arr.add(newObj);
     }
@@ -287,7 +296,12 @@ void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
             
             tmp_s.clear();
             tmp_s <<valueTreeNames[GRIDMIDIROUTE]<< i;
-            v = preset.getProperty(tmp_s, var());
+            if (preset.hasProperty(tmp_s)) {
+                v = preset.getProperty(tmp_s, var());
+            } else {
+                // Assign a specific value if the property doesn't exist
+                v =   valueTreeState.getParameter(tmp_s)->convertFrom0to1(  valueTreeState.getParameter(tmp_s)->getDefaultValue()); // Change defaultValueForMissingProperty to your desired value
+            }
             p.gridsMidiRoute[i] = v;
             
         }
@@ -316,6 +330,11 @@ void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
         tmp_s << valueTreeNames[SHUFFLE];
         v = preset.getProperty(tmp_s, var());
         p.shuffle = v;
+        
+        tmp_s.clear();
+        tmp_s << valueTreeNames[CHANNON];
+        v = preset.getProperty(tmp_s, var());
+        p.channelOn = v;
         
         myProgram.push_back(p);
     }
@@ -414,6 +433,10 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
     tmp_s.clear();
     tmp_s << valueTreeNames[SHUFFLE];
     paramProg.shuffle = *valueTreeState.getRawParameterValue(tmp_s);;
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[CHANNON];
+    paramProg.channelOn = *valueTreeState.getRawParameterValue(tmp_s);;
     
     myProgram.push_back(paramProg);
     writePresetToFileJSON();

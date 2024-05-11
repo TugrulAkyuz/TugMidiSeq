@@ -175,6 +175,8 @@ private:
     TextButton velUsageButton;
     TextButton inBuiltSynthButton;
     TextButton sortedOrFirstEmptySelectButton;
+    TextButton channelOnButton;
+    
     
     Label globalNameLabel;
     Label loopBarlenghtSliderLabel;
@@ -184,7 +186,7 @@ private:
     std::unique_ptr  <AudioProcessorValueTreeState::ButtonAttachment> inBultSynthButtonAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::ButtonAttachment> sortedOrFixedButtonAttachment;
     std::unique_ptr  <AudioProcessorValueTreeState::SliderAttachment> gridAllShuffleSliderAttachment;
-    
+    std::unique_ptr  <AudioProcessorValueTreeState::ButtonAttachment> channelOnButtonAttachment;
     
     TextButton writeButton;
     TextButton deleteButton;

@@ -269,6 +269,8 @@ void Grids::resized()
     float marjin =  1;
  
     auto area = getLocalBounds();
+    if(audioProcessor.getChannelStatus()) gridMidiRouteCombo.setEnabled(true);
+    else  gridMidiRouteCombo.setEnabled(false);
     gridMidiRouteCombo.setBounds( area.removeFromRight(40).reduced(0,8));
     gridDelaySlider.setBounds( area.removeFromRight(50));
     gridShuffleSlider.setBounds( area.removeFromRight(50));

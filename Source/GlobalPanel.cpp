@@ -21,13 +21,24 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     addAndMakeVisible(deleteButton);
     addAndMakeVisible(inBuiltSynthButton);
     addAndMakeVisible(sortedOrFirstEmptySelectButton);
+    addAndMakeVisible(channelOnButton);
+    
     inBuiltSynthButton.setButtonText("InBSynth");
     inBuiltSynthButton.setClickingTogglesState (true);
     inBuiltSynthButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
     inBuiltSynthButton.setColour(TextButton::ColourIds::buttonOnColourId, Colours::orange);
     inBuiltSynthButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
-    
     inBuiltSynthButton.setColour(ComboBox::outlineColourId, Colours::darkgrey);
+    
+    channelOnButton.setButtonText("Ch");
+    channelOnButton.setClickingTogglesState (true);
+    channelOnButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
+    channelOnButton.setColour(TextButton::ColourIds::buttonOnColourId, Colours::orange);
+    channelOnButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
+    channelOnButton.setColour(ComboBox::outlineColourId, Colours::darkgrey);
+    
+    
+    
     velUsageButton.setColour(ComboBox::outlineColourId, Colours::darkgrey);
     sortedOrFirstEmptySelectButton.setColour(ComboBox::outlineColourId, Colours::darkgrey);
     
@@ -143,6 +154,10 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     loopBarlenghtSlider.setLookAndFeel(&myLookAndFeel);
     loopBarlenghtSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     
+    channelOnButton.onClick = [this](){
+        myGridChangeListener.sendChangeMessage();
+    };
+    
     velUsageButton.onClick = [this](){
         
         for(auto i = 0; i < 5 ;i++)
@@ -201,6 +216,11 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     tmp_s.clear();
     tmp_s << valueTreeNames[INBUILTSYNTH];
     inBultSynthButtonAttachment =  std::make_unique <AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.valueTreeState, tmp_s, inBuiltSynthButton);
+    
+    tmp_s.clear();
+    tmp_s << valueTreeNames[CHANNON];
+    channelOnButtonAttachment =  std::make_unique <AudioProcessorValueTreeState::ButtonAttachment>(audioProcessor.valueTreeState, tmp_s, channelOnButton);
+    
     
     tmp_s.clear();
     tmp_s << valueTreeNames[SORTEDORFIRST];
@@ -343,7 +363,7 @@ void GlobalPanel::paint (juce::Graphics& g)
     g.setColour(juce::Colours::grey.withAlpha(0.7f));
     
     g.drawLine(gridAllNumberSlider.getX() -5, 0, gridAllNumberSlider.getX() - 5, getHeight());
-    g.drawLine(gridAllDelaySlider.getRight() + 4, 0, gridAllDelaySlider.getRight() +  4, getHeight());
+    g.drawLine(channelOnButton.getRight() + 4, 0, channelOnButton.getRight() +  4, getHeight());
     
 }
 void GlobalPanel::resized()
@@ -354,7 +374,8 @@ void GlobalPanel::resized()
     auto top_area = xarea.removeFromTop(13);
     auto rightarea = area.removeFromRight(200);
  
-    area.removeFromRight(40);
+  
+    channelOnButton.setBounds( area.removeFromRight(40).reduced(0, 13));
     gridAllDelaySlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridGridAllShuffleSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridAllEventSlider.setBounds(area.removeFromRight(50).reduced(3, 5));

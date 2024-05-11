@@ -17,13 +17,15 @@ using namespace juce;
 
 extern ChangeBroadcaster myGridChangeListener;
 
+const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","9","10","11","12","13","14", "15","15"};
+
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON
 };
 
 const std::vector <juce::String> myNotetUnit =
@@ -70,20 +72,20 @@ public:
     bool inBuiltSynth;
     bool sortedOrFirst;
     int shuffle;
+    bool channelOn;
     
 };
+
 
 class MidiProcessor : public juce::MidiInputCallback
 {
 public:
     MidiProcessor()
     {
-        // Obtain a MidiOutput instance through one of the static methods
         midiOutput = juce::MidiOutput::createNewDevice("TMS midi ");
         if (midiOutput != nullptr)
             midiOutput->startBackgroundThread(); // Start the MIDI output thread if needed
-       // midiInput = juce::MidiInput::createNewDevice("TMS midi " + std::to_string(i + 1), this);
- // Start the MIDI output thread if needed
+
     }
 
     ~MidiProcessor()
@@ -337,6 +339,11 @@ public:
     
     void calculateAndUpdateSetup(int myLine);
     
+    bool  getChannelStatus()
+    {
+        return *channelOnAtamic;
+    }
+    
 private:
     
     void midiHandling(juce::MidiBuffer& midiMessages,int sampleOffset);
@@ -370,6 +377,7 @@ private:
     std::atomic<float> *inBuiltSynthAtomic;
     std::atomic<float> *sortedOrFirstEmptySelectAtomic;
     std::atomic<float> *shuffleAtomic;
+    std::atomic<float> *channelOnAtamic;
     
     //std::atomic<float> *numOfGrid[5];
     juce::UndoManager undoManager;
