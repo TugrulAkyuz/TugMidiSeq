@@ -49,15 +49,15 @@ void TugMidiSeqAudioProcessorEditor::paint (juce::Graphics& g)
     // (Our component is opaque, so we must completely fill the background with a solid colour)
     g.fillAll (  Colour(0xff202020));
     auto allarea = getLocalBounds();
-    g.setColour(Colours::yellow.withAlpha(0.2f));
+    g.setColour(Colours::grey.withAlpha(0.3f));
     g.drawRect(allarea,3.0f);
     String ver;
-    g.setColour(Colours::grey);
+    g.setColour(Colours::lightgreen);
     ver << "Ver: " << ProjectInfo::versionString;
  //   g.drawText(ver, 0, getHeight() -15 , 80, 15, Justification::centred);
     juce::Font myFont("Arial", 10, juce::Font::plain);
     g.setFont(myFont);
-    g.drawFittedText(ver, getWidth() - 60, 5 , 70, 15, Justification::centred ,1);
+    g.drawFittedText(ver, getWidth() - 60, topInLabel[11]->getBounds().getY() , 70, topInLabel[11]->getBounds().getHeight(), Justification::centred ,1);
  
 }
 

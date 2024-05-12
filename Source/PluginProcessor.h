@@ -82,7 +82,12 @@ class MidiProcessor : public juce::MidiInputCallback
 public:
     MidiProcessor()
     {
+#if JUCE_MAC
         midiOutput = juce::MidiOutput::createNewDevice("TMS midi ");
+#elif JUCE_WINDOWS
+        juce::StringArray devices = juce::MidiInput::getDevices();
+        midiOutput = juce::MidiOutput::openDevice("MIDI Yoke 1");
+#endif
         if (midiOutput != nullptr)
             midiOutput->startBackgroundThread(); // Start the MIDI output thread if needed
 
@@ -125,6 +130,9 @@ private:
     std::unique_ptr<juce::MidiOutput> midiOutput;
     std::unique_ptr<juce::MidiInput> midiInput;
 };
+
+
+
 //==============================================================================
 /**
  */
@@ -406,6 +414,7 @@ private:
     SynthSound    *synthSound;
     float remaining[numOfLine] = {};
     float gauge[numOfLine] = {};
+    double prevppq = 0;
     //juce::AudioProcessorValueTreeState::ParameterLayout createAllParameters();
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TugMidiSeqAudioProcessor)

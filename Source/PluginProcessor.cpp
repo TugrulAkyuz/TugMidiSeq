@@ -427,7 +427,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     if (positionInfo.bpm == 0) return;
 
     delaySampleNumberForQuarter = mySampleRate*0.5/(positionInfo.bpm*1.0/60);
-    
+    double ppq =  std::fmod(positionInfo.ppqPosition,4.f);
     if (positionInfo.bpm)
     {
         initPrepareValue();
@@ -436,7 +436,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         {
             measureBar = *globalResyncBar-1;  // resync var number
             measureSample = (int)(4*mySampleRate/myBps)-1; // mBps Beat per second  ---> 1 bar  numof sample
-            
+            prevppq = ppq;;
            prevtimeInSamples = positionInfo.ppqPosition;; /**ppq ye bakma code*/
         }
         auto  x = positionInfo.ppqPosition; /**ppq ye bakma code*/
@@ -478,12 +478,21 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 midiProcessor->sendMidiBuffer(midiMessages, mySampleRate);
             return;
         }
+        
+        auto xx = 4.0/(double)((4*mySampleRate)/myBps);
         for(int s = 0 ; s < buffer.getNumSamples();  s++)/**ppq ye bakma code*/
         {
-  
-            
+
             measureSample++;
-            measureSample %= (int)ceil((double)(4*mySampleRate)/myBps);
+            if( ppq <= prevppq)
+            {
+                measureSample = 0;
+            }
+            prevppq = ppq ;
+            ppq = std::fmod(ppq + xx,4.f);
+
+            
+            //measureSample %= (int)ceil((double)(4*mySampleRate)/myBps);
             if(measureSample == 0)
             {
                 measureBar++;
@@ -539,18 +548,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 auto tmps = std::to_string(baseSampleNumber[i]);
                 
                 baseSampleNumber[i]++;
-                if(baseSampleNumber[i] == 3)
-                {
-                    gauge[i] = gauge[i] + remaining[i];
-                    if(gauge[i] >= 1)
-                    {
-                        gauge[i] = gauge[i] - 1 ;
-                        baseSampleNumber[i]++;
-                        DBG("----------");
-                    }
-                }
+  
                 baseSampleNumber[i] %= stepLoopResetInterval[i];
-                 
+ 
                 int idx = (-*gridsDelayAtomic[i]*0.01*delaySampleNumberForQuarter  + baseSampleNumber[i] );
   
                 idx = circularRange(idx, 0, stepLoopResetInterval[i]);
@@ -920,7 +920,20 @@ void TugMidiSeqAudioProcessor::initForVariables()
         idx = circularRange(idx, 0, stepLoopResetInterval[i]);
         sampleNumber[i] = idx;
        
-        stpSample[i] = stepResetIntervalForShuffle[i][steps[i]];
+/*
+        gauge[i] = gauge[i] + *numOfGrid[i]*remaining[i];
+        int c = 0;
+        if(gauge[i] >= 1)
+            {
+                c = gauge[i] ;
+                gauge[i] = gauge[i]  - c;
+                
+               
+            }
+      
+         */
+        
+        stpSample[i] = stepResetIntervalForShuffle[i][steps[i]] ;
     }
 }
 

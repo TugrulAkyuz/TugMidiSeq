@@ -299,8 +299,7 @@ void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
             if (preset.hasProperty(tmp_s)) {
                 v = preset.getProperty(tmp_s, var());
             } else {
-                // Assign a specific value if the property doesn't exist
-                v =   valueTreeState.getParameter(tmp_s)->convertFrom0to1(  valueTreeState.getParameter(tmp_s)->getDefaultValue()); // Change defaultValueForMissingProperty to your desired value
+                v =   valueTreeState.getParameter(tmp_s)->convertFrom0to1(  valueTreeState.getParameter(tmp_s)->getDefaultValue()); //
             }
             p.gridsMidiRoute[i] = v;
             
@@ -333,7 +332,11 @@ void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
         
         tmp_s.clear();
         tmp_s << valueTreeNames[CHANNON];
-        v = preset.getProperty(tmp_s, var());
+        if (preset.hasProperty(tmp_s)) {
+            v = preset.getProperty(tmp_s, var());
+        } else {
+            //v =   valueTreeState.getParameter(tmp_s)->convertFrom0to1(  valueTreeState.getParameter(tmp_s)->getDefaultValue()); //
+        }
         p.channelOn = v;
         
         myProgram.push_back(p);
