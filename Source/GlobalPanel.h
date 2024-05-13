@@ -17,6 +17,56 @@
 
 #pragma once
 
+
+class ComboBoxDialog :  public Component
+{
+public:
+    ComboBoxDialog(TugMidiSeqAudioProcessor &p) : audioProcessor(p)
+    {
+        //combo = new juce::ComboBox();
+        juce::StringArray devices = juce::MidiOutput::getDevices();
+        int i = 1;
+        for (auto d : devices)
+        {
+            combo.addItem(d, i);
+                i++;
+        }
+        combo.setSelectedId(1);
+
+        addAndMakeVisible(combo);
+       // setContentComponentSize(100,100);
+        setSize(300, 100);
+
+        combo.onChange = [this]()
+            {
+                String s = combo.getText();
+                 audioProcessor.setMidiPortName(s);
+            };
+       
+
+    }
+    void paint(Graphics& g) override
+    {
+        g.fillAll(Colours::black);
+    }
+        
+    void resized() override
+    {
+        int cL = getWidth() * 0.75;
+        int cH = getHeight() * 0.25;
+
+        int x = (getWidth() - cL) / 2;
+        int y = (getHeight() - cH) / 2;
+
+        combo.setBounds(x, y, cL, cH);
+    }
+
+private:
+    juce::ComboBox combo;
+    TugMidiSeqAudioProcessor& audioProcessor;
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ComboBoxDialog)
+};
+
 class InformationComponent : public Component
 {
 public:
@@ -113,7 +163,7 @@ private:
 };
 
 
-class GlobalPanel   : public juce::Component , juce::Timer  
+class GlobalPanel   : public juce::Component , juce::Timer  , ChangeListener
 {
     public:
     GlobalPanel(TugMidiSeqAudioProcessor&  );
@@ -142,7 +192,13 @@ class GlobalPanel   : public juce::Component , juce::Timer
         myMeasure = rread_m;
         getComponentID();
     }
-    
+
+    void changeListenerCallback(ChangeBroadcaster* source) override
+    {
+        resized();
+
+    }
+
     void setGridComp(Grids *g , int i)
     {
         otherg[i] = g;
@@ -167,6 +223,8 @@ private:
     juce::ComboBox gridAllDurationCombo;
     juce::ComboBox presetCombo;
     
+    TextButton midiPort;
+
     CustomRoratySlider gridAllShuffleSlider;
     
     CustomRoratySlider loopBarlenghtSlider;

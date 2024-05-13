@@ -37,6 +37,9 @@ TugMidiSeqAudioProcessorEditor::TugMidiSeqAudioProcessorEditor (TugMidiSeqAudioP
     for(auto i =  0; i < 5; i++ )
         globalPanel.setGridComp(grids[i],i);
     setSize (1172 + 40, 276);
+
+
+   // audioProcessor.setMidiPortName("Alllah");
 }
 
 TugMidiSeqAudioProcessorEditor::~TugMidiSeqAudioProcessorEditor()

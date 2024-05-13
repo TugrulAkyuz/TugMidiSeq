@@ -10,6 +10,7 @@
 #include "PluginEditor.h"
 
 ChangeBroadcaster myGridChangeListener;
+ChangeBroadcaster updateMidiPort;;
 
 //==============================================================================
 TugMidiSeqAudioProcessor::TugMidiSeqAudioProcessor()
@@ -40,6 +41,7 @@ valueTreeState(*this, &undoManager)
     resourceJsonFile = new File(filePath);
 #endif
     juce::String  tmp_s;
+    juce::StringArray devices = juce::MidiOutput::getDevices();
     for(int j = 0 ; j <  numOfLine; j++)
     {
         for(int i = 0 ; i < numOfStep ; i++)
@@ -145,8 +147,9 @@ valueTreeState(*this, &undoManager)
     channelOnAtamic = valueTreeState.getRawParameterValue(tmp_s);
     
     
-    valueTreeState.state = juce::ValueTree("midiSeq"); // do not forget for valuetree
     
+    valueTreeState.state = juce::ValueTree("midiSeq"); // do not forget for valuetree
+
     
     readPresetToFileJSON();
     mySynth.setCurrentPlaybackSampleRate(mySampleRate);
@@ -169,8 +172,13 @@ valueTreeState(*this, &undoManager)
     mySampleRate = 44100;
     initPrepareValue();
     
-    
+
     midiProcessor = std::make_unique<MidiProcessor>();
+
+    
+
+   //  setMidiPortName("Tugrul");
+
     /*
     for(auto i = 0; i < numOfLine; i++)
     {
@@ -200,6 +208,7 @@ bool TugMidiSeqAudioProcessor::acceptsMidi() const
 #else
     return false;
 #endif
+
 }
 
 bool TugMidiSeqAudioProcessor::producesMidi() const
@@ -227,6 +236,7 @@ double TugMidiSeqAudioProcessor::getTailLengthSeconds() const
 
 int TugMidiSeqAudioProcessor::getNumPrograms()
 {
+  
     return  myProgram.size();   // NB: some hosts don't cope very well if you tell them there are 0 programs,
     // so this should be at least 1, even if you're not really implementing programs.
 }
@@ -348,6 +358,7 @@ void TugMidiSeqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
 
     playHead->getCurrentPosition(positionInfo);
     initPrepareValue();
+  
 }
 
 void TugMidiSeqAudioProcessor::releaseResources()
@@ -396,7 +407,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
     buffer.clear (i, 0, buffer.getNumSamples());
-    
+  
     // This is the place where you'd normally do the guts of your plugin's
     // audio processing...
     // Make sure to reset the state if your inner loop is processing
@@ -592,6 +603,7 @@ void TugMidiSeqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     auto state = valueTreeState.copyState();
     std::unique_ptr<XmlElement> xml (state.createXml());
     copyXmlToBinary (*xml, destData);
+   
 }
 
 void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
@@ -602,6 +614,11 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
     if (xmlState.get() != nullptr)
         if (xmlState->hasTagName (valueTreeState.state.getType()))
             valueTreeState.replaceState (ValueTree::fromXml (*xmlState));
+
+
+  
+    midiPortName = getMidiPortNameFromXml();
+    midiProcessor->setMidiPort(midiPortName);
 }
 
 void TugMidiSeqAudioProcessor::initPrepareValue()

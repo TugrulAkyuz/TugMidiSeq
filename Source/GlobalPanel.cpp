@@ -11,18 +11,41 @@
 #include "GlobalPanel.h"
 #include "Satellite.h"
 
+extern ChangeBroadcaster updateMidiPort;;
 
 GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , velUsageButton("VelButton")
 {
     startTimer(100);
 
-    
+    updateMidiPort.addChangeListener(this);
+
+    addAndMakeVisible(midiPort);
     addAndMakeVisible(writeButton);
     addAndMakeVisible(deleteButton);
     addAndMakeVisible(inBuiltSynthButton);
     addAndMakeVisible(sortedOrFirstEmptySelectButton);
     addAndMakeVisible(channelOnButton);
     
+    midiPort.setButtonText(audioProcessor.getMidiPortName());
+
+    midiPort.onClick = [this]()
+        {
+
+
+            auto dialog = std::make_unique<ComboBoxDialog>(audioProcessor);
+
+            // Launch the panel in a new window
+            juce::DialogWindow::LaunchOptions options;
+            options.dialogTitle = "Select Midi Port";
+            options.content.setOwned(dialog.release());
+            options.componentToCentreAround = getParentComponent();
+            options.useNativeTitleBar = true;
+            options.resizable = false;
+
+            options.launchAsync();
+
+        };
+
     inBuiltSynthButton.setButtonText("InBSynth");
     inBuiltSynthButton.setClickingTogglesState (true);
     inBuiltSynthButton.setColour(TextButton::ColourIds::textColourOffId, Colours::lightgrey);
@@ -67,6 +90,10 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
         randomButton.getLast()->setColour(ComboBox::outlineColourId, Colours::darkgrey);
         
     }
+    midiPort.setColour(TextButton::ColourIds::textColourOffId,Colours::pink);
+    midiPort.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
+    midiPort.setColour(ComboBox::outlineColourId, Colours::darkgrey);
+
     
     globalNameLabel.setText("GLOBAL CONTROLS", juce::dontSendNotification);
     globalNameLabel.setColour(juce::Label::ColourIds::textColourId, myTextLabelColour);
@@ -373,8 +400,9 @@ void GlobalPanel::resized()
     auto xarea =getLocalBounds();
     auto top_area = xarea.removeFromTop(13);
     auto rightarea = area.removeFromRight(200);
- 
-  
+
+
+    midiPort.setButtonText(audioProcessor.getMidiPortName());
     channelOnButton.setBounds( area.removeFromRight(40).reduced(0, 13));
     gridAllDelaySlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridGridAllShuffleSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
@@ -399,13 +427,16 @@ void GlobalPanel::resized()
     
     
     velUsageButton.setBounds( area.removeFromRight(70).reduced(3, 10));
-    
+    auto d = area.removeFromRight(260);
+    auto dd = d.removeFromBottom(getHeight()/2);
     for(int i = 0 ; i < 5 ; i++)
     {
-        randomButton.getUnchecked(i)->setBounds( area.removeFromRight(53).reduced(3, 14));
+        randomButton.getUnchecked(i)->setBounds(d.removeFromRight(53).reduced(3, 2));
     }
     globalNameLabel.setBounds(top_area.removeFromLeft(100).reduced(3, 0));
-    
+    auto r = randomButton.getUnchecked(2);
+
+    midiPort.setBounds(dd.reduced(2, 2));
     resetButton.setBounds( rightarea.removeFromRight(60).reduced(3, 10));
     presetCombo.setBounds( rightarea.removeFromRight(70).reduced(3, 10));
     rightarea.removeFromTop(5);

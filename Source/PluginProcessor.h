@@ -13,6 +13,8 @@ using namespace juce;
 #define numOfStep  32
 #define numOfLine  5
 
+extern ChangeBroadcaster updateMidiPort;;
+
 #include "SynthVoice.h"
 
 extern ChangeBroadcaster myGridChangeListener;
@@ -84,12 +86,27 @@ public:
     {
 #if JUCE_MAC
         midiOutput = juce::MidiOutput::createNewDevice("TMS midi ");
-#elif JUCE_WINDOWS
-        juce::StringArray devices = juce::MidiInput::getDevices();
-        midiOutput = juce::MidiOutput::openDevice("MIDI Yoke 1");
 #endif
-        if (midiOutput != nullptr)
-            midiOutput->startBackgroundThread(); // Start the MIDI output thread if needed
+    }
+
+    void setMidiPort(String s)
+    {
+        auto  devices = juce::MidiOutput::getAvailableDevices();
+
+        
+        for (auto device : devices)
+        {
+            if (device.name == s)
+            {
+                midiOutput = juce::MidiOutput::openDevice(s);
+
+                if (midiOutput != nullptr)
+                    midiOutput->startBackgroundThread(); // Start the MIDI output thread if needed
+                else 
+                    midiOutput = nullptr;
+            }
+        }
+
 
     }
 
@@ -121,6 +138,7 @@ public:
  
         
     }
+
 
 private:
 
@@ -351,9 +369,36 @@ public:
     {
         return *channelOnAtamic;
     }
+
+    String getMidiPortNameFromXml()
+    {
+        
+        auto x = valueTreeState.state.getOrCreateChildWithName("midiPort", nullptr);
+        auto name =  x.getProperty("nameOfMidiPort", "").toString();
+       return name;
+    }
+
+    void setMidiPortNameToXml(String midiPort)
+    {
+        auto x = valueTreeState.state.getOrCreateChildWithName("midiPort", nullptr);
+        x.setProperty("nameOfMidiPort", midiPort, nullptr);
+
+    }
+    void setMidiPortName(String midiPort)
+    {
+
+        setMidiPortNameToXml( midiPort);
+        midiPortName = midiPort;
+        updateMidiPort.sendChangeMessage();
+    }
+
+    String getMidiPortName()
+    {
+        return  midiPortName;
+    }
     
 private:
-    
+    String midiPortName = "Press To Select Midi Port";
     void midiHandling(juce::MidiBuffer& midiMessages,int sampleOffset, bool sampelBased = true);
     
     std::unique_ptr<MidiProcessor> midiProcessor;
