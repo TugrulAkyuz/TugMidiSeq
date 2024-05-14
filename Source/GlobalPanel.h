@@ -24,11 +24,14 @@ public:
     ComboBoxDialog(TugMidiSeqAudioProcessor &p) : audioProcessor(p)
     {
         //combo = new juce::ComboBox();
-        juce::StringArray devices = juce::MidiOutput::getDevices();
+        auto devices = juce::MidiInput::getAvailableDevices();
         int i = 1;
+#ifdef JUCE_MAC
+        //combo.addItem(myVirtualMidiName, i++);
+#endif
         for (auto d : devices)
         {
-            combo.addItem(d, i);
+            combo.addItem(d.name, i);
                 i++;
         }
         combo.setSelectedId(1);
@@ -66,14 +69,11 @@ public:
         
     void resized() override
     {
-        int cL = getWidth() * 0.75;
-        int cH = getHeight() * 0.25;
-
-        int x = (getWidth() - cL) / 2;
-        int y = 0.33*(getHeight() - cH) ;
-
-        combo.setBounds(x, y, cL, cH);
-        oKButton.setBounds(combo.getBounds().translated(0, 30).reduced(0.2*getWidth(), 0));
+        auto area = getBounds();
+        area.reduce(5, 20);
+        auto okba = area.removeFromBottom(area.getHeight()/2);
+        combo.setBounds(area.reduced(0.15*area.getWidth(), 0.2*area.getHeight()));
+        oKButton.setBounds(okba.reduced(0.3*okba.getWidth(), 0.2*okba.getHeight()));
     }
 
 private:

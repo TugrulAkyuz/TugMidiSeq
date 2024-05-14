@@ -19,6 +19,8 @@ extern ChangeBroadcaster updateMidiPort;;
 
 extern ChangeBroadcaster myGridChangeListener;
 
+//const String myVirtualMidiName = "TMS Midi";
+
 const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","9","10","11","12","13","14", "15","15"};
 
 const juce::StringArray valueTreeNames = 
@@ -81,13 +83,14 @@ public:
 };
 
 
-class MidiProcessor : public juce::MidiInputCallback
+class MidiProcessor
 {
 public:
     MidiProcessor()
     {
 #if JUCE_MAC
-        midiOutput = juce::MidiOutput::createNewDevice("TMS midi ");
+    //    handleVirtualOwnMidiPort();
+       // midiInput = juce::MidiInput::createNewDevice("TMS midi ", this);
 #endif
         
     }
@@ -95,7 +98,17 @@ public:
     void setMidiPort(String s)
     {
         const juce::ScopedLock lock(midiOutputMutex);
+        /*
+        if(myVirtualMidiName == s &&  midiOutput != nullptr)
+        {
+            if(midiOutput->getName() == s)
+               handleVirtualOwnMidiPort();
+            return;
+        }
+         */
+        
         auto  devices = juce::MidiOutput::getAvailableDevices();
+         
         for (auto device : devices)
         {
 
@@ -110,6 +123,7 @@ public:
                 return;
             }
         }
+        
     }
 
     ~MidiProcessor()
@@ -121,6 +135,21 @@ public:
         }
        
     }
+   void  handleVirtualOwnMidiPort()
+    {
+       /*
+       midiOutput = juce::MidiOutput::openDevice(myVirtualMidiName);
+       if (midiOutput == nullptr)
+           midiOutput = juce::MidiOutput::createNewDevice(myVirtualMidiName);
+       if (midiOutput != nullptr)
+       {
+           if (midiOutput->isBackgroundThreadRunning() == false)
+               midiOutput->startBackgroundThread();
+       }
+        */
+        
+    }
+    
     void sendMidiBuffer(const MidiBuffer &buffer, int samplerate)
     {
         if (midiOutput != nullptr)
@@ -137,14 +166,14 @@ public:
        // MidiMessage message2 = MidiMessage::noteOn( 1, 64, 1.0f );
        // midiOutput->sendMessageNow( message2 );
     }
-
+/*
     void handleIncomingMidiMessage(juce::MidiInput* source, const juce::MidiMessage& message) override
     {
         // Process the incoming MIDI message here (if needed)
  
         
     }
-
+*/
 
 private:
 

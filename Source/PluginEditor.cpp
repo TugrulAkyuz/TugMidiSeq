@@ -39,7 +39,6 @@ TugMidiSeqAudioProcessorEditor::TugMidiSeqAudioProcessorEditor (TugMidiSeqAudioP
     setSize (1172 + 40, 276);
 
 
-   // audioProcessor.setMidiPortName("Alllah");
 }
 
 TugMidiSeqAudioProcessorEditor::~TugMidiSeqAudioProcessorEditor()

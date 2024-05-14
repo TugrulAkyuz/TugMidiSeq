@@ -330,14 +330,17 @@ void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
         v = preset.getProperty(tmp_s, var());
         p.shuffle = v;
         
+        /*
         tmp_s.clear();
         tmp_s << valueTreeNames[CHANNON];
         if (preset.hasProperty(tmp_s)) {
             v = preset.getProperty(tmp_s, var());
+            p.channelOn = v;
         } else {
             //v =   valueTreeState.getParameter(tmp_s)->convertFrom0to1(  valueTreeState.getParameter(tmp_s)->getDefaultValue()); //
         }
-        p.channelOn = v;
+         */
+        
         
         myProgram.push_back(p);
     }

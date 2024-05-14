@@ -99,7 +99,7 @@ valueTreeState(*this, &undoManager)
        
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDMIDIROUTE] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,16,j + 1));
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,16,j + 10));
         gridsMidiRouteAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         //*numOfGrid[j] = 16;
@@ -175,20 +175,6 @@ valueTreeState(*this, &undoManager)
 
     midiProcessor = std::make_unique<MidiProcessor>();
 
-    
-
-   //  setMidiPortName("Tugrul");
-
-    /*
-    for(auto i = 0; i < numOfLine; i++)
-    {
-        midiProcessor[i] = std::make_unique<MidiProcessor>(i);
-   
-    }
-     */
-     
-    
-    
 }
 
 TugMidiSeqAudioProcessor::~TugMidiSeqAudioProcessor()
@@ -426,7 +412,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     midiMessagesStack = midiMessages;
     playHead->getCurrentPosition(positionInfo);
 
-    
+
     //midiMessages.swapWith(processedMidiBuffer);
 
     if(positionInfo.isPlaying == true)
