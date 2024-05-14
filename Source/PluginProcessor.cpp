@@ -11,7 +11,7 @@
 
 ChangeBroadcaster myGridChangeListener;
 ChangeBroadcaster updateMidiPort;;
-
+juce::CriticalSection midiOutputMutex;
 //==============================================================================
 TugMidiSeqAudioProcessor::TugMidiSeqAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -578,7 +578,11 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
             buffer.clear (i, 0, buffer.getNumSamples());
     if(*channelOnAtamic == true)
-       midiProcessor->sendMidiBuffer(midiMessages,mySampleRate);
+    {
+        const juce::ScopedLock lock(midiOutputMutex);
+        midiProcessor->sendMidiBuffer(midiMessages, mySampleRate);
+    }
+      
 }
 
 //==============================================================================

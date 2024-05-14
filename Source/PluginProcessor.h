@@ -30,6 +30,8 @@ enum valueTreeNamesEnum
     BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON
 };
 
+extern juce::CriticalSection midiOutputMutex;
+
 const std::vector <juce::String> myNotetUnit =
 { "1nd","1n", "1nt",
     "2nd","2n","2nt",
@@ -87,33 +89,37 @@ public:
 #if JUCE_MAC
         midiOutput = juce::MidiOutput::createNewDevice("TMS midi ");
 #endif
+        
     }
 
     void setMidiPort(String s)
     {
+        const juce::ScopedLock lock(midiOutputMutex);
         auto  devices = juce::MidiOutput::getAvailableDevices();
-
-        
         for (auto device : devices)
         {
+
             if (device.name == s)
             {
-                midiOutput = juce::MidiOutput::openDevice(s);
-
+                midiOutput = juce::MidiOutput::openDevice(device.identifier);
                 if (midiOutput != nullptr)
-                    midiOutput->startBackgroundThread(); // Start the MIDI output thread if needed
-                else 
-                    midiOutput = nullptr;
+                {
+                    if (midiOutput->isBackgroundThreadRunning() == false)
+                        midiOutput->startBackgroundThread();
+                }
+                return;
             }
         }
-
-
     }
 
     ~MidiProcessor()
     {
         if (midiOutput != nullptr)
+        { 
             midiOutput->stopBackgroundThread(); // Stop the MIDI output thread if needed
+           
+        }
+       
     }
     void sendMidiBuffer(const MidiBuffer &buffer, int samplerate)
     {
@@ -147,6 +153,8 @@ private:
     MidiInputCallback* midiInputCallback;
     std::unique_ptr<juce::MidiOutput> midiOutput;
     std::unique_ptr<juce::MidiInput> midiInput;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MidiProcessor)
 };
 
 
@@ -389,6 +397,7 @@ public:
 
         setMidiPortNameToXml( midiPort);
         midiPortName = midiPort;
+        midiProcessor->setMidiPort(midiPort);
         updateMidiPort.sendChangeMessage();
     }
 

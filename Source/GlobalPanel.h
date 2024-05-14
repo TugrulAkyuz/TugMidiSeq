@@ -32,19 +32,33 @@ public:
                 i++;
         }
         combo.setSelectedId(1);
-
-        addAndMakeVisible(combo);
-       // setContentComponentSize(100,100);
-        setSize(300, 100);
-
-        combo.onChange = [this]()
-            {
-                String s = combo.getText();
-                 audioProcessor.setMidiPortName(s);
-            };
        
 
+        addAndMakeVisible(combo);
+        addAndMakeVisible(oKButton);
+       // setContentComponentSize(100,100);
+        setSize(300, 100);
+        oKButton.setColour(TextButton::ColourIds::textColourOffId, Colours::pink);
+        oKButton.setColour(TextButton::ColourIds::buttonColourId, Colours::black);
+        oKButton.setColour(ComboBox::outlineColourId, Colours::darkgrey);
+        oKButton.setButtonText("OK");
+        myLookAndFeel.setColour(ComboBox::textColourId, Colours::lightgrey);
+        myLookAndFeel.setColour(PopupMenu::backgroundColourId, Colours::black);
+        myLookAndFeel.setColour(ComboBox::backgroundColourId, Colours::black);
+        combo.setLookAndFeel(&myLookAndFeel);
+        oKButton.onClick = [this]()
+            {
+                String s = combo.getText();
+                audioProcessor.setMidiPortName(s);
+               
+            };
+
     }
+    ~ComboBoxDialog()
+    {
+        setLookAndFeel(nullptr);
+    }
+
     void paint(Graphics& g) override
     {
         g.fillAll(Colours::black);
@@ -56,13 +70,16 @@ public:
         int cH = getHeight() * 0.25;
 
         int x = (getWidth() - cL) / 2;
-        int y = (getHeight() - cH) / 2;
+        int y = 0.33*(getHeight() - cH) ;
 
         combo.setBounds(x, y, cL, cH);
+        oKButton.setBounds(combo.getBounds().translated(0, 30).reduced(0.2*getWidth(), 0));
     }
 
 private:
+    MyLookAndFeel myLookAndFeel;
     juce::ComboBox combo;
+    TextButton oKButton;
     TugMidiSeqAudioProcessor& audioProcessor;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ComboBoxDialog)
 };
@@ -172,6 +189,7 @@ class GlobalPanel   : public juce::Component , juce::Timer  , ChangeListener
     void ButtonClick(TextButton *b) {};
    ~GlobalPanel()
     {
+       updateMidiPort.removeChangeListener(this);
        setLookAndFeel (nullptr);
     }
     
