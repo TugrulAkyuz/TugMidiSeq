@@ -472,7 +472,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         {
             midiHandling(midiMessagesStack,0,false);
             if(*channelOnAtamic == true)
-                midiProcessor->sendMidiBuffer(midiMessages, mySampleRate);
+            {
+                midiProcessor->sendMidiBuffer(midiMessagesStack, mySampleRate);
+            }
             return;
         }
         
@@ -565,7 +567,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             buffer.clear (i, 0, buffer.getNumSamples());
     if(*channelOnAtamic == true)
     {
-        const juce::ScopedLock lock(midiOutputMutex);
+       
         midiProcessor->sendMidiBuffer(midiMessages, mySampleRate);
     }
       
@@ -863,10 +865,23 @@ void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int 
     
     MidiMessage currentMessage;
     MidiBuffer erasedMidi;
+  
     int samplePos;
     //myInnmidiBuffer.clear();
     while(it.getNextEvent(currentMessage,samplePos))
     {
+        bool loopFound = false;
+        auto ch =  currentMessage.getChannel();
+        for (int i = 0; i < numOfLine; ++i) {
+            if (currentMessage.getChannel()== *gridsMidiRouteAtomic[i]) {
+                
+                loopFound =  true;
+                break;
+                DBG("");
+            }
+        }
+        if(loopFound == true) continue;
+        
         if(sampleBased == false) { samplePos = 0 ; sampleOffset = 0;}
         if(samplePos == sampleOffset)
         {
@@ -881,6 +896,7 @@ void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int 
                     if(inMidiNoteListVector.at(i).getVelocity() != 0) continue;
                     
                     inMidiNoteListVector.at(i) = currentMessage;
+                  
                     break;;
                 }
                 
@@ -911,8 +927,38 @@ void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int 
         }
   
     }
-    
+    /*
+if(myIsPlaying == false)
+{
+    MidiBuffer temMidiBuffer;
+    if(*sortedOrFirstEmptySelectAtomic == 1)
+    {
+        for (auto i = 0 ; i < numOfLine;i++)
+        {
+            inMidiNoteListVector.at(i).setChannel(*gridsMidiRouteAtomic[i]);
+            temMidiBuffer.addEvent(inMidiNoteListVector.at(i), 0);
+        }
+    }
+    else{
 
+        for (auto i = 0 ; i < numOfLine;i++)
+        {
+            auto it = std::next(inMidiNoteList.begin(), i);
+            if(it == inMidiNoteList.end()) break;
+            it->setChannel(*gridsMidiRouteAtomic[i]);
+            temMidiBuffer.addEvent(*it, 0);
+                
+        }
+   
+    }
+    midiMessages.swapWith(temMidiBuffer);
+    midiMessages.addEvents(erasedMidi, 0,0, 0);
+    
+}
+    */
+
+    
+    
 }
 
 void TugMidiSeqAudioProcessor::initForVariables()

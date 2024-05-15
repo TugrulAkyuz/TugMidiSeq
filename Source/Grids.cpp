@@ -236,7 +236,7 @@ void Grids::paint (juce::Graphics& g)
     g.drawLine(octaveSlider.getRight(), 4,octaveSlider.getRight(), getHeight()- 4,1);
     g.drawLine(gridNumberSlider.getX() -4  ,4,gridNumberSlider.getX() - 4, getHeight() - 4,1);
  
-     x= gridMidiRouteCombo.getX();
+     x= gridMidiRouteCombo.getX() + 7 ;
      y = getLocalBounds().getY();
     if(audioProcessor.midiState[myLine] == true)
     {

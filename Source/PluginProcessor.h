@@ -114,6 +114,8 @@ public:
 
             if (device.name == s)
             {
+                if (midiOutput != nullptr)
+                    midiOutput->clearAllPendingMessages();
                 midiOutput = juce::MidiOutput::openDevice(device.identifier);
                 if (midiOutput != nullptr)
                 {
@@ -152,6 +154,7 @@ public:
     
     void sendMidiBuffer(const MidiBuffer &buffer, int samplerate)
     {
+        const juce::ScopedLock lock(midiOutputMutex);
         if (midiOutput != nullptr)
             midiOutput->sendBlockOfMessages(buffer, Time::getMillisecondCounter(), samplerate);
     }
