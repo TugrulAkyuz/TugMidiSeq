@@ -218,6 +218,11 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
  
     myGridChangeListener.addChangeListener(this);
     
+    midiInNote.onClick = [this]()
+    {
+        audioProcessor.setGridSolo(myLine);
+    };
+    
 }
 void Grids::paint (juce::Graphics& g)
 {
@@ -249,6 +254,9 @@ void Grids::paint (juce::Graphics& g)
         g.setColour(Colours::darkgreen);
         g.fillEllipse(x, y + 2, 5, 5);
     }
+
+    if(audioProcessor.getSoloState() == myLine)
+        g.fillAll (  Colours::black.withAlpha(1.0f));
     
     /*
     if(midiInNote.getButtonText() != "")
@@ -374,7 +382,8 @@ void Grids::resized()
 void  SubGrids::paint (juce::Graphics& g)
 {
     float ratio =   audioProcessor.getGridContinousRatio(myLine);
-    
+    auto soloLane = audioProcessor.getSoloState();
+    if( soloLane != -1 &&  soloLane != myLine) return;
      DropShadow ds(juce::Colours::lightgreen.withAlpha(1.0f), 2, {0,0});
     float thickness = 2;
     Rectangle<int>  area;

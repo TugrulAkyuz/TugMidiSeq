@@ -760,7 +760,7 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
 
 bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessages,int s)
 {
-    
+    if(soloLane != -1 && soloLane != i ) return true;
     int midRouteIndex = *gridsMidiRouteAtomic[i];
     bool  sortedofirs_Bool = inMidiNoteList.size() > i;
     if(*sortedOrFirstEmptySelectAtomic == true)
@@ -872,15 +872,20 @@ void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int 
     {
         bool loopFound = false;
         auto ch =  currentMessage.getChannel();
+        String tmpS = currentMessage.getDescription();
+        DBG(tmpS);
+        
         for (int i = 0; i < numOfLine; ++i) {
-            if (currentMessage.getChannel()== *gridsMidiRouteAtomic[i]) {
+            if (currentMessage.getChannel() == *gridsMidiRouteAtomic[i]) {
                 
                 loopFound =  true;
+                DBG("Filtered: " + tmpS) ;
                 break;
-                DBG("");
+                
             }
         }
         if(loopFound == true) continue;
+         
         
         if(sampleBased == false) { samplePos = 0 ; sampleOffset = 0;}
         if(samplePos == sampleOffset)

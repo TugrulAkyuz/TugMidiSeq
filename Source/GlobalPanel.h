@@ -53,6 +53,10 @@ public:
             {
                 String s = combo.getText();
                 audioProcessor.setMidiPortName(s);
+                if (auto* dw = findParentComponentOfClass<juce::DialogWindow>())
+                            {
+                                dw->exitModalState(0);
+                            }
                
             };
 

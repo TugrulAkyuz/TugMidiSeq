@@ -437,8 +437,25 @@ public:
     {
         return  midiPortName;
     }
+    void setGridSolo(int lane_no)
+    {
+         
+         if(soloLane == lane_no)
+         {
+             soloLane = -1;
+             return;
+         }
+        soloLane = lane_no;
+    }
+    
+    int getSoloState()
+    {
+        return soloLane;
+    }
     
 private:
+    int soloLane = -1;
+    
     String midiPortName = "Press To Select Midi Port";
     void midiHandling(juce::MidiBuffer& midiMessages,int sampleOffset, bool sampelBased = true);
     
