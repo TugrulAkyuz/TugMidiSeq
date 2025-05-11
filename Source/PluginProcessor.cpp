@@ -31,14 +31,33 @@ valueTreeState(*this, &undoManager)
     String filePath;
  
 #if JUCE_MAC
+    // macOS: Standard Audio Presets location (~/Library/Audio/Presets/)
+    auto userHome = File::getSpecialLocation(File::userHomeDirectory);
+    File presetDir = userHome.getChildFile("Library")
+                           .getChildFile("Audio")
+                           .getChildFile("Presets")
+                           .getChildFile("2Rule")
+                           .getChildFile("TugMidiSeq");
 
-    filePath =  File::getSpecialLocation(File::currentApplicationFile).getChildFile ("TugMidiSeqPresets.json").getFullPathName();
+    if (!presetDir.exists())
+        presetDir.createDirectory();
+
+    filePath = presetDir.getChildFile("TugMidiSeqPresets.json").getFullPathName();
     resourceJsonFile = new File(filePath);
+
 #elif JUCE_WINDOWS
-    auto a = File::getSpecialLocation(File::currentApplicationFile);
-    auto b = a.getParentDirectory();
-    filePath =  b.getChildFile("TugMidiSeqPresets.json").getFullPathName();
+    // Windows: Standard AppData location
+    auto appSupport = File::getSpecialLocation(File::userApplicationDataDirectory);
+    File presetDir = appSupport.getChildFile("2Rule")
+                             .getChildFile("TugMidiSeq")
+                             .getChildFile("Presets");
+
+    if (!presetDir.exists())
+        presetDir.createDirectory();
+
+    filePath = presetDir.getChildFile("TugMidiSeqPresets.json").getFullPathName();
     resourceJsonFile = new File(filePath);
+
 #endif
     juce::String  tmp_s;
     juce::StringArray devices = juce::MidiOutput::getDevices();
