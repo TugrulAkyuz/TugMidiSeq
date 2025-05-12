@@ -253,6 +253,7 @@ int TugMidiSeqAudioProcessor::getCurrentProgram()
 void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
 {
     if (index == 0) return;
+    if(index > myProgram.size()) return;
      program = index;
 //    if (hasEditor() == true)
 //    {
