@@ -49,8 +49,7 @@ valueTreeState(*this, &undoManager)
     // Windows: Standard AppData location
     auto appSupport = File::getSpecialLocation(File::userApplicationDataDirectory);
     File presetDir = appSupport.getChildFile("2Rule")
-                             .getChildFile("TugMidiSeq")
-                             .getChildFile("Presets");
+        .getChildFile("TugMidiSeq");
 
     if (!presetDir.exists())
         presetDir.createDirectory();
