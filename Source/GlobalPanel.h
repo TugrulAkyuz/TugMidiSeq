@@ -82,7 +82,7 @@ public:
 
 private:
     MyLookAndFeel myLookAndFeel;
-    juce::ComboBox combo;
+    WheelComboBox combo;
     TextButton oKButton;
     TugMidiSeqAudioProcessor& audioProcessor;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ComboBoxDialog)
@@ -208,7 +208,7 @@ class GlobalPanel   : public juce::Component , juce::Timer  , ChangeListener
         }
         else
         {
-            loopBarlenghtSliderLabel.setColour(Label::textColourId,  Colours::lightgrey);
+            loopBarlenghtSliderLabel.setColour(Label::textColourId,  Theme::textSecondary);
             //loopBarlenghtSliderLabel.setColour(Label::backgroundColourId,  Colours::transparentBlack  );
         }
         myMeasure = rread_m;
@@ -241,9 +241,9 @@ private:
     CustomRoratySlider gridAllEventSlider;
     CustomRoratySlider gridGridAllShuffleSlider;
     CustomRoratySlider gridAllDelaySlider;
-    juce::ComboBox gridAllSpeedCombo;
-    juce::ComboBox gridAllDurationCombo;
-    juce::ComboBox presetCombo;
+    WheelComboBox gridAllSpeedCombo;
+    WheelComboBox gridAllDurationCombo;
+    WheelComboBox presetCombo;
     
     TextButton midiPort;
 

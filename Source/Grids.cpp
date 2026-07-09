@@ -37,9 +37,10 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     //octaveSlider.gette
     octaveSlider.setLookAndFeel(&myLookAndFeel);
     octaveSlider.setTextBoxStyle(juce::Slider::TextBoxRight, true, 40, 25);
-    octaveSlider.setColour(Slider::textBoxTextColourId,  Colours::orange);
+    octaveSlider.setColour(Slider::textBoxTextColourId,  Theme::textValue);
     addAndMakeVisible(midiInNote);
-    midiInNote.setColour(juce::TextButton::textColourOffId, juce::Colours::black);
+    midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, Theme::surfaceAlt);
+    midiInNote.setColour(juce::TextButton::textColourOffId, Theme::textSecondary);
 
     gridSpeedCombo.setLookAndFeel(&myLookAndFeel);
     gridMidiRouteCombo.setLookAndFeel(&myLookAndFeel);
@@ -78,6 +79,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     for (int i = 0; i < numOfStep; ++i)
     {
         addAndMakeVisible (buttons.add (new MultiStateButton (audioProcessor , myLine, i)));
+        buttons.getLast()->setOwnerGrid(this);
         buttons.getLast()->setClickingTogglesState(true);
         buttons.getLast()->setColour(juce::TextButton::ColourIds::buttonColourId, juce::Colours::grey);
         buttons.getLast()->setColour(juce::TextButton::ColourIds::buttonOnColourId, juce::Colours::orange);
@@ -195,9 +197,9 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     tmp_s << valueTreeNames[DUR] <<line;
     comBoxDurationAtaachment =  std::make_unique <AudioProcessorValueTreeState::ComboBoxAttachment>(audioProcessor.valueTreeState, tmp_s, gridDurationCombo);
 
-    octaveSlider.setColour (Slider::ColourIds::backgroundColourId, Colours::lightgrey);
-    octaveSlider.setColour (Slider::ColourIds::trackColourId, Colours::lightgrey);
-    octaveSlider.setColour (Slider::ColourIds::thumbColourId, Colours::orange);
+    octaveSlider.setColour (Slider::ColourIds::backgroundColourId, Theme::well);
+    octaveSlider.setColour (Slider::ColourIds::trackColourId, colourarray[myLine].withAlpha (0.55f));
+    octaveSlider.setColour (Slider::ColourIds::thumbColourId, colourarray[myLine]);
     //Slider::ColourIds::thumbColourId
     //octaveSlider.setRange(-2, 2,1);
    // octaveSlider.setValue(0);
@@ -226,51 +228,60 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
 }
 void Grids::paint (juce::Graphics& g)
 {
-   
-    //g.fillAll (  Colour(0xff404040));
-    g.fillAll (  Colours::darkgrey.withAlpha(0.0f));
-    auto y = getLocalBounds().getHeight();
-    auto x = getLocalBounds().getWidth();
-    g.setColour(juce::Colours::grey.withAlpha(0.7f));
-    g.drawLine(0, y, x, y, 2);
-    if(myLine == 4)
-        g.drawLine(0, 0, x, 0, 2);
-   
+    auto bounds = getLocalBounds().toFloat();
 
-    g.setColour(juce::Colours::grey.withAlpha(0.7f));
-    g.drawLine(octaveSlider.getRight(), 4,octaveSlider.getRight(), getHeight()- 4,1);
-    g.drawLine(gridNumberSlider.getX() -4  ,4,gridNumberSlider.getX() - 4, getHeight() - 4,1);
- 
-     x= gridMidiRouteCombo.getX() + 7 ;
-     y = getLocalBounds().getY();
-    if(audioProcessor.midiState[myLine] == true)
+    // alternating raised lane surface
+    g.setColour (myLine % 2 == 0 ? Theme::surface : Theme::surfaceAlt);
+    g.fillRect (bounds);
+
+    // lane identity tab on the far left
+    g.setColour (colourarray[myLine].withAlpha (0.85f));
+    g.fillRect (0.0f, 2.0f, 3.0f, bounds.getHeight() - 4.0f);
+
+    // hairline separators (row bottom, top for the first lane, control columns)
+    g.setColour (Theme::hairline.withAlpha (0.7f));
+    g.drawLine (0, bounds.getBottom() - 0.5f, bounds.getRight(), bounds.getBottom() - 0.5f, 1.0f);
+    if (myLine == 4)
+        g.drawLine (0, 0.5f, bounds.getRight(), 0.5f, 1.0f);
+
+    g.setColour (Theme::hairline.withAlpha (0.45f));
+    g.drawLine (octaveSlider.getRight() + 2.0f, 5.0f, octaveSlider.getRight() + 2.0f, getHeight() - 5.0f, 1.0f);
+    g.drawLine (gridNumberSlider.getX() - 5.0f, 5.0f, gridNumberSlider.getX() - 5.0f, getHeight() - 5.0f, 1.0f);
+
+    // MIDI-activity LED
+    float lx = gridMidiRouteCombo.getX() + 7.0f;
+    if (audioProcessor.midiState[myLine] == true)
     {
-
-        g.setColour(Colours::lightgreen);
-        g.fillEllipse(x, y + 2, 5, 5);
+        g.setColour (Colour (0xff86e0a0).withAlpha (0.3f));
+        g.fillEllipse (lx - 2.0f, 0.0f, 9.0f, 9.0f);        // glow
+        g.setColour (Colour (0xff86e0a0));
+        g.fillEllipse (lx, 2.0f, 5.0f, 5.0f);
     }
     else
     {
-        g.setColour(Colours::darkgreen);
-        g.fillEllipse(x, y + 2, 5, 5);
+        g.setColour (Theme::hairline);
+        g.fillEllipse (lx, 2.0f, 5.0f, 5.0f);
     }
 
-    if(audioProcessor.getSoloState() == myLine)
-        g.fillAll (  Colours::black.withAlpha(1.0f));
-    
-    /*
-    if(midiInNote.getButtonText() != "")
+}
+
+void Grids::paintOverChildren (juce::Graphics& g)
+{
+    int solo = audioProcessor.getSoloState();
+    if (solo == -1) return;               // no solo active: nothing to shade
+
+    if (solo == myLine)
     {
-        auto b = midiInNote.getBounds();
-        ColourGradient gf(Colours::lightgreen , b.getCentreX(),  b.getCentreY(), Colours::lightgreen.withAlpha(0.0f), b.getX()-20,b.getY()-20, true);
-        g.setGradientFill(gf);
-        
-        g.fillRect(b.expanded(10, 10));
+        // the soloed lane stays lit, with a crisp brass frame above the widgets
+        g.setColour (Theme::accent.withAlpha (0.85f));
+        g.drawRect (getLocalBounds().toFloat().reduced (1.0f), 1.2f);
     }
-     */
-   // if(ratio >= 0)
-   // g.fillRect(  subGrids->getX(), 0, (int)(ratio*(subGrids->getWidth()-20)), getHeight());
-    
+    else
+    {
+        // every other lane is shadowed (covers its widgets too)
+        g.setColour (Colours::black.withAlpha (0.55f));
+        g.fillRect (getLocalBounds());
+    }
 }
 void Grids::resized()
 {
@@ -384,19 +395,20 @@ void  SubGrids::paint (juce::Graphics& g)
     float ratio =   audioProcessor.getGridContinousRatio(myLine);
     auto soloLane = audioProcessor.getSoloState();
     if( soloLane != -1 &&  soloLane != myLine) return;
-     DropShadow ds(juce::Colours::lightgreen.withAlpha(1.0f), 2, {0,0});
+     DropShadow ds(Theme::accentBright.withAlpha(0.9f), 3, {0,0});
     float thickness = 2;
     Rectangle<int>  area;
     if(ratio >= 0)
     {
         area = Rectangle<int>  (10,getHeight() -7,ratio*(getWidth() -20),2);
- 
+        g.setColour (Theme::accent);
+        g.fillRect (area);
         ds.drawForRectangle(g, area);
-        
-      //  g.drawLine(10 + ratio*(getWidth() -20), getHeight() -10 , 10 + ratio*(getWidth() -20), getHeight() - 5);
+
+        g.setColour (Theme::accentBright);
          Line<float> line(10 + ratio*(getWidth() -20),getHeight() -6, 20 + ratio*(getWidth() -20) ,getHeight() -6);
         g.drawArrow(line, 4, 4, 5);
-    
+
     }
     float len = audioProcessor.getGridSampleLen( myLine);
     int  s_x = 0;
@@ -435,6 +447,113 @@ void  SubGrids::paint (juce::Graphics& g)
 
 void  SubGrids::resized ()
 {
-    
-    
+
+
+}
+
+//== Drag-to-paint =============================================================
+
+void MultiStateButton::mouseDown (const MouseEvent& e)
+{
+    shiftPressed = false;
+
+    if (juce::ModifierKeys::currentModifiers.isShiftDown())
+    {
+        shiftPressed = true;
+        y = e.getPosition().getY();
+        Button::mouseDown (e);              // shift = velocity nudge (unchanged)
+        return;
+    }
+
+    if (! e.mods.isLeftButtonDown())
+    {
+        Button::mouseDown (e);
+        return;
+    }
+
+    // Open a paint gesture: decide the brush from this pad, apply it here, then
+    // let Grids stamp the same value onto every pad the cursor crosses.
+    State brush = cycledState (e.mods.isCtrlDown());
+    paintTo (brush);
+    if (ownerGrid != nullptr)
+        ownerGrid->beginPaint (brush, myStep);
+}
+
+void MultiStateButton::mouseDrag (const MouseEvent& e)
+{
+    if (shiftPressed)
+    {
+        auto p = e.getPosition().getY();
+        float z = y - p;
+        y = p;
+        juce::String tmp_s;
+        tmp_s << valueTreeNames[VELGRIDBUTTON] << myLine << myStep;
+        float value = audioProcesor.getVelButton (myLine, myStep) + z / 127.0f;
+        value = jlimit (0.0f, 1.0f, value);
+        audioProcesor.valueTreeState.getParameter (tmp_s)->setValueNotifyingHost (value);
+        return;
+    }
+
+    // Screen coords so the gesture can reach pads in any lane, not just this one.
+    if (ownerGrid != nullptr && e.mods.isLeftButtonDown())
+        ownerGrid->paintDrag (e.getScreenPosition());
+}
+
+void MultiStateButton::mouseUp (const MouseEvent& e)
+{
+    // The origin pad was already painted on mouseDown; suppress the Button click
+    // so the attachment doesn't double-toggle it.
+    if (ownerGrid != nullptr)
+        ownerGrid->endPaint();
+}
+
+// Walk the sibling lanes (all the Grids that share our parent editor).
+template <typename Fn>
+static void forEachLane (juce::Component* self, Fn&& fn)
+{
+    if (auto* parent = self->getParentComponent())
+        for (int i = 0; i < parent->getNumChildComponents(); ++i)
+            if (auto* g = dynamic_cast<Grids*> (parent->getChildComponent (i)))
+                fn (g);
+}
+
+void Grids::beginPaint (MultiStateButton::State s, int originStep)
+{
+    painting   = true;
+    brushState = s;
+
+    // fresh gesture: clear the "already painted" marks on every lane
+    forEachLane (this, [] (Grids* g) { g->resetPainted(); });
+
+    if (originStep >= 0 && originStep < numOfStep)
+        paintedStep[originStep] = true;   // origin was painted on mouseDown
+    subGrids->rP();
+}
+
+void Grids::paintLocal (juce::Point<int> screenPos, MultiStateButton::State s)
+{
+    auto local = getLocalPoint (nullptr, screenPos);
+    int n = (int) *audioProcessor.numOfGrid[myLine];
+    for (int i = 0; i < n && i < buttons.size(); ++i)
+    {
+        auto* b = buttons[i];
+        if (b->isVisible() && ! paintedStep[i] && b->getBounds().contains (local))
+        {
+            b->paintTo (s);
+            paintedStep[i] = true;
+        }
+    }
+    subGrids->rP();
+}
+
+void Grids::paintDrag (juce::Point<int> screenPos)
+{
+    if (! painting) return;
+    // origin drives every lane; each hit-tests the cursor in its own space
+    forEachLane (this, [this, screenPos] (Grids* g) { g->paintLocal (screenPos, brushState); });
+}
+
+void Grids::endPaint()
+{
+    painting = false;
 }

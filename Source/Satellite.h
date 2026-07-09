@@ -9,14 +9,13 @@
 */
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include "Theme.h"
 #pragma once
 
+// Curated Eurorack lane palette (see Theme.h). Kept under the original name so
+// every existing reference (Grids, GlobalPanel, Satellite) picks it up unchanged.
 const juce::Colour colourarray [5] = {
-    juce::Colours::red.darker(),
-    juce::Colours::lightgreen.darker(),
-    juce::Colours::yellow.darker(),
-    juce::Colours::magenta.darker(),
-    juce::Colours::lightblue.darker()
+    Theme::lane[0], Theme::lane[1], Theme::lane[2], Theme::lane[3], Theme::lane[4]
 };
 
 class Satellite   : public juce::Component , public juce::Timer

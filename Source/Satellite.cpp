@@ -18,28 +18,35 @@ Satellite::Satellite(TugMidiSeqAudioProcessor& p): audioProcessor (p)
 }
 void Satellite::paint (juce::Graphics& g)
 {
-   
-    //g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
-    g.fillAll (juce::Colours::black);
-
     auto area = getLocalBounds();
- 
-    g.setColour(juce::Colours::darkgrey);
+
+    // recessed scope screen with a hardware bezel
+    g.fillAll (Theme::panel);
+    auto screen = area.toFloat().reduced (3.0f);
+    g.setColour (Theme::screen);
+    g.fillRoundedRectangle (screen, Theme::radMd);
+    g.setColour (Theme::shadow);                       // inner top shadow
+    g.drawLine (screen.getX() + Theme::radMd, screen.getY() + 1.0f,
+                screen.getRight() - Theme::radMd, screen.getY() + 1.0f, 1.4f);
+
     float center_x =  area.getHeight()/2;
     float center_y =  center_x;
     float r[5];
-    g.setColour(juce::Colours::grey);
-    g.drawLine(0, center_y,getWidth(), center_y);
-    g.drawLine(center_x, 0,center_x, getHeight());
-    g.setColour(juce::Colours::grey.withAlpha(0.6f));
-    g.drawLine(0, 0,getWidth(),getWidth());
-    g.drawLine(0, getHeight(),getWidth(), 0);
+
+    // phosphor grid: crosshair + diagonals
+    g.setColour (Theme::hairline.withAlpha (0.55f));
+    g.drawLine (0, center_y, (float) getWidth(), center_y);
+    g.drawLine (center_x, 0, center_x, (float) getHeight());
+    g.setColour (Theme::hairline.withAlpha (0.28f));
+    g.drawLine (0, 0, (float) getWidth(), (float) getWidth());
+    g.drawLine (0, (float) getHeight(), (float) getWidth(), 0);
     for(int i = 0 ; i < 5 ; i++)
     {
         float x = i*(area.getHeight()/2)/7 +10;
         float y = x;
         float width = area.getHeight() - 2*x;
         float height = width;
+        g.setColour (Theme::hairline.withAlpha (0.4f + i * 0.05f));
         g.drawEllipse(x, y, width, height, 1);
         r[i] =  center_x - x; ;
     }
@@ -89,29 +96,26 @@ void Satellite::paint (juce::Graphics& g)
         juce::String tmp = std::to_string(i+1);
         if(audioProcessor.midiState[i] == false  || audioProcessor.myIsPlaying == false)
         {
-
-            g.setColour(juce::Colours::lightgrey);
-            g.fillEllipse(x-6, y-6, 12, 12);
-            g.setColour(juce::Colours::black);
-     
-            g.drawText(tmp, x-5, y-5, 11, 11, juce::Justification::centred);
-            
+            g.setColour (Theme::surfaceAlt);
+            g.fillEllipse (x - 6, y - 6, 12, 12);
+            g.setColour (colourarray[i].withAlpha (0.55f));
+            g.drawEllipse (x - 6, y - 6, 12, 12, 1.0f);
+            g.setColour (Theme::textSecondary);
+            g.setFont (Theme::valueFont (9.0f));
+            g.drawText (tmp, x - 6, y - 6, 12, 12, juce::Justification::centred);
         }
         else {
-            g.setColour(colourarray[i]);
             juce::ColourGradient cg{colourarray[i], x, y, colourarray[i].withAlpha(0.0f), x+15, y + 15, true};
             g.setGradientFill(cg);
             g.fillEllipse(x-15, y-15, 30, 30);
+            g.setColour (colourarray[i].brighter (0.4f));
+            g.fillEllipse (x - 3, y - 3, 6, 6);
         }
-            
+
     }
-    g.setColour(juce::Colours::grey);
-    //getLocalBounds().toFloat().reduce(1, 1);
-    auto x = getLocalBounds();
-    x.reduce(2, 2);
-    
-     g.drawRoundedRectangle(x.toFloat(), 2.0f, 2.0f);
-    
+    // hardware bezel around the scope screen
+    g.setColour (Theme::hairline);
+    g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (3.0f), Theme::radMd, 1.0f);
 
 
 }

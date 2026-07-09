@@ -17,6 +17,33 @@
 
 const std::vector <std::string> topLabel={"midi in","Octave","G R I D S","#Grid","Speed","Duration","Vel","Event","Shuffle","Delay","Chan","Note Satellite"};
 
+// The UI is authored at this fixed size; the editor scales it uniformly.
+static constexpr int kEditorDesignW = 1212;
+static constexpr int kEditorDesignH = 276;
+
+//==============================================================================
+// All widgets live here at the fixed design size. The editor owns one of these
+// and applies a uniform scale transform when the window is resized, so the
+// magic-number layout never has to change.
+class EditorContent  : public juce::Component
+{
+public:
+    EditorContent (TugMidiSeqAudioProcessor&);
+
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    TugMidiSeqAudioProcessor& audioProcessor;
+
+    juce::OwnedArray< Grids> grids;
+    Satellite satellite;
+    GlobalPanel globalPanel;
+    juce::OwnedArray< juce::Label > topInLabel;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EditorContent)
+};
+
 //==============================================================================
 /**
 */
@@ -29,22 +56,13 @@ public:
     //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
- 
-
 
 private:
-    // This reference is provided as a quick way for your editor to
-    // access the processor object that created it.
     TugMidiSeqAudioProcessor& audioProcessor;
- 
- 
-    juce::OwnedArray< Grids> grids;
-    Satellite satellite;
-    GlobalPanel globalPanel;
-    juce::OwnedArray< juce::Label > topInLabel;
-    
-    
- 
+
+    EditorContent content;
+    juce::ComponentBoundsConstrainer constrainer;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TugMidiSeqAudioProcessorEditor)
 };
 

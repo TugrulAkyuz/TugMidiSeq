@@ -452,7 +452,23 @@ public:
     {
         return soloLane;
     }
-    
+
+    // Persisted editor width — lives in the state tree, so it is saved with the
+    // DAW project and restored on GUI reopen, in both AU and VST3 (both formats
+    // round-trip through get/setStateInformation).
+    void setEditorWidth (int w)
+    {
+        auto x = valueTreeState.state.getOrCreateChildWithName ("editor", nullptr);
+        x.setProperty ("width", w, nullptr);
+    }
+    int getEditorWidth (int defaultW)
+    {
+        auto x = valueTreeState.state.getChildWithName ("editor");
+        if (x.isValid())
+            return (int) x.getProperty ("width", defaultW);
+        return defaultW;
+    }
+
 private:
     int soloLane = -1;
     
