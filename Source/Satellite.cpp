@@ -46,8 +46,9 @@ void Satellite::paint (juce::Graphics& g)
         float y = x;
         float width = area.getHeight() - 2*x;
         float height = width;
-        g.setColour (Theme::hairline.withAlpha (0.4f + i * 0.05f));
-        g.drawEllipse(x, y, width, height, 1);
+        // lane-tinted orbit ring — clearer, and each ring reads as its lane
+        g.setColour (colourarray[i].withAlpha (0.32f));
+        g.drawEllipse(x, y, width, height, 1.4f);
         r[i] =  center_x - x; ;
     }
     for(int i = 0 ; i < 5 ; i++)
@@ -96,20 +97,29 @@ void Satellite::paint (juce::Graphics& g)
         juce::String tmp = std::to_string(i+1);
         if(audioProcessor.midiState[i] == false  || audioProcessor.myIsPlaying == false)
         {
+            // idle orbiting marker — larger, crisper, full lane-colour ring
             g.setColour (Theme::surfaceAlt);
-            g.fillEllipse (x - 6, y - 6, 12, 12);
-            g.setColour (colourarray[i].withAlpha (0.55f));
-            g.drawEllipse (x - 6, y - 6, 12, 12, 1.0f);
+            g.fillEllipse (x - 7, y - 7, 14, 14);
+            g.setColour (colourarray[i].withAlpha (0.9f));
+            g.drawEllipse (x - 7, y - 7, 14, 14, 1.6f);
             g.setColour (Theme::textSecondary);
             g.setFont (Theme::valueFont (9.0f));
-            g.drawText (tmp, x - 6, y - 6, 12, 12, juce::Justification::centred);
+            g.drawText (tmp, x - 7, y - 7, 14, 14, juce::Justification::centred);
         }
         else {
-            juce::ColourGradient cg{colourarray[i], x, y, colourarray[i].withAlpha(0.0f), x+15, y + 15, true};
-            g.setGradientFill(cg);
-            g.fillEllipse(x-15, y-15, 30, 30);
-            g.setColour (colourarray[i].brighter (0.4f));
-            g.fillEllipse (x - 3, y - 3, 6, 6);
+            // active marker — strong bloom + hot white centre
+            float R = 26.0f;
+            juce::ColourGradient cg { colourarray[i].brighter (0.4f), x, y,
+                                      colourarray[i].withAlpha (0.0f), x + R, y + R, true };
+            cg.addColour (0.35, colourarray[i].withAlpha (0.85f));
+            g.setGradientFill (cg);
+            g.fillEllipse (x - R, y - R, 2 * R, 2 * R);
+
+            g.setColour (colourarray[i].brighter (0.6f));
+            g.fillEllipse (x - 6, y - 6, 12, 12);
+
+            g.setColour (juce::Colours::white.withAlpha (0.95f));
+            g.fillEllipse (x - 2.5f, y - 2.5f, 5, 5);
         }
 
     }

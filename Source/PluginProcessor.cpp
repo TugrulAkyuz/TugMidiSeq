@@ -545,7 +545,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 if(stepmidStopSampleCounter[i] != -1)
                 {
                     stepmidStopSampleCounter[i]++;
-                    stepmidStopSampleCounter[i] %= stepmidStopSampleIntervalForShuffle[i][steps[i]] ; // byrada uçuyor bir bak
+                    int stopInterval = stepmidStopSampleIntervalForShuffle[i][steps[i]];
+                    if (stopInterval != 0)                       // guard: was a divide-by-zero crash point
+                        stepmidStopSampleCounter[i] %= stopInterval;
                 }
                 if( stepmidStopSampleCounter[i]== 0)
                 {
@@ -563,11 +565,10 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     }
                     
                 }
-                auto tmps = std::to_string(baseSampleNumber[i]);
-                
                 baseSampleNumber[i]++;
-  
-                baseSampleNumber[i] %= stepLoopResetInterval[i];
+
+                if (stepLoopResetInterval[i] != 0)              // guard against modulo-by-zero
+                    baseSampleNumber[i] %= stepLoopResetInterval[i];
  
                 int idx = (-*gridsDelayAtomic[i]*0.01*delaySampleNumberForQuarter  + baseSampleNumber[i] );
   
@@ -847,7 +848,11 @@ void TugMidiSeqAudioProcessor::calculateAndUpdateSetup(int myLine)
 {
     
  
-    stpSample[myLine] %=stepResetIntervalForShuffle[myLine][new_steps[myLine]];
+    {
+        int resetInterval = stepResetIntervalForShuffle[myLine][new_steps[myLine]];
+        if (resetInterval != 0)                                 // guard against modulo-by-zero
+            stpSample[myLine] %= resetInterval;
+    }
     int left = 0;
     if(sampleNumber[myLine] == 0)
     {
@@ -883,24 +888,17 @@ void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int 
     MidiBuffer::Iterator it(midiMessages);
     
     MidiMessage currentMessage;
-    MidiBuffer erasedMidi;
-  
+
     int samplePos;
     //myInnmidiBuffer.clear();
     while(it.getNextEvent(currentMessage,samplePos))
     {
         bool loopFound = false;
-        auto ch =  currentMessage.getChannel();
-        String tmpS = currentMessage.getDescription();
-        DBG(tmpS);
-        
+
         for (int i = 0; i < numOfLine; ++i) {
             if (currentMessage.getChannel() == *gridsMidiRouteAtomic[i]) {
-                
                 loopFound =  true;
-                DBG("Filtered: " + tmpS) ;
                 break;
-                
             }
         }
         if(loopFound == true) continue;
@@ -933,12 +931,9 @@ void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int 
                 
                 auto midiNote = [&](MidiMessage l){ return l.getNoteNumber() == currentMessage.getNoteNumber(); };
                 auto it = std::find_if(inMidiNoteList.begin(), inMidiNoteList.end(), midiNote);
-                if(it == inMidiNoteList.end()) return;
-                //  DBG(it->getNoteNumber());
+                if(it == inMidiNoteList.end()) continue;   // was 'return' — skipped the rest of the buffer
                 inMidiNoteList.erase(it);
-                
-                erasedMidi.addEvent(currentMessage, currentMessage.getTimeStamp());
-                
+
                 for (auto i = 0 ; i < inMidiNoteListVector.size() ;i++)
                 {
                     if(inMidiNoteListVector.at(i).getNoteNumber() != currentMessage.getNoteNumber()) continue;
