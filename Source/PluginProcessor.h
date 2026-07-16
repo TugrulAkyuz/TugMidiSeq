@@ -154,9 +154,12 @@ public:
     
     void sendMidiBuffer(const MidiBuffer &buffer, int samplerate)
     {
-        const juce::ScopedLock lock(midiOutputMutex);
-        if (midiOutput != nullptr)
-            midiOutput->sendBlockOfMessages(buffer, Time::getMillisecondCounter(), samplerate);
+        const juce::ScopedTryLock lock(midiOutputMutex);
+        if (lock.isLocked() && midiOutput != nullptr)
+        {
+            for (const auto metadata : buffer)
+                midiOutput->sendMessageNow(metadata.getMessage());
+        }
     }
     
     void sendMidiMessage( juce::MidiMessage& message,int ch)
@@ -261,10 +264,8 @@ public:
     {
         if(*sortedOrFirstEmptySelectAtomic == false)
         {
-            std::list<juce::MidiMessage>::iterator it = inMidiNoteList.begin();
-            if(inMidiNoteList.size() <= line ) return -1;
-            std::advance(it, line);
-            return it->getNoteNumber();
+            if(inMidiNoteList.size() <= (size_t)line ) return -1;
+            return inMidiNoteList[(size_t)line].getNoteNumber();
         }
         if(inMidiNoteListVector.at(line).getVelocity() != 0)
             return     inMidiNoteListVector.at(line).getNoteNumber();
@@ -509,7 +510,8 @@ private:
     //std::atomic<float> *numOfGrid[5];
     juce::UndoManager undoManager;
     juce::MidiBuffer myInnmidiBuffer;
-    std::list<juce::MidiMessage> inMidiNoteList;
+    juce::MidiBuffer midiMessagesStack;
+    std::vector<juce::MidiMessage> inMidiNoteList;
     std::vector<juce::MidiMessage> inMidiNoteListVector;
     //std::list<juce::MidiMessage> inMidiNoteListTmp;
     //std::vector<juce::MidiMessage> inMidiNoteListVectorTmp;
@@ -520,7 +522,7 @@ private:
         int durationsample;
         int lineNo;
     };
-    std::list<RealMidiNoteList> inRealMidiNoteList;
+    std::vector<RealMidiNoteList> inRealMidiNoteList;
     int preset_idex = 0;
     
     double gridsSpeed[numOfLine];

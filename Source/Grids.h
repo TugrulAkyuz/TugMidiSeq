@@ -41,7 +41,7 @@ public:
     }
     ~SubGrids()
     {
-        
+        stopTimer();
     }
     void resized() override;
     void  paint (juce::Graphics& g) override;

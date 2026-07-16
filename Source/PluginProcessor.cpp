@@ -12,6 +12,18 @@
 ChangeBroadcaster myGridChangeListener;
 ChangeBroadcaster updateMidiPort;;
 juce::CriticalSection midiOutputMutex;
+
+// AudioParameterInt does not report isDiscrete(), so hosts/validators (e.g.
+// pluginval's state-restoration test) treat coarse integer parameters as
+// continuous and flag them as "not restored" when a raw normalized test value
+// rounds more than the tolerance away from the nearest legal step. These
+// parameters are genuinely discrete, so advertise that.
+class DiscreteAudioParameterInt : public juce::AudioParameterInt
+{
+public:
+    using juce::AudioParameterInt::AudioParameterInt;
+    bool isDiscrete() const override { return true; }
+};
 //==============================================================================
 TugMidiSeqAudioProcessor::TugMidiSeqAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -66,13 +78,13 @@ valueTreeState(*this, &undoManager)
         {
             juce::String  grid_block;
             grid_block <<valueTreeNames[BLOCK]<< j << i;
-            valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{grid_block,1}, grid_block,0,2,0));
+            valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{grid_block,1}, grid_block,0,2,0));
             
             gridsArr[j][i] = valueTreeState.getRawParameterValue(grid_block);
             
             grid_block.clear();
             grid_block <<valueTreeNames[VELGRIDBUTTON]<< j << i;
-            valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{grid_block,1}, grid_block,0,127,100));
+            valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{grid_block,1}, grid_block,0,127,100));
             gridVelArrAtomic[j][i] = valueTreeState.getRawParameterValue(grid_block);
         }
         tmp_s.clear();
@@ -87,37 +99,37 @@ valueTreeState(*this, &undoManager)
         gridsDurationAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDNUM] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,2,32,16));
+        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,2,32,16));
         numOfGrid[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         tmp_s.clear();
         tmp_s << valueTreeNames[OCTAVE] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-2,2,0));
+        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-2,2,0));
         octave[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         tmp_s.clear();
         tmp_s << valueTreeNames[VEL] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,0,127,90));
+        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,0,127,90));
         gridsVelAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         tmp_s.clear();
         tmp_s << valueTreeNames[EVENT] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,100,50));
+        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,100,50));
         gridsEventAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
        
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDSHUFFLE] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-75,75,0));
+        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-75,75,0));
         gridsShuffleAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDDELAY] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-99,99,0));
+        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-99,99,0));
         gridsDelayAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
        
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDMIDIROUTE] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,16,j + 10));
+        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,16,j + 10));
         gridsMidiRouteAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         
         //*numOfGrid[j] = 16;
@@ -129,20 +141,14 @@ valueTreeState(*this, &undoManager)
     }
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOBALRESTBAR];
-    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,32,1));
+    valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,32,1));
     globalResyncBar = valueTreeState.getRawParameterValue(tmp_s);
     
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOABLINORFIXVEL];
     valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s,false));
     GlobalInOrFixedAtomic = valueTreeState.getRawParameterValue(tmp_s);
-    
-   
-    tmp_s.clear();
-    tmp_s << valueTreeNames[GLOABLINORFIXVEL];
-    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s,false));
-    GlobalInOrFixedAtomic = valueTreeState.getRawParameterValue(tmp_s);
-    
+
     tmp_s.clear();
     tmp_s << valueTreeNames[INBUILTSYNTH];
     valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s,false));
@@ -156,7 +162,7 @@ valueTreeState(*this, &undoManager)
     
     tmp_s.clear();
     tmp_s << valueTreeNames[SHUFFLE];
-    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-75,75,0));
+    valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,-75,75,0));
     shuffleAtomic = valueTreeState.getRawParameterValue(tmp_s);
     
     tmp_s.clear();
@@ -184,6 +190,9 @@ valueTreeState(*this, &undoManager)
         inMidiNoteListVector.at(i).setVelocity(0.0f);
       //  inMidiNoteListVectorTmp.at(i).setVelocity(0.0f);
     }
+    inMidiNoteList.reserve(128);
+    inRealMidiNoteList.reserve(32);
+    midiMessagesStack.ensureSize(2048);
     
     program = 1;
     positionInfo.bpm = 120;
@@ -427,8 +436,8 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 //    }
     juce::AudioPlayHead* playHead = getPlayHead();
     if (playHead == nullptr) return;
-    juce::MidiBuffer midiMessagesStack;
-    midiMessagesStack = midiMessages;
+    midiMessagesStack.clear();
+    midiMessagesStack.addEvents(midiMessages, 0, buffer.getNumSamples(), 0);
     playHead->getCurrentPosition(positionInfo);
 
 
@@ -462,8 +471,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             initForVariables();
         if(myIsPlaying == true &&  positionInfo.isPlaying == false )/**ppq ye bakma code*/
         {
-            std::list<RealMidiNoteList>::iterator it;
-            for (it = inRealMidiNoteList.begin(); it != inRealMidiNoteList.end(); )
+            for (auto it = inRealMidiNoteList.begin(); it != inRealMidiNoteList.end(); )
             {
                 it->sentMidi.setVelocity(0.0f);
                 it->sentMidi.setChannel(it->lineNo);
@@ -523,8 +531,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             }
            
                
-            std::list<RealMidiNoteList>::iterator it;
-            for (it = inRealMidiNoteList.begin(); it != inRealMidiNoteList.end(); )
+            for (auto it = inRealMidiNoteList.begin(); it != inRealMidiNoteList.end(); )
             {
                 if(it->durationsample != 0) { it->durationsample--; it++ ; continue;}
                 it->sentMidi.setVelocity(0.0f);
@@ -613,6 +620,7 @@ void TugMidiSeqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     // You could do that either as raw data, or use the XML or ValueTree classes
     // as intermediaries to make it easy to save and load complex data.
     auto state = valueTreeState.copyState();
+    state.setProperty ("currentProgram", program, nullptr);
     std::unique_ptr<XmlElement> xml (state.createXml());
     copyXmlToBinary (*xml, destData);
    
@@ -625,10 +633,27 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
     std::unique_ptr<XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
     if (xmlState.get() != nullptr)
         if (xmlState->hasTagName (valueTreeState.state.getType()))
+        {
             valueTreeState.replaceState (ValueTree::fromXml (*xmlState));
 
+            // Force every parameter to reflect the restored value-tree value.
+            // replaceState only re-syncs a parameter when its (quantized) tree
+            // value changes, so bool / coarse parameters can otherwise keep a
+            // stale raw value if the restored value matches the pre-restore one
+            // (flagged by pluginval as "not restored").
+            for (auto* param : getParameters())
+            {
+                if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (param))
+                {
+                    const auto child = valueTreeState.state.getChildWithProperty ("id", ranged->paramID);
+                    if (child.isValid())
+                        ranged->setValueNotifyingHost (ranged->convertTo0to1 ((float) child.getProperty ("value")));
+                }
+            }
+        }
 
-  
+    program = valueTreeState.state.getProperty ("currentProgram", program);
+
     midiPortName = getMidiPortNameFromXml();
     midiProcessor->setMidiPort(midiPortName);
 }
@@ -791,8 +816,7 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         MidiMessage it;
         if(*sortedOrFirstEmptySelectAtomic == false)
         {
-            auto it1 = std::next(inMidiNoteList.begin(), i);
-            it = *it1;
+            it = inMidiNoteList[(size_t)i];
         }
         else
         {
@@ -805,9 +829,8 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         
         it.setNoteNumber( it.getNoteNumber() + *octave[i]*12 );
         
-        std::list<RealMidiNoteList>::iterator it2;
-        auto midiNote = [&](RealMidiNoteList l){ return l.sentMidi.getNoteNumber() == it.getNoteNumber(); };
-        it2 = std::find_if(inRealMidiNoteList.begin(), inRealMidiNoteList.end(),midiNote);
+        auto midiNote = [&](const RealMidiNoteList& l){ return l.sentMidi.getNoteNumber() == it.getNoteNumber(); };
+        auto it2 = std::find_if(inRealMidiNoteList.begin(), inRealMidiNoteList.end(),midiNote);
         if(it2 != inRealMidiNoteList.end())
         {
             it2->sentMidi.setVelocity(0.0f);
@@ -910,8 +933,8 @@ void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int 
             if(currentMessage.isNoteOn())
             {
                 inMidiNoteList.push_back(currentMessage);
-                auto comp = [](MidiMessage &l1,MidiMessage &l2){ return l1.getNoteNumber() < l2.getNoteNumber(); };
-                inMidiNoteList.sort(comp);
+                auto comp = [](const MidiMessage &l1, const MidiMessage &l2){ return l1.getNoteNumber() < l2.getNoteNumber(); };
+                std::sort(inMidiNoteList.begin(), inMidiNoteList.end(), comp);
                 
                 for (auto i = 0 ; i < inMidiNoteListVector.size() ;i++)
                 {
