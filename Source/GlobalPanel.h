@@ -229,6 +229,8 @@ class GlobalPanel   : public juce::Component , juce::Timer  , ChangeListener
     void deletePresetMenu();
     void factoryConfirmed();
     void setPresetMenu(String preset_name);
+    void stepPreset(int delta);
+    void refreshPresetList();
 private:
     int myMeasure;
     Grids *otherg[5] = {};
@@ -270,6 +272,10 @@ private:
     
     TextButton writeButton;
     TextButton deleteButton;
+    TextButton openFolderButton;
+    juce::ArrowButton presetPrevButton;
+    juce::ArrowButton presetNextButton;
+    std::shared_ptr<juce::FileChooser> folderChooser;
     
     juce::OwnedArray<juce::TextButton> randomButton;
     int preset_index_sil = 0;

@@ -4,7 +4,7 @@
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
               pluginManufacturer="2Rule" pluginCharacteristicsValue="pluginIsSynth,pluginProducesMidiOut,pluginWantsMidiIn"
               pluginFormats="buildAU,buildStandalone,buildVST3" bundleIdentifier="2Rule.TugMidiSeq"
-              version="2.3.0" pluginAUMainType="'aumu'" companyName="2Rule"
+              version="2.5.0" pluginAUMainType="'aumu'" companyName="2Rule"
               companyWebsite="https://akyuz5.wixsite.com/mysite" companyEmail="tugrulvega@gmail.com">
   <MAINGROUP id="soeMpr" name="TugMidiSeq">
     <GROUP id="{8DE839C0-F477-F119-F4B1-66A417831F51}" name="PNGs"/>
@@ -50,6 +50,7 @@
         <MODULEPATH id="juce_graphics" path="../../JUCE/modules"/>
         <MODULEPATH id="juce_gui_basics" path="../../JUCE/modules"/>
         <MODULEPATH id="juce_gui_extra" path="../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors_headless" path="../JUCE/modules"/>
       </MODULEPATHS>
     </XCODE_MAC>
     <VS2022 targetFolder="Builds/VisualStudio2022">
@@ -70,6 +71,7 @@
         <MODULEPATH id="juce_graphics" path="C:\JUCE\modules"/>
         <MODULEPATH id="juce_gui_basics" path="C:\JUCE\modules"/>
         <MODULEPATH id="juce_gui_extra" path="C:\JUCE\modules"/>
+        <MODULEPATH id="juce_audio_processors_headless" path="../JUCE/modules"/>
       </MODULEPATHS>
     </VS2022>
   </EXPORTFORMATS>
@@ -80,6 +82,8 @@
     <MODULE id="juce_audio_plugin_client" showAllCode="1" useLocalCopy="0"
             useGlobalPath="1"/>
     <MODULE id="juce_audio_processors" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_processors_headless" showAllCode="1" useLocalCopy="0"
+            useGlobalPath="1"/>
     <MODULE id="juce_audio_utils" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_core" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
     <MODULE id="juce_data_structures" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>

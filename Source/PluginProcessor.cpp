@@ -70,8 +70,27 @@ valueTreeState(*this, &undoManager)
     resourceJsonFile = new File(filePath);
 
 #endif
+    // persist the user-chosen single-preset folder across sessions
+    {
+        juce::PropertiesFile::Options opts;
+        opts.applicationName     = "TugMidiSeq";
+        opts.filenameSuffix      = "settings";
+        opts.osxLibrarySubFolder = "Application Support/2Rule/TugMidiSeq";
+        opts.folderName          = "2Rule/TugMidiSeq";
+        appProperties.setStorageParameters(opts);
+    }
+    presetFolder = resourceJsonFile->getParentDirectory();  // default
+    if (auto* props = appProperties.getUserSettings())
+    {
+        String savedPath = props->getValue("presetFolder", "");
+        if (savedPath.isNotEmpty())
+        {
+            File saved(savedPath);
+            if (saved.isDirectory()) presetFolder = saved;
+        }
+    }
+
     juce::String  tmp_s;
-    juce::StringArray devices = juce::MidiOutput::getDevices();
     for(int j = 0 ; j <  numOfLine; j++)
     {
         for(int i = 0 ; i < numOfStep ; i++)
@@ -175,7 +194,8 @@ valueTreeState(*this, &undoManager)
     valueTreeState.state = juce::ValueTree("midiSeq"); // do not forget for valuetree
 
     
-    readPresetToFileJSON();
+    readPresetToFileJSON();        // 1) legacy bundle file (backward compat)
+    readSinglePresetFilesJSON();   // 2) single-preset files from presetFolder
     mySynth.setCurrentPlaybackSampleRate(mySampleRate);
     mySynth.clearSounds();
     mySynth.addSound(new SynthSound());

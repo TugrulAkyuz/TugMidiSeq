@@ -14,6 +14,8 @@
 extern ChangeBroadcaster updateMidiPort;;
 
 GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , velUsageButton("VelButton")
+    , presetPrevButton("presetPrev", 0.5f, Theme::accentBright)
+    , presetNextButton("presetNext", 0.0f, Theme::accentBright)
 {
     startTimer(100);
 
@@ -22,6 +24,9 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     addAndMakeVisible(midiPort);
     addAndMakeVisible(writeButton);
     addAndMakeVisible(deleteButton);
+    addAndMakeVisible(openFolderButton);
+    addAndMakeVisible(presetPrevButton);
+    addAndMakeVisible(presetNextButton);
     addAndMakeVisible(inBuiltSynthButton);
     addAndMakeVisible(sortedOrFirstEmptySelectButton);
     addAndMakeVisible(channelOnButton);
@@ -171,6 +176,10 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     writeButton.setColour(TextButton::ColourIds::textColourOffId, Theme::textSecondary);
     writeButton.setColour(TextButton::ColourIds::buttonColourId, Theme::surfaceAlt);
     writeButton.setColour(ComboBox::outlineColourId, Theme::hairline);
+    openFolderButton.setButtonText("Folder");
+    openFolderButton.setColour(TextButton::ColourIds::textColourOffId, Theme::textSecondary);
+    openFolderButton.setColour(TextButton::ColourIds::buttonColourId, Theme::surfaceAlt);
+    openFolderButton.setColour(ComboBox::outlineColourId, Theme::hairline);
     
     
     /*
@@ -205,8 +214,10 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
    // resetButton.setLookAndFeel(&myLookAndFeel);
     resetButton.setColour(TextButton::ColourIds::buttonOnColourId, Theme::accent);
     resetButton.setColour(TextButton::ColourIds::buttonColourId, Theme::surfaceAlt);
+    resetButton.setColour(TextButton::ColourIds::textColourOffId, Theme::textSecondary);
+    resetButton.setColour(ComboBox::outlineColourId, Theme::hairline);
     //velUsageButton.setLookAndFeel(&myLookAndFeel);
-    resetButton.setButtonText("RESET");
+    resetButton.setButtonText("Reset");
     int i= 1;
     for(auto s: myNotetUnit)
     {
@@ -348,40 +359,55 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
             if (r)
             {
                 auto text = pwdDialog->getTextEditorContents("Preset");
-                setPresetMenu(text);
-                audioProcessor.writePresetToFileJSON();
-                
+                setPresetMenu(text);   // createPrograms already writes the single file
             }
         }), true);
     };
-    int k =  audioProcessor.getNumPrograms();
-    if(k == 1 ) return;
-    for(auto i = 0  ; i < k ; i++ )
+
+    openFolderButton.onClick = [this]
     {
-        String s  = audioProcessor.getProgramName(i + 1);
-        
-        presetCombo.addItem(s, i + 1);
-    }
+        folderChooser = std::make_shared<juce::FileChooser>(
+            "Choose Preset Folder  (select folder or any preset inside it)",
+            audioProcessor.presetFolder, "*.json", true);
+        folderChooser->launchAsync(juce::FileBrowserComponent::openMode |
+                                   juce::FileBrowserComponent::canSelectDirectories |
+                                   juce::FileBrowserComponent::canSelectFiles,
+            [this](const juce::FileChooser& fc)
+            {
+                auto result = fc.getResult();
+                if (!result.exists()) return;
+                const juce::File folder = result.isDirectory() ? result
+                                                               : result.getParentDirectory();
+                audioProcessor.setPresetFolder(folder);
+                refreshPresetList();
+            });
+    };
+
+    presetPrevButton.onClick = [this] { stepPreset(-1); };
+    presetNextButton.onClick = [this] { stepPreset(+1); };
+
+    // NB: onChange / delete handlers are assigned unconditionally — even when
+    // the plugin opens with no presets, ones added later (folder pick, Save)
+    // must still load on click.
     presetCombo.onChange = [this]
     {
-        auto x = presetCombo.getNumItems();
         if(presetCombo.getNumItems() == 0) return;
-        x = presetCombo.getSelectedId();
+        auto x = presetCombo.getSelectedId();
         if(x == 0) return;
         audioProcessor.setCurrentProgram(x);
-        
+
     };
     deleteButton.onClick = [&]
     {
-        //        BasicWindow *basicWindow = new BasicWindow("Information", Colours::grey, DocumentWindow::allButtons);
-        //
-        //        basicWindow->setUsingNativeTitleBar(true);
-        //        basicWindow->setContentOwned(new InformationComponent(), true);// InformationComponent is my GUI editor component (the visual editor of JUCE)
-        //
-        //        basicWindow->centreWithSize(basicWindow->getWidth(), basicWindow->getHeight());
-        //        basicWindow->setVisible(true);
         deletePresetMenu();
     };
+
+    refreshPresetList();
+    // restore the previously selected preset in the combo (GUI reopen /
+    // project reload) without re-triggering a program load
+    const int curr = audioProcessor.getCurrentProgram();
+    if (curr > 0 && curr <= presetCombo.getNumItems())
+        presetCombo.setSelectedId(curr, juce::dontSendNotification);
     associatedComponent.getLookAndFeel().setColour(AlertWindow::ColourIds::backgroundColourId, Theme::panel);
     associatedComponent.getLookAndFeel().setColour(AlertWindow::ColourIds::textColourId, Theme::accent);
     
@@ -439,12 +465,22 @@ void GlobalPanel::resized()
     auto r = randomButton.getUnchecked(2);
 
     midiPort.setBounds(dd.reduced(2, 2));
-    resetButton.setBounds( rightarea.removeFromRight(60).reduced(3, 10));
-    presetCombo.setBounds( rightarea.removeFromRight(70).reduced(3, 10));
-    rightarea.removeFromTop(5);
-    rightarea.removeFromBottom(5);
-    writeButton.setBounds( rightarea.removeFromTop(20).reduced(6, 1));
-    deleteButton.setBounds( rightarea.reduced(6, 1));
+    resetButton.setBounds( rightarea.removeFromRight(48).reduced(2, 15));
+
+    // preset strip, two rows:
+    //   row 1:  ◀  [preset combo]  ▶
+    //   row 2:  [Folder] [Save] [Delete]
+    auto presetArea = rightarea.reduced(2, 2);
+    auto row1 = presetArea.removeFromTop(presetArea.getHeight() / 2);
+    presetPrevButton.setBounds(row1.removeFromLeft(14).withSizeKeepingCentre(10, 10));
+    presetNextButton.setBounds(row1.removeFromRight(14).withSizeKeepingCentre(10, 10));
+    presetCombo.setBounds(row1.reduced(0, 2));
+
+    auto row2 = presetArea;
+    const int bw = row2.getWidth() / 3;
+    openFolderButton.setBounds(row2.removeFromLeft(bw).reduced(2, 2));
+    writeButton.setBounds(row2.removeFromLeft(bw).reduced(2, 2));
+    deleteButton.setBounds(row2.reduced(2, 2));
     
     xarea.removeFromBottom(5);
     inBuiltSynthButton.setBounds(xarea.removeFromLeft(70).reduced(4, 5));
@@ -457,27 +493,44 @@ void GlobalPanel::resized()
 }
 
 
-void GlobalPanel::deleteConfirmed()
+void GlobalPanel::refreshPresetList()
 {
-    int k = audioProcessor.getNumPrograms();
-    if (k == 1) return;
-    int curr_prg = audioProcessor.getCurrentProgram();
-    if (curr_prg == 0) return;
-    audioProcessor.deletePreset(curr_prg);
-    presetCombo.clear();
-    k = audioProcessor.getNumPrograms();
-    
+    presetCombo.clear(NotificationType::dontSendNotification);
+    const int k = audioProcessor.getNumPrograms();
     for (auto i = 0; i < k; i++)
     {
         String s = audioProcessor.getProgramName(i + 1);
+        if (s.isEmpty()) continue;
         presetCombo.addItem(s, i + 1);
-        
     }
+}
+
+void GlobalPanel::stepPreset(int delta)
+{
+    const int n = presetCombo.getNumItems();
+    if (n == 0) return;
+    int idx = presetCombo.getSelectedItemIndex();
+    if (idx < 0) idx = (delta > 0 ? 0 : n - 1);   // no selection: start from an end
+    else         idx = (idx + delta + n) % n;      // wraps around at both ends
+    presetCombo.setSelectedItemIndex(idx);         // onChange -> loads the program
+}
+
+void GlobalPanel::deleteConfirmed()
+{
+    int k = audioProcessor.getNumPrograms();
+    if (k == 0) return;
+    int curr_prg = audioProcessor.getCurrentProgram();
+    if (curr_prg == 0) return;
+    audioProcessor.deletePreset(curr_prg);
+    refreshPresetList();
+    k = audioProcessor.getNumPrograms();
     if ((k + 1) == curr_prg)  curr_prg--;
     presetCombo.setSelectedId(curr_prg);
     audioProcessor.setCurrentProgram(curr_prg);
+    // harmless & needed: only rewrites bundle residents, so a deleted bundle
+    // preset actually drops out of the legacy file
     audioProcessor.writePresetToFileJSON();
-    
+
 }
 
 void GlobalPanel::deletePresetMenu()
@@ -512,15 +565,8 @@ void GlobalPanel::setPresetMenu(String preset_name)
 {
     audioProcessor.createPrograms(preset_name);
     int k =  audioProcessor.getNumPrograms();
-    String s  = audioProcessor.getProgramName(k);
-    //   myControlPanel->
-    presetCombo.clear();
-    for (auto i = 0; i < k; i++)
-    {
-        String s = audioProcessor.getProgramName(i + 1);
-        presetCombo.addItem(s, i + 1);
-    }
+    refreshPresetList();
     audioProcessor.setCurrentProgram(k);
     presetCombo.setSelectedId(k);
-    
+
 }

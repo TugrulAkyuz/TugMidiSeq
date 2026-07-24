@@ -90,128 +90,239 @@ void TugMidiSeqAudioProcessor::resetAllParam()
     myGridChangeListener.sendChangeMessage();
 }
 
+var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
+{
+    var newObj ( new DynamicObject() );
+    juce::String tmp_s;
+    newObj.getDynamicObject()->setProperty("PresetName", prg.myProgramname);
+
+    for(int i = 0 ; i < numOfLine; i++)
+    {
+        for(int j = 0 ; j < numOfStep ; j++)
+        {
+            tmp_s.clear();
+            tmp_s <<valueTreeNames[BLOCK]<< i << j;
+            newObj.getDynamicObject()->setProperty(tmp_s, prg.grids[i][j]);
+
+            tmp_s.clear();
+            tmp_s <<valueTreeNames[VELGRIDBUTTON]<< i << j;
+            newObj.getDynamicObject()->setProperty(tmp_s, prg.gridVelArr[i][j]);
+        }
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[SPEEED]<< i;
+        newObj.getDynamicObject()->setProperty(tmp_s, prg.gridsSpeed[i]);
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[DUR]<< i;
+        newObj.getDynamicObject()->setProperty(tmp_s, prg.gridsDuration[i]);
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[GRIDNUM]<< i;
+        newObj.getDynamicObject()->setProperty(tmp_s, prg.numOfGrid[i]);
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[OCTAVE]<< i;
+        newObj.getDynamicObject()->setProperty(tmp_s, prg.octave[i]);
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[VEL]<< i;
+        newObj.getDynamicObject()->setProperty(tmp_s, prg.gridsVel[i]);
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[EVENT]<< i;
+        newObj.getDynamicObject()->setProperty(tmp_s, prg.gridsEvent[i]);
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[GRIDSHUFFLE]<< i;
+        newObj.getDynamicObject()->setProperty(tmp_s, prg.gridsShuffle[i]);
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[GRIDDELAY]<< i;
+        newObj.getDynamicObject()->setProperty(tmp_s, prg.gridsDelay[i]);
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[GRIDMIDIROUTE]<< i;
+        newObj.getDynamicObject()->setProperty(tmp_s, prg.gridsMidiRoute[i]);
+    }
+    tmp_s.clear();
+    tmp_s << valueTreeNames[GLOBALRESTBAR];
+    newObj.getDynamicObject()->setProperty(tmp_s, prg.globalResyncBar);
+
+    tmp_s.clear();
+    tmp_s << valueTreeNames[GLOABLINORFIXVEL];
+    newObj.getDynamicObject()->setProperty(tmp_s, prg.GlobalInOrFixedVel);
+
+    tmp_s.clear();
+    tmp_s << valueTreeNames[INBUILTSYNTH];
+    newObj.getDynamicObject()->setProperty(tmp_s, prg.inBuiltSynth);
+
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SORTEDORFIRST];
+    newObj.getDynamicObject()->setProperty(tmp_s, prg.sortedOrFirst);
+
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SHUFFLE];
+    newObj.getDynamicObject()->setProperty(tmp_s, prg.shuffle);
+
+    tmp_s.clear();
+    tmp_s << valueTreeNames[CHANNON];
+    newObj.getDynamicObject()->setProperty(tmp_s, prg.channelOn);
+
+    return newObj;
+}
+
+// bundle (legacy) writer — only writes presets that still live in the bundle
+// file; presets that have their own single file are skipped
 void  TugMidiSeqAudioProcessor::writePresetToFileJSON()
 {
-    String strName;
-    
-    
-    juce::FileOutputStream outputStream (*resourceJsonFile);
-    outputStream.setPosition(0);
-    
+    if (resourceJsonFile == nullptr) return;
+
     DynamicObject* tree = new DynamicObject();
     Array<var> arr;
-    juce::String  tmp_s;
     for(auto p = 0 ; p < myProgram.size(); p++)
     {
-        var newObj ( new DynamicObject() );
-        String ss = myProgram.at(p).myProgramname;
-        newObj.getDynamicObject()->setProperty("PresetName",ss);
-        //------------
-        for(int i = 0 ; i < numOfLine; i++)
-        {
-            for(int j = 0 ; j < numOfStep ; j++)
-            {
-                tmp_s.clear();
-                tmp_s <<valueTreeNames[BLOCK]<< i << j;
-                auto v = myProgram.at(p).grids[i][j];
-                newObj.getDynamicObject()->setProperty(tmp_s,v);
-                
-                
-                tmp_s.clear();
-                tmp_s <<valueTreeNames[VELGRIDBUTTON]<< i << j;
-                v = myProgram.at(p).gridVelArr[i][j];
-                newObj.getDynamicObject()->setProperty(tmp_s,v);
-                
-            }
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[SPEEED]<< i;
-            auto v = myProgram.at(p).gridsSpeed[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[DUR]<< i;
-            v = myProgram.at(p).gridsDuration[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[GRIDNUM]<< i;
-            v = myProgram.at(p).numOfGrid[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[OCTAVE]<< i;
-            v = myProgram.at(p).octave[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[VEL]<< i;
-            v = myProgram.at(p).gridsVel[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[EVENT]<< i;
-            v = myProgram.at(p).gridsEvent[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[GRIDSHUFFLE]<< i;
-            v = myProgram.at(p).gridsShuffle[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[GRIDDELAY]<< i;
-            v = myProgram.at(p).gridsDelay[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[GRIDMIDIROUTE]<< i;
-            v = myProgram.at(p).gridsMidiRoute[i];
-            newObj.getDynamicObject()->setProperty(tmp_s,v);
-        }
-        tmp_s.clear();
-        tmp_s << valueTreeNames[GLOBALRESTBAR];
-        auto v  = myProgram.at(p).globalResyncBar;
-        newObj.getDynamicObject()->setProperty(tmp_s,v);
-        
-        tmp_s.clear();
-        tmp_s << valueTreeNames[GLOABLINORFIXVEL];
-        v = myProgram.at(p).GlobalInOrFixedVel;
-        newObj.getDynamicObject()->setProperty(tmp_s,v);
-        
-        tmp_s.clear();
-        tmp_s << valueTreeNames[INBUILTSYNTH];
-        v = myProgram.at(p).inBuiltSynth;
-        newObj.getDynamicObject()->setProperty(tmp_s,v);
-        
-        tmp_s.clear();
-        tmp_s << valueTreeNames[SORTEDORFIRST];
-        v = myProgram.at(p).sortedOrFirst;
-        newObj.getDynamicObject()->setProperty(tmp_s,v);
-        
-        tmp_s.clear();
-        tmp_s << valueTreeNames[SHUFFLE];
-        v  = myProgram.at(p).channelOn;
-        newObj.getDynamicObject()->setProperty(tmp_s,v);
-        
-    
-        tmp_s.clear();
-        tmp_s << valueTreeNames[CHANNON];
-        v  = myProgram.at(p).shuffle;
-        newObj.getDynamicObject()->setProperty(tmp_s,v);
-        
-        arr.add(newObj);
+        if (myProgram.at(p).sourceFile != File()) continue;  // lives in its own file
+        arr.add(presetToVar(myProgram.at(p)));
     }
     tree->setProperty("Presets",arr);
-    
-    var json (tree);
-    String sil_string = JSON::toString(json);
-    DBG(sil_string);
-    
-    outputStream.writeString(sil_string);
-    outputStream.flush();
-    
+
+    // replaceWithText truncates safely (stream + setPosition(0) left stale
+    // bytes behind when the JSON got shorter, corrupting the file)
+    resourceJsonFile->replaceWithText(JSON::toString(var(tree)));
+}
+
+void TugMidiSeqAudioProcessor::writeSinglePresetToFileJSON(TugMidiSeqProgram& prg)
+{
+    if (resourceJsonFile == nullptr) return;
+    if (prg.sourceFile == File())
+    {
+        auto dir = presetFolder.isDirectory() ? presetFolder
+                                              : resourceJsonFile->getParentDirectory();
+        String legal = File::createLegalFileName(prg.myProgramname);
+        if (legal.isEmpty()) legal = "Preset";
+        auto f = dir.getChildFile(legal + ".json");
+        if (f == *resourceJsonFile) f = dir.getChildFile(legal + "_preset.json");
+        prg.sourceFile = f;
+    }
+    DynamicObject* tree = new DynamicObject();
+    Array<var> arr;  arr.add(presetToVar(prg));
+    tree->setProperty("Presets", arr);
+    prg.sourceFile.replaceWithText(JSON::toString(var(tree)));
+}
+
+TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
+{
+    juce::String  tmp_s;
+    String strName = preset.getProperty("PresetName", var()).toString();
+
+    float v;
+
+    TugMidiSeqProgram p (strName);
+
+    for(int i = 0 ; i < numOfLine; i++)
+    {
+        for(int j = 0 ; j < numOfStep ; j++)
+        {
+            tmp_s.clear();
+            tmp_s <<valueTreeNames[BLOCK]<< i << j;
+            v = preset.getProperty(tmp_s, var());
+            p.grids[i][j] = v;
+
+            tmp_s.clear();
+            tmp_s <<valueTreeNames[VELGRIDBUTTON]<< i << j;
+            if (preset.hasProperty(tmp_s))
+               v = preset.getProperty(tmp_s, var());
+            else
+                v =  90;
+            p.gridVelArr[i][j] = v;
+
+        }
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[SPEEED]<< i;
+        v = preset.getProperty(tmp_s, var());
+        p.gridsSpeed[i] = v;
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[DUR]<< i;
+        v = preset.getProperty(tmp_s, var());
+        p.gridsDuration[i] = v;
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[GRIDNUM]<< i;
+        v = preset.getProperty(tmp_s, var());
+        p.numOfGrid[i] = v;
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[OCTAVE]<< i;
+        v = preset.getProperty(tmp_s, var());
+        p.octave[i] = v;
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[VEL]<< i;
+        v = preset.getProperty(tmp_s, var());
+        p.gridsVel[i] = v;
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[EVENT]<< i;
+        v = preset.getProperty(tmp_s, var());
+        p.gridsEvent[i] = v;
+
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[GRIDSHUFFLE]<< i;
+        v = preset.getProperty(tmp_s, var());
+        p.gridsShuffle[i] = v;
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[GRIDDELAY]<< i;
+        v = preset.getProperty(tmp_s, var());
+        p.gridsDelay[i] = v;
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[GRIDMIDIROUTE]<< i;
+        if (preset.hasProperty(tmp_s)) {
+            v = preset.getProperty(tmp_s, var());
+        } else {
+            v =   valueTreeState.getParameter(tmp_s)->convertFrom0to1(  valueTreeState.getParameter(tmp_s)->getDefaultValue()); //
+        }
+        p.gridsMidiRoute[i] = v;
+
+    }
+    tmp_s.clear();
+    tmp_s << valueTreeNames[GLOBALRESTBAR];
+    v = preset.getProperty(tmp_s, var());
+    p.globalResyncBar = v;
+
+    tmp_s.clear();
+    tmp_s << valueTreeNames[GLOABLINORFIXVEL];
+    v = preset.getProperty(tmp_s, var());
+    p.GlobalInOrFixedVel = v;
+
+
+    tmp_s.clear();
+    tmp_s << valueTreeNames[INBUILTSYNTH];
+    v = preset.getProperty(tmp_s, var());
+    p.inBuiltSynth = v;
+
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SORTEDORFIRST];
+    v = preset.getProperty(tmp_s, var());
+    p.sortedOrFirst = v;
+
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SHUFFLE];
+    v = preset.getProperty(tmp_s, var());
+    p.shuffle = v;
+
+    tmp_s.clear();
+    tmp_s << valueTreeNames[CHANNON];
+    if (preset.hasProperty(tmp_s)) {
+        v = preset.getProperty(tmp_s, var());
+        p.channelOn = v != 0;
+    }
+
+    return p;
 }
 
 void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
@@ -220,131 +331,57 @@ void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
     if (inputStream.failedToOpen())
         return;
     String sil_string = inputStream.readString();
-    juce::var parsedJson;
-    
+
     var jsonReply = JSON::parse(sil_string);
     Array<var>* presetArray= jsonReply.getProperty("Presets", var()).getArray();
-    juce::String  tmp_s;
-    
+    if (presetArray == nullptr)
+        return;  // corrupt / foreign file
+
     for (auto& preset : *presetArray)
     {
-        String strName = preset.getProperty("PresetName", var()).toString();
         preset_idex++;
-        
-        float v;
-        
-        TugMidiSeqProgram p (strName);
-        
-        for(int i = 0 ; i < numOfLine; i++)
-        {
-            for(int j = 0 ; j < numOfStep ; j++)
-            {
-                tmp_s.clear();
-                tmp_s <<valueTreeNames[BLOCK]<< i << j;
-                v = preset.getProperty(tmp_s, var());
-                p.grids[i][j] = v;
-                
-                tmp_s.clear();
-                tmp_s <<valueTreeNames[VELGRIDBUTTON]<< i << j;
-                if (preset.hasProperty(tmp_s))
-                   v = preset.getProperty(tmp_s, var());
-                else
-                    v =  90;
-                p.gridVelArr[i][j] = v;
-                
-            }
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[SPEEED]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.gridsSpeed[i] = v;
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[DUR]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.gridsDuration[i] = v;
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[GRIDNUM]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.numOfGrid[i] = v;
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[OCTAVE]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.octave[i] = v;
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[VEL]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.gridsVel[i] = v;
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[EVENT]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.gridsEvent[i] = v;
-            
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[GRIDSHUFFLE]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.gridsShuffle[i] = v;
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[GRIDDELAY]<< i;
-            v = preset.getProperty(tmp_s, var());
-            p.gridsDelay[i] = v;
-            
-            tmp_s.clear();
-            tmp_s <<valueTreeNames[GRIDMIDIROUTE]<< i;
-            if (preset.hasProperty(tmp_s)) {
-                v = preset.getProperty(tmp_s, var());
-            } else {
-                v =   valueTreeState.getParameter(tmp_s)->convertFrom0to1(  valueTreeState.getParameter(tmp_s)->getDefaultValue()); //
-            }
-            p.gridsMidiRoute[i] = v;
-            
-        }
-        tmp_s.clear();
-        tmp_s << valueTreeNames[GLOBALRESTBAR];
-        v = preset.getProperty(tmp_s, var());
-        p.globalResyncBar = v;
-        
-        tmp_s.clear();
-        tmp_s << valueTreeNames[GLOABLINORFIXVEL];
-        v = preset.getProperty(tmp_s, var());
-        p.GlobalInOrFixedVel = v;
-        
-        
-        tmp_s.clear();
-        tmp_s << valueTreeNames[INBUILTSYNTH];
-        v = preset.getProperty(tmp_s, var());
-        p.inBuiltSynth = v;
-        
-        tmp_s.clear();
-        tmp_s << valueTreeNames[SORTEDORFIRST];
-        v = preset.getProperty(tmp_s, var());
-        p.sortedOrFirst = v;
-        
-        tmp_s.clear();
-        tmp_s << valueTreeNames[SHUFFLE];
-        v = preset.getProperty(tmp_s, var());
-        p.shuffle = v;
-        
-        /*
-        tmp_s.clear();
-        tmp_s << valueTreeNames[CHANNON];
-        if (preset.hasProperty(tmp_s)) {
-            v = preset.getProperty(tmp_s, var());
-            p.channelOn = v;
-        } else {
-            //v =   valueTreeState.getParameter(tmp_s)->convertFrom0to1(  valueTreeState.getParameter(tmp_s)->getDefaultValue()); //
-        }
-         */
-        
-        
+        TugMidiSeqProgram p = varToPreset(preset);
+        p.sourceFile = File();  // lives in the legacy bundle file
         myProgram.push_back(p);
     }
-    
+}
+
+void TugMidiSeqAudioProcessor::readSinglePresetFilesJSON()
+{
+    if (resourceJsonFile == nullptr) return;
+    auto dir = presetFolder.isDirectory() ? presetFolder
+                                          : resourceJsonFile->getParentDirectory();
+    auto files = dir.findChildFiles(File::findFiles, false, "*.json");
+    files.sort();
+    for (auto& f : files)
+    {
+        if (f == *resourceJsonFile) continue;          // the bundle file itself
+        var jsonReply = JSON::parse(f.loadFileAsString());
+        Array<var>* presetArray = jsonReply.getProperty("Presets", var()).getArray();
+        if (presetArray == nullptr) continue;          // not our format
+        for (auto& preset : *presetArray)
+        {
+            preset_idex++;
+            TugMidiSeqProgram p = varToPreset(preset);
+            p.sourceFile = f;
+            myProgram.push_back(p);
+        }
+    }
+}
+
+void TugMidiSeqAudioProcessor::setPresetFolder(const File& dir)
+{
+    if (!dir.isDirectory()) return;
+    presetFolder = dir;
+    if (auto* props = appProperties.getUserSettings())
+    {
+        props->setValue("presetFolder", presetFolder.getFullPathName());
+        props->saveIfNeeded();
+    }
+    myProgram.clear();
+    preset_idex = 0;
+    readPresetToFileJSON();        // bundle always from its default location
+    readSinglePresetFilesJSON();   // singles from the new folder
 }
 void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
 {
@@ -445,14 +482,16 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
     paramProg.channelOn = *valueTreeState.getRawParameterValue(tmp_s);;
     
     myProgram.push_back(paramProg);
-    writePresetToFileJSON();
+    writeSinglePresetToFileJSON(myProgram.back());  // new presets get their own file
 }
 
 
-void TugMidiSeqAudioProcessor::deletePreset(int index)
+void TugMidiSeqAudioProcessor::deletePreset(int index)   // index is 1-based
 {
     if(index == 0) return;
+    auto& prg = myProgram.at(index - 1);
+    if (prg.sourceFile != File())
+        prg.sourceFile.deleteFile();       // single-file preset: delete its own file
     myProgram.erase(myProgram.begin() + index -1);
-    
-    
+    // bundle residents: caller rewrites the bundle via writePresetToFileJSON()
 }

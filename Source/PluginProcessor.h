@@ -62,6 +62,10 @@ public:
     }
     
     juce::String myProgramname;
+    // where this preset lives on disk:
+    //  - empty File()  -> legacy bundle (TugMidiSeqPresets.json)
+    //  - otherwise     -> its own single-preset JSON file (TugMorpho style)
+    juce::File sourceFile;
     int grids[numOfLine][numOfStep];
     int gridVelArr[numOfLine][numOfStep];
     int numOfGrid[numOfLine];
@@ -73,12 +77,12 @@ public:
     int gridsShuffle[numOfLine];
     int gridsDelay[numOfLine];
     int gridsMidiRoute[numOfLine];
-    int globalResyncBar;
-    bool GlobalInOrFixedVel;
-    bool inBuiltSynth;
-    bool sortedOrFirst;
-    int shuffle;
-    bool channelOn;
+    int globalResyncBar = 1;
+    bool GlobalInOrFixedVel = false;
+    bool inBuiltSynth = false;
+    bool sortedOrFirst = false;
+    int shuffle = 0;
+    bool channelOn = false;
     
 };
 
@@ -240,10 +244,17 @@ public:
     bool subComputrFunc(int i,juce::MidiBuffer& midiMessages ,int sample);
     
     void  writePresetToFileJSON();
-    
-    
+    void  writeSinglePresetToFileJSON(TugMidiSeqProgram& prg);
+
     void  readPresetToFileJSON();
+    void  readSinglePresetFilesJSON();
     void createPrograms(juce::String preset_name );
+
+    // active folder that single-preset JSON files are read from / written to;
+    // persisted across sessions via appProperties
+    juce::File presetFolder;
+    juce::ApplicationProperties appProperties;
+    void setPresetFolder(const juce::File& dir);
     
     juce::AudioProcessorValueTreeState valueTreeState;
     int getSteps(int i)
@@ -297,8 +308,12 @@ public:
     }
     
     void resetAllParam();
-    
+
     void deletePreset(int);
+
+    // single preset <-> JSON object (shared by bundle and single-file IO)
+    juce::var presetToVar(const TugMidiSeqProgram& prg);
+    TugMidiSeqProgram varToPreset(const juce::var& preset);
     
     std::atomic<float> * gridsArr[numOfLine][numOfStep];
     std::atomic<float> * gridVelArrAtomic[numOfLine][numOfStep];
