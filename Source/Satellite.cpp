@@ -56,6 +56,7 @@ void Satellite::paint (juce::Graphics& g)
     //  float  r = (5-i)*(area.getHeight()/2)/7 ;
         g.setColour(colourarray[i].withAlpha(0.8f));
         float arcangle = audioProcessor.getDurAngle(i);
+        if (! std::isfinite (arcangle)) arcangle = 0.0f;
         float startplacediff = 0;
         int n = *audioProcessor.numOfGrid[i];
      for(int j = 0 ; j < n ; j++)
@@ -70,10 +71,20 @@ void Satellite::paint (juce::Graphics& g)
           float angle = delay + 2.0*(j + startplacediff )*juce::double_Pi/(*audioProcessor.numOfGrid[i]);
           
           auto sr = audioProcessor.getSfuffleRatios(i,  j);
+          if (! std::isfinite (sr)) sr = 0.0f;
           startplacediff =  startplacediff + (sr -1);
           if(*audioProcessor.gridsArr[i][j] == 0) continue;
 
-          p.addCentredArc (center_x, center_y, r[i], r[i], 0.f, angle, angle+sr*arcangle, true);
+          // Path::addCentredArc emits a line segment every pi/100 radians, so the
+          // sweep must stay bounded. A long note duration over a very short step
+          // (fast speed + long duration) makes getDurAngle() enormous, which would
+          // add millions of points and exhaust memory. A ring cannot show more than
+          // one full turn anyway.
+          float sweep = sr * arcangle;
+          if (! std::isfinite (sweep)) sweep = 0.0f;
+          sweep = jlimit (-MathConstants<float>::twoPi, MathConstants<float>::twoPi, sweep);
+
+          p.addCentredArc (center_x, center_y, r[i], r[i], 0.f, angle, angle + sweep, true);
           g.setColour(colourarray[i].withAlpha(alpha));
           g.strokePath (p, juce::PathStrokeType (4.f));
           g.setColour(colourarray[i].withAlpha(0.8f));
