@@ -289,75 +289,61 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
 //        auto x = getActiveEditor();
 //        ((_2ruleSynthAudioProcessorEditor*)x)->myControlPanel->presetMenu.setSelectedId(index);
 //    }
+    // Hosts may call this from any thread, so every write goes through
+    // setParamValue() rather than the message-thread-only juce::Value API.
+    const auto& prog = myProgram.at(program - 1);
     String tmp_s;
-   
+
         for(int i = 0 ; i <  numOfLine; i++)
         {
             for(int j = 0 ; j < numOfStep ; j++)
             {
                 tmp_s.clear();
                 tmp_s << valueTreeNames[BLOCK] << i << j;
-                valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).grids[i][j]);
-                
+                setParamValue(tmp_s, prog.grids[i][j]);
+
                 tmp_s.clear();
                 tmp_s << valueTreeNames[VELGRIDBUTTON] << i << j;
-                valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridVelArr[i][j]);
-                
+                setParamValue(tmp_s, prog.gridVelArr[i][j]);
+
             }
             tmp_s.clear();
             tmp_s << valueTreeNames[SPEEED] << i;
-            valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsSpeed[i]);
+            setParamValue(tmp_s, prog.gridsSpeed[i]);
             tmp_s.clear();
             tmp_s << valueTreeNames[DUR] << i;
-            valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsDuration[i]);
+            setParamValue(tmp_s, prog.gridsDuration[i]);
             tmp_s.clear();
             tmp_s << valueTreeNames[GRIDNUM] << i;
-            valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).numOfGrid[i]);
+            setParamValue(tmp_s, prog.numOfGrid[i]);
             tmp_s.clear();
             tmp_s << valueTreeNames[OCTAVE] << i;
-            valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).octave[i]);
+            setParamValue(tmp_s, prog.octave[i]);
             tmp_s.clear();
             tmp_s << valueTreeNames[VEL] << i;
-            valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsVel[i]);
+            setParamValue(tmp_s, prog.gridsVel[i]);
             tmp_s.clear();
             tmp_s << valueTreeNames[EVENT] << i;
-            valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsEvent[i]);
+            setParamValue(tmp_s, prog.gridsEvent[i]);
             tmp_s.clear();
             tmp_s << valueTreeNames[GRIDSHUFFLE] << i;
-            valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsShuffle[i]);
-            
+            setParamValue(tmp_s, prog.gridsShuffle[i]);
+
             tmp_s.clear();
             tmp_s << valueTreeNames[GRIDDELAY] << i;
-            valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsDelay[i]);
-            
+            setParamValue(tmp_s, prog.gridsDelay[i]);
+
             tmp_s.clear();
             tmp_s << valueTreeNames[GRIDMIDIROUTE] << i;
-            valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).gridsMidiRoute[i]);
-            
+            setParamValue(tmp_s, prog.gridsMidiRoute[i]);
+
         }
-    tmp_s.clear();
-    tmp_s << valueTreeNames[GLOBALRESTBAR];
-    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).globalResyncBar);
-    
-    tmp_s.clear();
-    tmp_s << valueTreeNames[GLOABLINORFIXVEL];
-    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).GlobalInOrFixedVel);
-    
-    tmp_s.clear();
-    tmp_s << valueTreeNames[INBUILTSYNTH];
-    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).inBuiltSynth);
-    
-    tmp_s.clear();
-    tmp_s << valueTreeNames[SORTEDORFIRST];
-    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).sortedOrFirst);
-    
-    tmp_s.clear();
-    tmp_s << valueTreeNames[SHUFFLE];
-    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).shuffle);
-    
-    tmp_s.clear();
-    tmp_s << valueTreeNames[CHANNON];
-    valueTreeState.getParameterAsValue(tmp_s).setValue(myProgram.at(program -1).channelOn);
+    setParamValue(valueTreeNames[GLOBALRESTBAR],  prog.globalResyncBar);
+    setParamValue(valueTreeNames[GLOABLINORFIXVEL], prog.GlobalInOrFixedVel);
+    setParamValue(valueTreeNames[INBUILTSYNTH],   prog.inBuiltSynth);
+    setParamValue(valueTreeNames[SORTEDORFIRST],  prog.sortedOrFirst);
+    setParamValue(valueTreeNames[SHUFFLE],        prog.shuffle);
+    setParamValue(valueTreeNames[CHANNON],        prog.channelOn);
 
     myGridChangeListener.sendChangeMessage();
 }
@@ -553,7 +539,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                
             for (auto it = inRealMidiNoteList.begin(); it != inRealMidiNoteList.end(); )
             {
-                if(it->durationsample != 0) { it->durationsample--; it++ ; continue;}
+                // ">" not "!=": a negative duration would never reach 0, so the note
+                // would never get its note-off and would sit in the list forever.
+                if(it->durationsample > 0) { it->durationsample--; it++ ; continue;}
                 it->sentMidi.setVelocity(0.0f);
                 it->sentMidi.setChannel(it->lineNo);
                 midiMessages.addEvent(it->sentMidi, s);
@@ -715,9 +703,9 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
             else if((index -2)%3 == 0) { index = (index-1) / 3;first = 4*first/9;}
             
             double tmp = (first / pow(2,index));
-            stepResetInterval[i] = tmp + 1; // dviding  "first" you get number of sample  for musical note time values
+            stepResetInterval[i] = jmax (1, (int) (tmp + 1)); // dviding  "first" you get number of sample  for musical note time values
             remaining[i] =  tmp + 1 - stepResetInterval[i];
-            stepLoopResetInterval[i] = tmp**numOfGrid[i] + 1;
+            stepLoopResetInterval[i] = jmax (1, (int) (tmp**numOfGrid[i] + 1));
             float shuffleTmp = (*gridsShuffleAtomic[i] + *shuffleAtomic)/100;
             shuffleTmp = juce::jlimit(-0.99f, 0.99f, shuffleTmp);
             long tmpTotal = stepLoopResetInterval[i];
@@ -748,9 +736,17 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
                 {
                     stepResetIntervalForShuffle[i][s] =  stepResetIntervalForShuffle[i][s]+ addTmp;
                 }
-                
+
             }
-           
+
+            // Every step must consume at least one sample. Extreme shuffle values and
+            // the tmpTotal corrections above can drive an interval to 0 or below, which
+            // makes calculateAndUpdateSetup() never advance the step: the lane then
+            // re-fires on every single sample and inRealMidiNoteList grows without
+            // bound until processBlock effectively stops making progress.
+            for(int s = 0 ; s < *numOfGrid[i] ; s++)
+                stepResetIntervalForShuffle[i][s] = jmax (1, stepResetIntervalForShuffle[i][s]);
+
             //for(int s = 0 ; s < *numOfGrid[i] ; s++)
             //    forGuiStepResetIntervalForShuffle[i][s] = stepResetIntervalForShuffle[i][s] ;
             
@@ -878,7 +874,9 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         RealMidiNoteList tmp;
         tmp.sentMidi = it;
         tmp.lineNo = midRouteIndex;
-        tmp.durationsample = stepmidStopSampleIntervalForShuffle[i][steps[i]]  -1 ;
+        // Shuffle/duration maths can drive this interval to 0 or below, which would
+        // otherwise produce a never-expiring note.
+        tmp.durationsample = jmax (0, stepmidStopSampleIntervalForShuffle[i][steps[i]] - 1);
         inRealMidiNoteList.push_back(tmp);
         
         //DBG(" Channel: "  << it.getChannel());

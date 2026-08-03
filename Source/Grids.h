@@ -68,7 +68,8 @@ private:
 
 
 
-class MultiStateButton : public juce::Button ,  private AudioProcessorValueTreeState::Listener
+class MultiStateButton : public juce::Button ,  private AudioProcessorValueTreeState::Listener,
+                         private juce::AsyncUpdater
 {
 public:
     enum class State
@@ -87,8 +88,9 @@ public:
     }
     ~MultiStateButton()
     {
-       
+
         myState->removeParameterListener(myParameterID, this);
+        cancelPendingUpdate();
 
     }
   
@@ -230,7 +232,8 @@ public:
         return currentState;
     }
 
-    void setCurrentState(State newState) 
+    // Message-thread only (mouse handling / attachment).
+    void setCurrentState(State newState)
     {
         currentState = newState;
         repaint();
@@ -242,23 +245,32 @@ public:
         state.addParameterListener ( parameterID, this);
     }
  
+    // Called by the host on the automation/audio thread, so this may only touch
+    // atomics — repainting a Component off the message thread corrupts its
+    // pending-repaint RectangleList. The redraw is deferred to handleAsyncUpdate().
     void parameterChanged (const String& parameterID, float newValue) override
     {
-      
-        
-        // Called when parameter "yourParamId" is changed.
         if(parameterID.contains(valueTreeNames[EVENT]) == true)
         {
             evenAlpha = newValue /100;
+            triggerAsyncUpdate();
             return;
         }
         if(parameterID.contains(valueTreeNames[BLOCK]) == true)
         {
-            setCurrentState((State)newValue);
+            currentState = (State)newValue;
+            triggerAsyncUpdate();
             return;
         }
-       
+
     }
+
+    // Message thread: pick up whatever parameterChanged() stored.
+    void handleAsyncUpdate() override
+    {
+        repaint();
+    }
+
     void setCurrentAlpha( float a)
     {
         evenAlpha = a;
@@ -271,9 +283,11 @@ private:
     TugMidiSeqAudioProcessor& audioProcesor;
     int myLine, myStep;
     juce::AudioProcessorValueTreeState *myState;
-    State currentState = State::ButtonOffState;
+    // Written by parameterChanged() on the host's automation thread, read by
+    // paint() on the message thread.
+    std::atomic<State> currentState { State::ButtonOffState };
     float y;
-    float evenAlpha =1.0;
+    std::atomic<float> evenAlpha { 1.0f };
     Grids* ownerGrid = nullptr;
     
     
@@ -412,7 +426,8 @@ private:
     void paintLocal (juce::Point<int> screenPos, MultiStateButton::State s);
     void resetPainted() { for (auto& p : paintedStep) p = false; }
 
-    bool myShuffleChabged = false;
+    // Set from parameterChanged() on the automation thread, consumed by the timer.
+    std::atomic<bool> myShuffleChabged { false };
     bool painting = false;
     MultiStateButton::State brushState = MultiStateButton::State::ButtonOffState;
     bool paintedStep[numOfStep] = {};

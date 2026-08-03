@@ -287,23 +287,33 @@ public:
         if (myIsPlaying == false) return + 1;
         return  measureBar + 1;
     }
+    // Thread-safe parameter write. getParameterAsValue().setValue() goes through
+    // juce::Value/ValueTree, which is message-thread only: a temporary Value also
+    // registers and unregisters a ValueTree listener, so calling it off the message
+    // thread corrupts the listener list that APVTS's own timer walks in flushToTree().
+    // Hosts call setCurrentProgram() from arbitrary threads, so route writes here.
+    void setParamValue (const juce::String& paramID, float rawValue)
+    {
+        if (auto* p = valueTreeState.getParameter (paramID))
+            p->setValueNotifyingHost (p->convertTo0to1 (rawValue));
+    }
     void setAllValue( juce::String s,int v)
     {
         for(int i = 0 ; i < 5 ; i++)
         {
-            valueTreeState.getParameterAsValue(s+std::to_string(i)).setValue(v);
+            setParamValue (s + std::to_string(i), (float) v);
         }
         myGridChangeListener.sendChangeMessage();
     }
     void randomizeGrids(int index)
     {
-        
+
         for(int i = 0 ; i < 32 ; i++)
         {
             juce::String grid_block;
             grid_block <<  "block" << index << i;
             int x = juce::Random::getSystemRandom().nextInt(2);
-            valueTreeState.getParameterAsValue(grid_block).setValue(x);
+            setParamValue (grid_block, (float) x);
         }
     }
     
