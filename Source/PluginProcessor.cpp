@@ -69,6 +69,18 @@ valueTreeState(*this, &undoManager)
     filePath = presetDir.getChildFile("TugMidiSeqPresets.json").getFullPathName();
     resourceJsonFile = new File(filePath);
 
+#elif JUCE_LINUX
+    // Linux: XDG config location (~/.config/2Rule/TugMidiSeq)
+    auto configDir = File::getSpecialLocation(File::userApplicationDataDirectory);
+    File presetDir = configDir.getChildFile("2Rule")
+        .getChildFile("TugMidiSeq");
+
+    if (!presetDir.exists())
+        presetDir.createDirectory();
+
+    filePath = presetDir.getChildFile("TugMidiSeqPresets.json").getFullPathName();
+    resourceJsonFile = new File(filePath);
+
 #endif
     // persist the user-chosen single-preset folder across sessions
     {
