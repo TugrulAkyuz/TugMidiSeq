@@ -29,6 +29,16 @@ enum  {
     GETBUTTONLEN
 };
 const std::string midiNotes[]={"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
+
+// Column widths of a lane row, left to right and then right to left; the grid
+// takes what's left in between. EditorContent places the header captions from
+// the same numbers, so they stay over their columns.
+namespace LaneLayout
+{
+    constexpr int number = 25, midiIn = 40, spread = 34, octave = 16;   // left of the grid
+    constexpr int steps = 50, speed = 66, duration = 66,                 // right of the grid
+                  vel = 50, event = 50, shuffle = 50, delay = 50, chan = 40;
+}
 class Grids;
 
 class SubGrids: public juce::Component,   public juce::Timer

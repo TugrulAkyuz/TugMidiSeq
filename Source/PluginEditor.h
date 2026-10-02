@@ -17,7 +17,7 @@
 
 
 // index 12 ("Strum") was added later, so the existing indices stay put
-const std::vector <std::string> topLabel={"midi in","Oct","G R I D S","#Grid","Speed","Duration","Vel","Event","Shuffle","Delay","Chan","Note Satellite","Strum"};
+const std::vector <std::string> topLabel={"Midi","Oct","G R I D S","#Grid","Speed","Duration","Vel","Event","Shuffle","Delay","Chan","Note Satellite","Strm"};
 
 // The UI is authored at this fixed size; the editor scales it uniformly.
 static constexpr int kNoteMapH      = 30;

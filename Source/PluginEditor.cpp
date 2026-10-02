@@ -69,25 +69,31 @@ void EditorContent::resized()
 {
     auto allarea = getLocalBounds();
     allarea.reduce (3, 3);
+    // Captions sit over the lane columns, taken from the same LaneLayout
+    // widths Grids::resized uses (the lanes span the width left of the
+    // satellite). The narrow left columns get no label insets, or their
+    // captions are cut short.
     auto label_area = allarea.removeFromTop (20);
-    label_area.removeFromLeft (26);
-    // the three narrow columns left of the grid: no label insets, or the
-    // captions get cut to "O..." / "STR..."
+    topInLabel[11]->setBounds (label_area.removeFromRight (200));   // satellite
     for (int i : { 0, 1, 12 })
         topInLabel[i]->setBorderSize ({});
-    topInLabel[0]->setBounds (label_area.removeFromLeft (48));
-    topInLabel[1]->setBounds (label_area.removeFromLeft (26));    // octave slider
-    topInLabel[12]->setBounds (label_area.removeFromLeft (44));   // strum spread knob
-    topInLabel[2]->setBounds (label_area.removeFromLeft (437));
-    topInLabel[3]->setBounds (label_area.removeFromLeft (52));
-    topInLabel[4]->setBounds (label_area.removeFromLeft (64));   // speed / duration combos are 66 wide
-    topInLabel[5]->setBounds (label_area.removeFromLeft (65));
-    topInLabel[6]->setBounds (label_area.removeFromLeft (55));
-    topInLabel[7]->setBounds (label_area.removeFromLeft (50));
-    topInLabel[8]->setBounds (label_area.removeFromLeft (50));
-    topInLabel[9]->setBounds (label_area.removeFromLeft (50));
-    topInLabel[10]->setBounds (label_area.removeFromLeft (40));
-    topInLabel[11]->setBounds (label_area);
+    label_area.removeFromLeft (LaneLayout::number);
+    topInLabel[0]->setBounds (label_area.removeFromLeft (LaneLayout::midiIn));
+    topInLabel[12]->setBounds (label_area.removeFromLeft (LaneLayout::spread));
+    // "OCT" is wider than its 16 px slider: let it run into the grid's caption area
+    auto octave = label_area.removeFromLeft (LaneLayout::octave);
+    topInLabel[1]->setJustificationType (juce::Justification::centredLeft);
+    topInLabel[1]->setBounds (octave.withWidth (30));
+    label_area.removeFromLeft (14);
+    topInLabel[10]->setBounds (label_area.removeFromRight (LaneLayout::chan));
+    topInLabel[9]->setBounds (label_area.removeFromRight (LaneLayout::delay));
+    topInLabel[8]->setBounds (label_area.removeFromRight (LaneLayout::shuffle));
+    topInLabel[7]->setBounds (label_area.removeFromRight (LaneLayout::event));
+    topInLabel[6]->setBounds (label_area.removeFromRight (LaneLayout::vel));
+    topInLabel[5]->setBounds (label_area.removeFromRight (LaneLayout::duration));
+    topInLabel[4]->setBounds (label_area.removeFromRight (LaneLayout::speed));
+    topInLabel[3]->setBounds (label_area.removeFromRight (LaneLayout::steps));
+    topInLabel[2]->setBounds (label_area);
 
     auto area = allarea.removeFromTop (200);
     auto satelite_area = area.removeFromRight (200);

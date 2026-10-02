@@ -282,7 +282,7 @@ void Grids::paint (juce::Graphics& g)
         g.drawLine (0, 0.5f, bounds.getRight(), 0.5f, 1.0f);
 
     g.setColour (Theme::hairline.withAlpha (0.45f));
-    g.drawLine (spreadKnob.getRight() + 2.0f, 5.0f, spreadKnob.getRight() + 2.0f, getHeight() - 5.0f, 1.0f);
+    g.drawLine (octaveSlider.getRight() + 2.0f, 5.0f, octaveSlider.getRight() + 2.0f, getHeight() - 5.0f, 1.0f);
 
     // octave ticks (-2..+2) beside the slider, the 0 one longer
     g.setColour (Theme::textDim);
@@ -501,25 +501,23 @@ void Grids::resized()
     auto area = getLocalBounds();
     if(audioProcessor.getChannelStatus()) gridMidiRouteCombo.setEnabled(true);
     else  gridMidiRouteCombo.setEnabled(false);
-    gridMidiRouteCombo.setBounds( area.removeFromRight(40).reduced(0,8));
-    gridDelaySlider.setBounds( area.removeFromRight(50));
-    gridShuffleSlider.setBounds( area.removeFromRight(50));
-    gridEventSlider.setBounds( area.removeFromRight(50));
-    gridVelSlider.setBounds( area.removeFromRight(50));
+    gridMidiRouteCombo.setBounds( area.removeFromRight(LaneLayout::chan).reduced(0,8));
+    gridDelaySlider.setBounds( area.removeFromRight(LaneLayout::delay));
+    gridShuffleSlider.setBounds( area.removeFromRight(LaneLayout::shuffle));
+    gridEventSlider.setBounds( area.removeFromRight(LaneLayout::event));
+    gridVelSlider.setBounds( area.removeFromRight(LaneLayout::vel));
     // wide enough for a note glyph + "1/128t"
-    gridDurationCombo.setBounds(area.removeFromRight(66).reduced(2,8)/*.withHeight(area.getHeight()-10)*/);
-    gridSpeedCombo.setBounds(area.removeFromRight(66).reduced(2,8)/*.withHeight(area.getHeight()-)*/);
-    gridNumberSlider.setBounds( area.removeFromRight(50)/*.withHeight(area.getHeight()+5)*/);
-    
-    
-    //auto tmp =
+    gridDurationCombo.setBounds(area.removeFromRight(LaneLayout::duration).reduced(2,8));
+    gridSpeedCombo.setBounds(area.removeFromRight(LaneLayout::speed).reduced(2,8));
+    gridNumberSlider.setBounds( area.removeFromRight(LaneLayout::steps));
+
     // lane number on top, its play-direction glyph underneath (both open the lane menu)
-    auto laneTab = area.removeFromLeft(25);
+    auto laneTab = area.removeFromLeft(LaneLayout::number);
     directionArea = laneTab.removeFromBottom (13).withTrimmedRight (2);
     myLineLabel.setBounds (laneTab.withTrimmedTop (4));
-    midiInNote.setBounds(area.removeFromLeft(40).reduced(0,10));
-    octaveSlider.setBounds(area.removeFromLeft(16));
-    spreadKnob.setBounds(area.removeFromLeft(34));
+    midiInNote.setBounds(area.removeFromLeft(LaneLayout::midiIn).reduced(0,10));
+    spreadKnob.setBounds(area.removeFromLeft(LaneLayout::spread));
+    octaveSlider.setBounds(area.removeFromLeft(LaneLayout::octave));
     
     subGrids->setBounds(area);
     area.removeFromTop(7);
