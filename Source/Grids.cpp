@@ -44,7 +44,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     octaveSlider.setPopupDisplayEnabled (true, true, nullptr);
     octaveSlider.setColour(Slider::textBoxTextColourId,  Theme::textValue);
     addAndMakeVisible(midiInNote);
-    midiInNote.setLookAndFeel (&myLookAndFeel);   // draws the toggle (= clicked note) as a brass frame
+    midiInNote.setLookAndFeel (&myLookAndFeel);   // the panel's button style
     midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, Theme::surfaceAlt);
     midiInNote.setColour(juce::TextButton::textColourOffId, Theme::textSecondary);
 
@@ -259,6 +259,21 @@ void Grids::paint (juce::Graphics& g)
     // play direction, under the lane number
     drawDirectionGlyph (g, directionArea.toFloat().withSizeKeepingCentre (11.0f, 9.0f)
                                                  .withX ((float) directionArea.getRight() - 12.0f));
+
+    // the lane's note was picked with the mouse (all of them, for an ALL lane):
+    // the lane number sits in a brass ring, as on the on-screen keyboard
+    if (laneSource == NoteFromClick)
+    {
+        const auto font = myLineLabel.getFont();
+        const auto text = myLineLabel.getText();
+        const auto border = myLineLabel.getBorderSize();
+        const auto lb = myLineLabel.getBounds().toFloat();
+        const float textW = juce::GlyphArrangement::getStringWidth (font, text);
+        const float cx = lb.getRight() - (float) border.getRight() - textW * 0.5f;
+        const float d = 17.0f;
+        g.setColour (Theme::accentBright);
+        g.drawEllipse (juce::Rectangle<float> (d, d).withCentre ({ cx, lb.getCentreY() }), 1.6f);
+    }
 
     // chord / strum lanes: stacked note bars left of the lane number, staggered for strums
     const int play = audioProcessor.getPlayMode (myLine);

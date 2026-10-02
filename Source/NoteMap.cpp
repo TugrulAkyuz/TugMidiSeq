@@ -325,21 +325,37 @@ void NoteMap::drawKey (juce::Graphics& g, int note, bool black) const
             g.drawRoundedRectangle (r.reduced (0.8f), 1.5f, 1.4f);
         }
 
+        const bool clicked = ((shown.screen[note >> 6] >> (note & 63)) & 1) != 0;
         if (lane >= 0)
         {
-            g.setColour (phys ? Theme::screen : c.brighter (0.4f));
-            g.setFont (Theme::valueFont (black ? 8.5f : 10.0f));
             auto label = black ? r : r.withTrimmedTop (r.getHeight() * 0.45f);
+            if (clicked)
+            {
+                // held with the mouse: the lane number in a brass ring, as on
+                // the lane's own number
+                const float d = jmin (label.getWidth() - 1.0f, label.getHeight() - 1.0f, 12.0f);
+                auto ring = label.withSizeKeepingCentre (d, d);
+                g.setColour (Theme::screen.withAlpha (0.85f));
+                g.fillEllipse (ring);
+                g.setColour (Theme::accentBright);
+                g.drawEllipse (ring.reduced (0.6f), 1.4f);
+                g.setColour (Theme::accentBright);
+            }
+            else
+            {
+                g.setColour (phys ? Theme::screen : c.brighter (0.4f));
+            }
+            g.setFont (Theme::valueFont (black ? 8.5f : 10.0f));
             g.drawText (juce::String (lane + 1), label, juce::Justification::centred, false);
         }
-    }
-    // held with the mouse: a brass frame round the whole key (the black keys,
-    // drawn after the white ones, cover the top of a white key's frame)
-    if (((shown.screen[note >> 6] >> (note & 63)) & 1) != 0)
-    {
-        g.setColour (Theme::accentBright);
-        g.drawRoundedRectangle (r.reduced (0.75f), 1.5f, 1.6f);
-        return;
+        else if (clicked)
+        {
+            // clicked but no lane takes it: a brass frame round the key
+            g.setColour (Theme::accentBright);
+            g.drawRoundedRectangle (r.reduced (0.75f), 1.5f, 1.6f);
+        }
+        if (clicked)
+            return;
     }
 
     if (! held && ! black && note % 12 == 0)
@@ -393,8 +409,7 @@ void NoteMap::drawLegend (juce::Graphics& g) const
     item ("Midi", count (midiOnly), [&] (juce::Rectangle<float> s)
           { g.setColour (swatchColour); g.fillRoundedRectangle (s, 1.0f); });
     item ("Clicked", count (shown.screen), [&] (juce::Rectangle<float> s)
-          { g.setColour (swatchColour); g.fillRoundedRectangle (s, 1.0f);
-            g.setColour (Theme::accentBright); g.drawRoundedRectangle (s.reduced (0.5f), 1.0f, 1.3f); });
+          { g.setColour (Theme::accentBright); g.drawEllipse (s.withSizeKeepingCentre (7.0f, 7.0f), 1.3f); });
     item ("Latched", count (latched), [&] (juce::Rectangle<float> s)
           { g.setColour (swatchColour); g.drawRoundedRectangle (s.reduced (0.5f), 1.0f, 1.0f); });
     item ("Sounding", -1, [&] (juce::Rectangle<float> s)

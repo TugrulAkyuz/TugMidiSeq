@@ -750,6 +750,7 @@ private:
         const int code = midi < 0 ? -1 : midi * 4 + source;   // repaint when either changes
         if(myMidiNote != code)
             setMidiName(midi, source);
+        laneSource = midi < 0 ? -1 : source;   // read by paint() for the number's ring
      
         if(myShuffleChabged == true)
         {
@@ -760,6 +761,7 @@ private:
     }
 
     enum { NoteFromMidi = 0, NoteFromClick, NoteFromLatch };
+    int laneSource = -1;   // where the lane's note comes from, -1 when nothing's held
 
     // Where the lane's note comes from, matching the note map: a MIDI keyboard,
     // a click on the on-screen keyboard, or Latch. For an ALL lane (note -1):
@@ -787,8 +789,8 @@ private:
     
     // m: a note number, -1 for nothing held, or 1000 + LanePlayMode for a
     // chord / strum lane with notes held. source styles it like the note map:
-    // MIDI = filled, clicked = filled with a brass frame (the toggle state,
-    // which MyLookAndFeel draws as one), latched = hollow.
+    // MIDI and clicked = filled (a clicked note rings the lane number
+    // instead, see paint()), latched = hollow.
     void setMidiName(int m, int source)
     {
         juce::String text;
@@ -813,7 +815,7 @@ private:
         const auto textColour = ! held ? Theme::textSecondary : hollow ? colourarray[myLine] : Theme::screen;
         midiInNote.setColour (juce::TextButton::textColourOffId, textColour);
         midiInNote.setColour (juce::TextButton::textColourOnId, textColour);
-        midiInNote.setToggleState (held && source == NoteFromClick, juce::dontSendNotification);
+
     }
     
     juce::OwnedArray    <MultiStateButtonAttachment> buttonAttachmentArray;
