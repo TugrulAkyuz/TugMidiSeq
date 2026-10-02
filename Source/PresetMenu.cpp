@@ -61,6 +61,10 @@ void TugMidiSeqAudioProcessor::resetAllParam()
         tmp_s.clear();
         tmp_s << valueTreeNames[DIRECTION] << j;
         valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
+
+        tmp_s.clear();
+        tmp_s << valueTreeNames[MUTATE] << j;
+        valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
     }
     // through the undo history: Reset is undoable (GlobalPanel wraps it)
     for (int j = 0; j < numOfLine; j++)
@@ -183,6 +187,10 @@ var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
         tmp_s.clear();
         tmp_s <<valueTreeNames[DIRECTION]<< i;
         newObj.getDynamicObject()->setProperty(tmp_s, prg.direction[i]);
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[MUTATE]<< i;
+        newObj.getDynamicObject()->setProperty(tmp_s, prg.mutate[i]);
     }
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOBALRESTBAR];
@@ -349,6 +357,11 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
         tmp_s <<valueTreeNames[DIRECTION]<< i;
         if (preset.hasProperty(tmp_s))
             p.direction[i] = jlimit(0, directionNames.size() - 1, (int) preset.getProperty(tmp_s, var()));
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[MUTATE]<< i;
+        if (preset.hasProperty(tmp_s))
+            p.mutate[i] = jlimit(0, 100, (int) preset.getProperty(tmp_s, var()));
 
     }
     tmp_s.clear();
@@ -524,6 +537,10 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
         tmp_s.clear();
         tmp_s <<valueTreeNames[DIRECTION]<< i;
         paramProg.direction[i] = (int) *valueTreeState.getRawParameterValue(tmp_s);
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[MUTATE]<< i;
+        paramProg.mutate[i] = (int) *valueTreeState.getRawParameterValue(tmp_s);
         
         
     }

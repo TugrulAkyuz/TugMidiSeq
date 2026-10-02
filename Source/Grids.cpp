@@ -325,13 +325,26 @@ void Grids::mouseDown (const juce::MouseEvent& e)
 
 void Grids::showLaneMenu()
 {
-    enum { dirBase = 10, euclidId = 20, copyId = 30, pasteId, shiftLeftId = 40, shiftRightId, clearId };
+    enum { dirBase = 10, euclidId = 20, copyId = 30, pasteId, shiftLeftId = 40, shiftRightId, clearId,
+           mutateBase = 100, mutateResetId = 300 };
+    static const int mutateAmounts[] = { 0, 5, 10, 25, 50, 100 };
 
     const int dir = audioProcessor.getDirection (myLine);
     juce::PopupMenu m;
     m.addSectionHeader ("Lane " + juce::String (myLine + 1) + "  -  direction");
     for (int d = 0; d < directionNames.size(); d++)
         m.addItem (dirBase + d, directionNames[d], true, d == dir);
+    const int mutate = audioProcessor.getMutate (myLine);
+    m.addSectionHeader ("Mutate  -  each loop, steps flip with this chance");
+    bool listed = false;
+    for (int amount : mutateAmounts)
+    {
+        m.addItem (mutateBase + amount, amount == 0 ? juce::String ("Off") : juce::String (amount) + " %", true, amount == mutate);
+        listed |= amount == mutate;
+    }
+    if (! listed)   // set from automation to a value the menu doesn't list
+        m.addItem (mutateBase + mutate, juce::String (mutate) + " %  (automated)", false, true);
+    m.addItem (mutateResetId, "Reset mutations");
     m.addSeparator();
     m.addItem (euclidId, "Euclidean fill...");
     m.addSeparator();
@@ -351,6 +364,8 @@ void Grids::showLaneMenu()
                          auto& p = safe->audioProcessor;
                          const int line = safe->myLine;
                          if (r >= dirBase && r < dirBase + directionNames.size()) p.setLaneDirection (line, r - dirBase);
+                         else if (r >= mutateBase && r <= mutateBase + 100)      p.setLaneMutate (line, r - mutateBase);
+                         else if (r == mutateResetId) p.requestMutationReset (line);
                          else if (r == copyId)       p.copyLane (line);
                          else if (r == pasteId)      p.pasteLane (line);
                          else if (r == shiftLeftId)  p.shiftLane (line, -1);

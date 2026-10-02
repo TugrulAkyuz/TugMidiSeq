@@ -231,6 +231,16 @@ valueTreeState(*this, &undoManager)
     valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterChoice>(ParameterID{tmp_s,1}, tmp_s, scaleTypeNames, 0));
     scaleTypeAtomic = valueTreeState.getRawParameterValue(tmp_s);
 
+    for (int j = 0; j < numOfLine; j++)
+    {
+        tmp_s.clear();
+        tmp_s << valueTreeNames[MUTATE] << j;
+        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s, 0, 100, 0));
+        gridsMutateAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
+        pubMutateMask[j].store (0);
+        mutateResetRequest[j].store (false);
+    }
+
     // C++17: std::atomic members start uninitialised
     clearStepData();
     for (int i = 0; i < numOfLine; i++)
@@ -413,6 +423,10 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
             tmp_s << valueTreeNames[DIRECTION] << i;
             setParamValue(tmp_s, prog.direction[i]);
 
+            tmp_s.clear();
+            tmp_s << valueTreeNames[MUTATE] << i;
+            setParamValue(tmp_s, prog.mutate[i]);
+
         }
     setParamValue(valueTreeNames[GLOBALRESTBAR],  prog.globalResyncBar);
     setParamValue(valueTreeNames[GLOABLINORFIXVEL], prog.GlobalInOrFixedVel);
@@ -565,6 +579,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             initForVariables();
             resetTrigCondState();   // conditions count loops from the next play
             for (auto& r : ratchetLeft) r = 0;   // no leftover repeats on the next play
+            for (auto& m : mutateMask) m = 0;    // every play starts from the written pattern
         }
         if(myIsPlaying == true &&  positionInfo.isPlaying == false )/**ppq ye bakma code*/
         {
@@ -650,8 +665,14 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 // the slot index going backwards means the lane's pattern wrapped
                 const bool newSlot = steps[i] != lastStep[i];
                 if (steps[i] < lastStep[i])
+                {
                     ++loopCount[i];
+                    if (loopCount[i] > 0)   // a loop was completed (0 is the first one starting)
+                        mutateLane (i);
+                }
                 lastStep[i] = steps[i];
+                if (mutateResetRequest[i].exchange (false))
+                    mutateMask[i] = 0;
                 if (newSlot)
                     playStep[i] = directedStep (i, steps[i]);   // after the loop count: ping-pong reads it
 
@@ -679,7 +700,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 if(stpSample[i] == 0)
                 {
                     const int st   = playStep[i];
-                    const int cell = (int) *gridsArr[i][st];   // 0 off, 1 on, 2 event
+                    int cell = (int) *gridsArr[i][st];   // 0 off, 1 on, 2 event
+                    if ((mutateMask[i] >> st) & 1u)
+                        cell = cell == 0 ? 1 : 0;              // mutated: an off step plays, a playing one rests
                     if (cell != 0)
                     {
                         const int cond = stepCond[i][st].load (std::memory_order_relaxed);
@@ -1277,7 +1300,7 @@ namespace
     LaneClipboard laneClipboard;
 
     // per-lane settings a copy carries (not the MIDI channel: that's routing)
-    const int copiedSettings[] = { GRIDNUM, SPEEED, DUR, OCTAVE, VEL, EVENT, GRIDSHUFFLE, GRIDDELAY, DIRECTION };
+    const int copiedSettings[] = { GRIDNUM, SPEEED, DUR, OCTAVE, VEL, EVENT, GRIDSHUFFLE, GRIDDELAY, DIRECTION, MUTATE };
 
     juce::String cellID (int base, int line, int step)
     {
@@ -1421,6 +1444,23 @@ void TugMidiSeqAudioProcessor::clearLane (int line)
 void TugMidiSeqAudioProcessor::setLaneDirection (int line, int dir)
 {
     undoableEdit ([&] { setParamValue (valueTreeNames[DIRECTION] + juce::String (line), (float) dir); });
+}
+
+void TugMidiSeqAudioProcessor::setLaneMutate (int line, int percent)
+{
+    undoableEdit ([&] { setParamValue (valueTreeNames[MUTATE] + juce::String (line), (float) percent); });
+}
+
+// Audio thread, once per completed loop of the lane.
+void TugMidiSeqAudioProcessor::mutateLane (int line)
+{
+    const int chance = getMutate (line);
+    if (chance <= 0) return;
+    const int n = jlimit (1, numOfStep, (int) *numOfGrid[line]);
+    auto& rng = juce::Random::getSystemRandom();
+    for (int s = 0; s < n; s++)
+        if (rng.nextInt (100) < chance)
+            mutateMask[line] ^= 1u << s;
 }
 
 //==============================================================================
@@ -1793,6 +1833,7 @@ void TugMidiSeqAudioProcessor::publishNoteMap()
                               std::memory_order_relaxed);
         pubBackward[i].store (dir == DirReverse || (dir == DirPingPong && jmax (0, loopCount[i]) % 2 == 1),
                               std::memory_order_relaxed);
+        pubMutateMask[i].store (myIsPlaying ? mutateMask[i] : 0u, std::memory_order_relaxed);
     }
 }
 

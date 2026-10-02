@@ -279,6 +279,17 @@ public:
             g.drawRoundedRectangle (b, Theme::radSm, 1.0f);
         }
 
+        // Mutate shows what will actually play: a written step that rests is
+        // dimmed, an empty one that plays gets a faint lane fill (plus the dashed
+        // frame drawn further down)
+        const bool mutated = audioProcesor.isStepMutated (myLine, myStep);
+        if (mutated)
+        {
+            g.setColour (currentState == State::ButtonOffState ? lane.withAlpha (0.62f)
+                                                                : Theme::well.withAlpha (0.86f));
+            g.fillRoundedRectangle (b, Theme::radSm);
+        }
+
         if (currentState == State::ButtonEventState)
         {
             // probability "dice" mark: event bow-tie + accent corner dot
@@ -313,6 +324,17 @@ public:
         const int pitch = audioProcesor.getStepPitch (myLine, myStep);
         if (pitch != 0)
             drawPitchTag (g, b, pitch, currentState != State::ButtonOffState);
+
+        // flipped by Mutate for now: a dashed frame (the written state is unchanged)
+        if (mutated)
+        {
+            juce::Path frame, dashed;
+            frame.addRoundedRectangle (b.reduced (1.0f), Theme::radSm);
+            const float dashes[] = { 2.5f, 2.0f };
+            juce::PathStrokeType (1.3f).createDashedStroke (dashed, frame, dashes, 2);
+            g.setColour (Theme::accentBright);
+            g.fillPath (dashed);
+        }
 
         // being shift-dragged: outline the pad the velocity popup points at
         if (valuePopup != nullptr)

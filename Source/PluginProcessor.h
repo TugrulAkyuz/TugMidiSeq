@@ -26,11 +26,11 @@ const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE
 };
 
 // Lane play direction. Time still runs forward (shuffle, delay and note
@@ -137,6 +137,7 @@ public:
     int stepPitch[numOfLine][numOfStep] = {};
     int scaleKey = 0, scaleType = 0;
     int direction[numOfLine] = {};
+    int mutate[numOfLine] = {};
     int numOfGrid[numOfLine];
     int octave[numOfLine];
     int gridsSpeed[numOfLine];
@@ -333,6 +334,19 @@ public:
         return playStep[i];
     }
     int getDirection (int line) const { return (int) *gridsDirectionAtomic[line]; }
+
+    // Mutate (per lane, 0..100 %): each time the lane completes a loop, every
+    // step flips with that chance. The flips accumulate in a mask that sits on
+    // top of the written pattern without changing it (an Off step plays, an
+    // On / Event step rests); 0 % freezes the current mask, and every play,
+    // or "Reset mutations", starts again from the written pattern.
+    int  getMutate (int line) const          { return (int) *gridsMutateAtomic[line]; }
+    void setLaneMutate (int line, int percent);   // one undo step
+    void requestMutationReset (int line)     { mutateResetRequest[line].store (true); }
+    bool isStepMutated (int line, int step) const
+    {
+        return ((pubMutateMask[line].load (std::memory_order_relaxed) >> step) & 1u) != 0;
+    }
 
     // Playhead for the GUI, published once per block (see publishNoteMap): the
     // grid step being played (-1 when stopped), how far through its time slot,
@@ -739,6 +753,11 @@ private:
     std::atomic<float> *gridsDelayAtomic[numOfLine];
     std::atomic<float> *gridsMidiRouteAtomic[numOfLine];
     std::atomic<float> *gridsDirectionAtomic[numOfLine];
+    std::atomic<float> *gridsMutateAtomic[numOfLine];
+    uint32_t mutateMask[numOfLine] = {};                // audio thread
+    std::atomic<uint32_t> pubMutateMask[numOfLine];     // for the pads
+    std::atomic<bool> mutateResetRequest[numOfLine];
+    void mutateLane (int line);
     int directedStep (int line, int slot) const;
     bool cellActiveAtSlot (int line, int slot) const;
     std::atomic<float> *GlobalInOrFixedAtomic;;
