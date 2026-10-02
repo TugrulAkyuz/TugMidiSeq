@@ -742,51 +742,78 @@ private:
             resized();
         }
         // the box shows the lane's note, or ALL (+ strum direction) for a
-        // lane that plays every held note
+        // lane that plays every held note, styled by where the note comes from
         const int play = audioProcessor.getPlayMode (myLine);
         const int midi = play == PlayVoice ? audioProcessor.getMidi (myLine)
                                            : (audioProcessor.getHeldNoteCount() > 0 ? 1000 + play : -1);
-        if(myMidiNote != midi)
-            setMidiName(midi);
+        const int source = midi < 0 ? NoteFromMidi : noteSource (play == PlayVoice ? midi : -1);
+        const int code = midi < 0 ? -1 : midi * 4 + source;   // repaint when either changes
+        if(myMidiNote != code)
+            setMidiName(midi, source);
      
         if(myShuffleChabged == true)
         {
             resized();
             myShuffleChabged = false;
         }
-        myMidiNote =  midi;
+        myMidiNote =  code;
+    }
+
+    enum { NoteFromMidi = 0, NoteFromClick, NoteFromLatch };
+
+    // Where the lane's note comes from, matching the note map: a MIDI keyboard,
+    // a click on the on-screen keyboard, or Latch. For an ALL lane (note -1):
+    // clicked / latched only when every held note is.
+    int noteSource (int note) const
+    {
+        auto sourceOf = [this] (int n)
+        {
+            if (audioProcessor.isScreenNote (n))           return (int) NoteFromClick;
+            if (! audioProcessor.isNotePhysicallyHeld (n)) return (int) NoteFromLatch;
+            return (int) NoteFromMidi;
+        };
+        if (note >= 0)
+            return sourceOf (note);
+        int first = -1;
+        for (int n = 0; n < 128; n++)
+        {
+            if (! audioProcessor.isNoteHeld (n)) continue;
+            const int s = sourceOf (n);
+            if (first == -1) first = s;
+            else if (s != first) return NoteFromMidi;   // mixed
+        }
+        return first < 0 ? NoteFromMidi : first;
     }
     
     // m: a note number, -1 for nothing held, or 1000 + LanePlayMode for a
-    // chord / strum lane with notes held
-    void setMidiName(int m)
+    // chord / strum lane with notes held. source styles it like the note map:
+    // MIDI = filled, clicked = filled with a brass frame (the toggle state,
+    // which MyLookAndFeel draws as one), latched = hollow.
+    void setMidiName(int m, int source)
     {
+        juce::String text;
         if (m >= 1000)
         {
-            static const juce::String all = "ALL";
             const juce::String arrows[] = { "", "", juce::CharPointer_UTF8 ("\xe2\x86\x91"),     // ↑
                                             juce::CharPointer_UTF8 ("\xe2\x86\x93"),            // ↓
                                             juce::CharPointer_UTF8 ("\xe2\x86\x95") };          // ↕
-            midiInNote.setButtonText (all + arrows[jlimit (0, 4, m - 1000)]);
-            midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, colourarray[myLine]);
-            midiInNote.setColour(juce::TextButton::textColourOffId, Theme::screen);
-            return;
+            text = "ALL" + arrows[jlimit (0, 4, m - 1000)];
         }
-        if(m ==  -1)
+        else if (m >= 0)
         {
-            midiInNote.setButtonText("");
-            midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, Theme::surfaceAlt);
-            midiInNote.setColour(juce::TextButton::textColourOffId, Theme::textSecondary);
+            text = midiNotes[m % 12] + std::to_string (m / 12);
         }
-        else
-        {
-            int i = m / 12;
-            m %= 12;
+        midiInNote.setButtonText (text);
 
-            midiInNote.setButtonText(midiNotes[m] + std::to_string(i));
-            midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, colourarray[myLine]);
-            midiInNote.setColour(juce::TextButton::textColourOffId, Theme::screen);
-        }
+        const bool held   = m >= 0;
+        const bool hollow = held && source == NoteFromLatch;
+        const auto fill   = held && ! hollow ? colourarray[myLine] : Theme::surfaceAlt;
+        midiInNote.setColour (juce::TextButton::buttonColourId, fill);
+        midiInNote.setColour (juce::TextButton::buttonOnColourId, fill);
+        const auto textColour = ! held ? Theme::textSecondary : hollow ? colourarray[myLine] : Theme::screen;
+        midiInNote.setColour (juce::TextButton::textColourOffId, textColour);
+        midiInNote.setColour (juce::TextButton::textColourOnId, textColour);
+        midiInNote.setToggleState (held && source == NoteFromClick, juce::dontSendNotification);
     }
     
     juce::OwnedArray    <MultiStateButtonAttachment> buttonAttachmentArray;

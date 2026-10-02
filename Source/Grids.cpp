@@ -44,6 +44,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     octaveSlider.setPopupDisplayEnabled (true, true, nullptr);
     octaveSlider.setColour(Slider::textBoxTextColourId,  Theme::textValue);
     addAndMakeVisible(midiInNote);
+    midiInNote.setLookAndFeel (&myLookAndFeel);   // draws the toggle (= clicked note) as a brass frame
     midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, Theme::surfaceAlt);
     midiInNote.setColour(juce::TextButton::textColourOffId, Theme::textSecondary);
 

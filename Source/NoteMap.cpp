@@ -333,11 +333,12 @@ void NoteMap::drawKey (juce::Graphics& g, int note, bool black) const
             g.drawText (juce::String (lane + 1), label, juce::Justification::centred, false);
         }
     }
-    // held with the mouse: a brass bar along the bottom of the key
+    // held with the mouse: a brass frame round the whole key (the black keys,
+    // drawn after the white ones, cover the top of a white key's frame)
     if (((shown.screen[note >> 6] >> (note & 63)) & 1) != 0)
     {
         g.setColour (Theme::accentBright);
-        g.fillRoundedRectangle (r.removeFromBottom (3.0f).reduced (black ? 1.5f : 3.0f, 0.0f), 1.0f);
+        g.drawRoundedRectangle (r.reduced (0.75f), 1.5f, 1.6f);
         return;
     }
 
@@ -393,7 +394,7 @@ void NoteMap::drawLegend (juce::Graphics& g) const
           { g.setColour (swatchColour); g.fillRoundedRectangle (s, 1.0f); });
     item ("Clicked", count (shown.screen), [&] (juce::Rectangle<float> s)
           { g.setColour (swatchColour); g.fillRoundedRectangle (s, 1.0f);
-            g.setColour (Theme::accentBright); g.fillRect (s.removeFromBottom (2.0f)); });
+            g.setColour (Theme::accentBright); g.drawRoundedRectangle (s.reduced (0.5f), 1.0f, 1.3f); });
     item ("Latched", count (latched), [&] (juce::Rectangle<float> s)
           { g.setColour (swatchColour); g.drawRoundedRectangle (s.reduced (0.5f), 1.0f, 1.0f); });
     item ("Sounding", -1, [&] (juce::Rectangle<float> s)
