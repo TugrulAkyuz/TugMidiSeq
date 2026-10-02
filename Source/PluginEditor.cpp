@@ -14,9 +14,10 @@
 // longer lives directly in the editor so it can be scaled as one unit.
 //==============================================================================
 EditorContent::EditorContent (TugMidiSeqAudioProcessor& p)
-    : audioProcessor (p), satellite (p), globalPanel (p)
+    : audioProcessor (p), satellite (p), noteMap (p), globalPanel (p)
 {
     addAndMakeVisible (satellite);
+    addAndMakeVisible (noteMap);
     for (auto i = 4; i >= 0; i--)
     {
         auto g = new Grids (audioProcessor, i);
@@ -72,10 +73,10 @@ void EditorContent::resized()
     label_area.removeFromLeft (26);
     topInLabel[0]->setBounds (label_area.removeFromLeft (50));
     topInLabel[1]->setBounds (label_area.removeFromLeft (60));
-    topInLabel[2]->setBounds (label_area.removeFromLeft (465));
+    topInLabel[2]->setBounds (label_area.removeFromLeft (445));
     topInLabel[3]->setBounds (label_area.removeFromLeft (52));
-    topInLabel[4]->setBounds (label_area.removeFromLeft (54));
-    topInLabel[5]->setBounds (label_area.removeFromLeft (55));
+    topInLabel[4]->setBounds (label_area.removeFromLeft (64));   // speed / duration combos are 66 wide
+    topInLabel[5]->setBounds (label_area.removeFromLeft (65));
     topInLabel[6]->setBounds (label_area.removeFromLeft (55));
     topInLabel[7]->setBounds (label_area.removeFromLeft (50));
     topInLabel[8]->setBounds (label_area.removeFromLeft (50));
@@ -90,6 +91,7 @@ void EditorContent::resized()
         g->setBounds (area.removeFromTop (h));
 
     satellite.setBounds (satelite_area);
+    noteMap.setBounds (allarea.removeFromTop (kNoteMapH));
     globalPanel.setBounds (allarea);
 }
 

@@ -68,6 +68,83 @@ private:
 
 
 
+// Floating read-out for shift+drag velocity editing. It lives in the editor
+// content (not inside the tiny pad), sits just above the pad being edited and
+// points at it; created on shift+mouse-down, removed on mouse-up.
+class VelocityPopup : public juce::Component
+{
+public:
+    VelocityPopup (juce::Colour laneColour) : lane (laneColour)
+    {
+        setInterceptsMouseClicks (false, false);
+        setAlwaysOnTop (true);
+    }
+
+    // value: step velocity 0..127; ignored: the global "In Vel" mode is on, so
+    // the engine uses the incoming MIDI velocity instead of this one
+    void setValue (int value, bool ignored)
+    {
+        if (value == vel && ignored == isIgnored) return;
+        vel = value;
+        isIgnored = ignored;
+        repaint();
+    }
+
+    // place above `pad` (inside `parent`), or below it when there's no room
+    void placeFor (juce::Component& pad, juce::Component& parent)
+    {
+        auto padArea = parent.getLocalArea (&pad, pad.getLocalBounds());
+        auto b = juce::Rectangle<int> (width, height).withCentre ({ padArea.getCentreX(), 0 });
+        pointsDown = padArea.getY() - height - gap >= 0;
+        b.setY (pointsDown ? padArea.getY() - height - gap : padArea.getBottom() + gap);
+        setBounds (b.constrainedWithin (parent.getLocalBounds()));
+        arrowX = (float) (padArea.getCentreX() - getX());
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        auto b = getLocalBounds().toFloat();
+        auto body = pointsDown ? b.withTrimmedBottom (arrow) : b.withTrimmedTop (arrow);
+
+        // pointer toward the pad
+        juce::Path tip;
+        const float ax = jlimit (body.getX() + 8.0f, body.getRight() - 8.0f, arrowX);
+        if (pointsDown) tip.addTriangle (ax - arrow, body.getBottom() - 1.0f, ax + arrow, body.getBottom() - 1.0f, ax, b.getBottom());
+        else            tip.addTriangle (ax - arrow, body.getY() + 1.0f,      ax + arrow, body.getY() + 1.0f,      ax, b.getY());
+        g.setColour (Theme::surface);
+        g.fillPath (tip);
+        g.setColour (Theme::hairline);
+        g.strokePath (tip, juce::PathStrokeType (1.0f));
+
+        Theme::drawRaisedPanel (g, body, Theme::radMd);
+        auto inner = body.reduced (6.0f, 4.0f);
+
+        // caption + number on one row
+        auto top = inner.removeFromTop (12.0f);
+        Theme::drawCaption (g, isIgnored ? "in vel" : "step vel", top.toNearestInt(),
+                            juce::Justification::centredLeft, isIgnored ? Theme::textDim : Theme::textSecondary, 9.0f);
+        g.setColour (isIgnored ? Theme::textDim : Theme::textValue);
+        g.setFont (Theme::valueFont (12.0f));
+        g.drawText (juce::String (vel), top, juce::Justification::centredRight, false);
+
+        // meter in the lane colour
+        inner.removeFromTop (3.0f);
+        auto meter = inner.removeFromTop (5.0f);
+        Theme::drawRecessedWell (g, meter, 2.0f);
+        g.setColour (isIgnored ? Theme::textDim : lane);
+        g.fillRoundedRectangle (meter.withWidth (meter.getWidth() * (float) vel / 127.0f), 2.0f);
+    }
+
+private:
+    static constexpr int width = 88, height = 36, gap = 1;
+    static constexpr float arrow = 5.0f;
+    juce::Colour lane;
+    int vel = -1;
+    bool isIgnored = false;
+    bool pointsDown = true;
+    float arrowX = 0.0f;
+};
+
 class MultiStateButton : public juce::Button ,  private AudioProcessorValueTreeState::Listener,
                          private juce::AsyncUpdater
 {
@@ -186,47 +263,55 @@ public:
             g.fillEllipse ((float) getWidth() - 5.0f, 2.0f, 3.0f, 3.0f);
         }
 
-        if (shiftPressed == true)
-            showVelocity (g, audioProcesor.getVelButton (myLine, myStep));
+        const int cond = audioProcesor.getStepCond (myLine, myStep);
+        if (cond != CondNone)
+            drawCondTag (g, b, cond, currentState != State::ButtonOffState);
+
+        // being shift-dragged: outline the pad the velocity popup points at
+        if (velPopup != nullptr)
+        {
+            g.setColour (Theme::accentBright);
+            g.drawRoundedRectangle (b, Theme::radSm, 1.5f);
+        }
     }
 
-    void showVelocity(juce::Graphics& g,float value)
+    // Trig-condition tag: a dark chip along the pad's bottom edge with the
+    // condition's short name, or just a corner flag when the pad is too narrow
+    // for text (long lanes). Dimmed on an off pad, where it has no effect.
+    void drawCondTag (juce::Graphics& g, juce::Rectangle<float> b, int cond, bool active)
     {
-        juce::Path backgroundArc;
-        
-         //g.setColour(Colours::darkgrey);
-        //g.fillAll();
-        Colour tmpC = Theme::screen.withAlpha (0.9f);
-        g.setColour(tmpC);
-        int centerX = g.getClipBounds().getCentreX();
-        int centerY = g.getClipBounds().getCentreY();
-        g.drawLine(centerX, centerY, (centerX) - cos(value * 6 * 3.14 / 4 - 1 * 3.14 / 4  )*(centerX-2), (centerY) -  sin(value * 6 * 3.14 / 4  - 1 * 3.14 / 4)*(centerY-2), 3);
-        
-        backgroundArc.addCentredArc(centerX,
-                                    centerY,
-                                    centerX-2,
-                                    centerY-2,
-            0.0f,
-            -3 * 3.14 / 4,
-            value * 6 * 3.14 / 4 - 3 * 3.14 / 4,
-            true);
-        PathStrokeType stroke(3.0f, PathStrokeType::JointStyle::curved, PathStrokeType::EndCapStyle::rounded);
-        g.strokePath(backgroundArc, stroke);
+        auto lane = colourarray[myLine];
+        const float alpha = active ? 1.0f : 0.45f;
 
-        backgroundArc.addCentredArc(centerX,
-                                    centerY,
-                                    centerX-2,
-                                    centerY-2,
-            0.0f,
-            -3 * 3.14 / 4,
-            1.0 * 6 * 3.14 / 4 - 3 * 3.14 / 4,
-            true);
-        stroke.setStrokeThickness(1.5f);
-        g.setColour(tmpC.withAlpha(0.5f));
-        g.strokePath(backgroundArc, stroke);
+        if (b.getWidth() < 18.0f)
+        {
+            // dark on a lit pad, lane-coloured on an unlit one: readable in every lane
+            juce::Path flag;
+            flag.addTriangle (b.getX(), b.getBottom(), b.getX() + 7.0f, b.getBottom(), b.getX(), b.getBottom() - 7.0f);
+            g.setColour (active ? Theme::screen.withAlpha (0.85f) : lane.withAlpha (alpha));
+            g.fillPath (flag);
+            return;
+        }
 
+        auto chip = b.removeFromBottom (9.0f).reduced (1.5f, 0.5f);
+        g.setColour (Theme::screen.withAlpha (0.78f * alpha));
+        g.fillRoundedRectangle (chip, 2.0f);
+        g.setColour (lane.brighter (0.5f).withAlpha (alpha));
+        g.setFont (Theme::valueFont (8.5f));
+        g.drawText (trigCondNames[cond], chip, juce::Justification::centred, false);
     }
-    
+
+    // Right-click: pick this step's trig condition. Defined in Grids.cpp.
+    void showCondMenu();
+
+    // Shift+drag velocity editing: the popup is parented to the editor content
+    // (the lane's parent) so it can sit outside this pad and the lane row.
+    // Bodies in Grids.cpp.
+    void showVelPopup();
+    void updateVelPopup();
+    void hideVelPopup();
+    juce::RangedAudioParameter* stepVelParam() const;
+
     State getCurrentState() const
     {
         return currentState;
@@ -289,6 +374,7 @@ private:
     float y;
     std::atomic<float> evenAlpha { 1.0f };
     Grids* ownerGrid = nullptr;
+    std::unique_ptr<VelocityPopup> velPopup;
     
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MultiStateButton)
@@ -421,6 +507,9 @@ public:
     void beginPaint (MultiStateButton::State s, int originStep);
     void paintDrag  (juce::Point<int> screenPos);
     void endPaint();
+
+    // the pads' popup menus share the lane's look and feel
+    juce::LookAndFeel& getMenuLookAndFeel() { return myLookAndFeel; }
 private:
     // Stamp any pad under screenPos in THIS lane with brush state s.
     void paintLocal (juce::Point<int> screenPos, MultiStateButton::State s);

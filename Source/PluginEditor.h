@@ -13,13 +13,15 @@
 #include "Grids.h"
 #include "Satellite.h"
 #include "GlobalPanel.h"
+#include "NoteMap.h"
 
 
 const std::vector <std::string> topLabel={"midi in","Octave","G R I D S","#Grid","Speed","Duration","Vel","Event","Shuffle","Delay","Chan","Note Satellite"};
 
 // The UI is authored at this fixed size; the editor scales it uniformly.
+static constexpr int kNoteMapH      = 30;
 static constexpr int kEditorDesignW = 1212;
-static constexpr int kEditorDesignH = 276;
+static constexpr int kEditorDesignH = 276 + kNoteMapH;
 
 //==============================================================================
 // All widgets live here at the fixed design size. The editor owns one of these
@@ -38,6 +40,7 @@ private:
 
     juce::OwnedArray< Grids> grids;
     Satellite satellite;
+    NoteMap noteMap;
     GlobalPanel globalPanel;
     juce::OwnedArray< juce::Label > topInLabel;
 

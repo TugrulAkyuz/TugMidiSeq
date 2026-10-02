@@ -9,6 +9,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <bitset>
 using namespace juce;
 #define numOfStep  32
 #define numOfLine  5
@@ -25,12 +26,33 @@ const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH
 };
+
+// Elektron-style trig conditions, one per step. A step only fires when its
+// condition passes (and, for an Event cell, its probability roll too).
+// "Loop" counts how many times the lane's own pattern has wrapped since play.
+// These are kept out of the APVTS on purpose: as host parameters they would
+// add another numOfLine * numOfStep (160) automatable entries.
+enum TrigCond
+{
+    CondNone = 0,
+    Cond1of2, Cond2of2, Cond1of3, Cond2of3, Cond3of3, Cond1of4, Cond2of4, Cond3of4, Cond4of4,
+    CondFirst, CondNotFirst,   // first loop since play / every loop but the first
+    CondPre,   CondNotPre,     // this lane's previous condition result
+    CondNei,   CondNotNei,     // the lane below's most recent condition result
+    NumTrigConds
+};
+const juce::StringArray trigCondNames =
+{
+    "", "1:2","2:2","1:3","2:3","3:3","1:4","2:4","3:4","4:4", "1ST","!1ST", "PRE","!PRE", "NEI","!NEI"
+};
+// preset-JSON / state-tree key prefix for step conditions (cond<lane><step>)
+const juce::String stepCondKey = "cond";
 
 extern juce::CriticalSection midiOutputMutex;
 
@@ -68,6 +90,7 @@ public:
     juce::File sourceFile;
     int grids[numOfLine][numOfStep];
     int gridVelArr[numOfLine][numOfStep];
+    int stepCond[numOfLine][numOfStep] = {};
     int numOfGrid[numOfLine];
     int octave[numOfLine];
     int gridsSpeed[numOfLine];
@@ -271,16 +294,59 @@ public:
         gridsDuration[line] = index;
     }
     
+    // GUI-side reads of the held-note state go through the snapshot that
+    // publishNoteMap() writes once per block, never the audio thread's vectors.
     int getMidi(int line)
     {
-        if(*sortedOrFirstEmptySelectAtomic == false)
-        {
-            if(inMidiNoteList.size() <= (size_t)line ) return -1;
-            return inMidiNoteList[(size_t)line].getNoteNumber();
-        }
-        if(inMidiNoteListVector.at(line).getVelocity() != 0)
-            return     inMidiNoteListVector.at(line).getNoteNumber();
-        else return -1;
+        return laneInNote[line].load (std::memory_order_relaxed);
+    }
+    // note the lane is sounding right now (input note + octave), or -1
+    int getLaneOutNote (int line) const
+    {
+        return laneOutNote[line].load (std::memory_order_relaxed);
+    }
+    bool isNoteHeld (int note) const
+    {
+        return ((heldMask[note >> 6].load (std::memory_order_relaxed) >> (note & 63)) & 1) != 0;
+    }
+    bool isNotePhysicallyHeld (int note) const
+    {
+        return ((physMask[note >> 6].load (std::memory_order_relaxed) >> (note & 63)) & 1) != 0;
+    }
+
+    // Notes played by clicking the on-screen keyboard (NoteMap). Each click
+    // toggles a note that then stays down like a held key. Message thread only;
+    // the events reach processBlock through a lock-free FIFO.
+    void toggleScreenNote (int note)
+    {
+        const bool on = ! screenHeld[(size_t) note];
+        screenHeld[(size_t) note] = on;
+        pushScreenNote (note, on);
+    }
+    void releaseScreenNotes()
+    {
+        for (int n = 0; n < 128; n++)
+            if (screenHeld[(size_t) n]) { screenHeld[(size_t) n] = false; pushScreenNote (n, false); }
+    }
+    bool isScreenNote (int note) const { return screenHeld[(size_t) note]; }
+
+    int getStepCond (int line, int step) const
+    {
+        return stepCond[line][step].load (std::memory_order_relaxed);
+    }
+    // Safe from any thread. Notifies the host only when asked to, because that
+    // must happen on the message thread (GUI edits) — preset loads don't need it.
+    void setStepCond (int line, int step, int cond, bool notifyHost = false)
+    {
+        stepCond[line][step].store (jlimit (0, NumTrigConds - 1, cond), std::memory_order_relaxed);
+        if (notifyHost)
+            updateHostDisplay (ChangeDetails{}.withNonParameterStateChanged (true));
+    }
+    void clearStepConds()
+    {
+        for (auto& lane : stepCond)
+            for (auto& c : lane)
+                c.store (CondNone, std::memory_order_relaxed);
     }
     int getLoopMeasure()
     {
@@ -534,7 +600,43 @@ private:
     std::atomic<float> *sortedOrFirstEmptySelectAtomic;
     std::atomic<float> *shuffleAtomic;
     std::atomic<float> *channelOnAtamic;
-    
+    std::atomic<float> *latchAtomic;
+
+    // Latch: which keys are physically down right now (the held-note lists keep
+    // latched notes after release, so they can't answer that themselves).
+    bool physHeld[128] = {};
+    int  physHeldCount = 0;
+    bool prevLatch = false;
+    void clearHeldNotes();
+    void releaseUnheldNotes();
+
+    // Trig-condition engine state (audio thread only).
+    std::atomic<int> stepCond[numOfLine][numOfStep];
+    int  loopCount[numOfLine] = {};
+    int  lastStep[numOfLine] = {};
+    bool lastCondResult[numOfLine] = {};
+    void resetTrigCondState();
+    bool evaluateTrigCond (int line, int step) const;
+    void writeStepCondsTo (juce::ValueTree& state) const;
+    void readStepCondsFrom (const juce::ValueTree& state);
+
+    // Snapshot for the GUI's note map, published once per block.
+    int lastOutNote[numOfLine] = {};
+    std::atomic<int> laneInNote[numOfLine];
+    std::atomic<int> laneOutNote[numOfLine];
+    std::atomic<uint64_t> heldMask[2];
+    std::atomic<uint64_t> physMask[2];
+    void publishNoteMap();
+
+    // On-screen keyboard -> audio thread (single producer, single consumer).
+    struct ScreenNoteEvent { int note; bool on; };
+    static constexpr int screenFifoSize = 256;
+    juce::AbstractFifo screenFifo { screenFifoSize };
+    ScreenNoteEvent screenEvents[screenFifoSize] = {};
+    std::bitset<128> screenHeld;   // message thread only
+    void pushScreenNote (int note, bool on);
+    void drainScreenNotes (juce::MidiBuffer& midiMessages);
+
     //std::atomic<float> *numOfGrid[5];
     juce::UndoManager undoManager;
     juce::MidiBuffer myInnmidiBuffer;

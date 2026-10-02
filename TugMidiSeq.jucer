@@ -19,6 +19,8 @@
       <FILE id="UIPv5n" name="MyLookanAndFeels.h" compile="0" resource="0"
             file="Source/MyLookanAndFeels.h"/>
       <FILE id="thm001" name="Theme.h" compile="0" resource="0" file="Source/Theme.h"/>
+      <FILE id="ntm001" name="NoteMap.cpp" compile="1" resource="0" file="Source/NoteMap.cpp"/>
+      <FILE id="ntm002" name="NoteMap.h" compile="0" resource="0" file="Source/NoteMap.h"/>
       <FILE id="hY8DMs" name="Grids.cpp" compile="1" resource="0" file="Source/Grids.cpp"/>
       <FILE id="ZGrLB5" name="Grids.h" compile="0" resource="0" file="Source/Grids.h"/>
       <FILE id="CkoaWu" name="PluginProcessor.cpp" compile="1" resource="0"

@@ -243,6 +243,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     myLookAndFeel.setColour (PopupMenu::textColourId, Theme::textPrimary);
     myLookAndFeel.setColour (PopupMenu::highlightedBackgroundColourId, Theme::accent);
     myLookAndFeel.setColour (PopupMenu::highlightedTextColourId, Theme::screen);
+    myLookAndFeel.setColour (PopupMenu::headerTextColourId, Theme::accentBright);
     myLookAndFeel.setColour (ComboBox::backgroundColourId, Theme::well);
     
     juce::String tmp_s;
@@ -436,10 +437,10 @@ void GlobalPanel::resized()
     gridGridAllShuffleSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridAllEventSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
     gridAllVelSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
-    gridAllDurationCombo.setBounds(area.removeFromRight(56).reduced(2,13));
-    
-    
-    gridAllSpeedCombo.setBounds(area.removeFromRight(56).reduced(2,13));
+    gridAllDurationCombo.setBounds(area.removeFromRight(66).reduced(2,13));   // matches the lane combos
+
+
+    gridAllSpeedCombo.setBounds(area.removeFromRight(66).reduced(2,13));
     gridAllNumberSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
     
     
@@ -455,11 +456,13 @@ void GlobalPanel::resized()
     
     
     velUsageButton.setBounds( area.removeFromRight(70).reduced(3, 10));
-    auto d = area.removeFromRight(260);
+    // 20px narrower since the speed/duration combos grew, so the shuffle knob
+    // left of it stays clear of the InBSynth / Sorted buttons
+    auto d = area.removeFromRight(240);
     auto dd = d.removeFromBottom(getHeight()/2);
     for(int i = 0 ; i < 5 ; i++)
     {
-        randomButton.getUnchecked(i)->setBounds(d.removeFromRight(53).reduced(3, 2));
+        randomButton.getUnchecked(i)->setBounds(d.removeFromRight(48).reduced(3, 2));
     }
     globalNameLabel.setBounds(top_area.removeFromLeft(100).reduced(3, 0));
     auto r = randomButton.getUnchecked(2);

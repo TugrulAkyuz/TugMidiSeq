@@ -19,6 +19,130 @@ using namespace juce;
 
 const Colour myTextLabelColour = Theme::textSecondary;
 
+// Note-length values ("1nd" / "16n" / "8nt": dotted, straight, triplet) shown as
+// a note glyph plus a fraction ("1/1." / "1/16" / "1/8t"), the way TugPhonon
+// draws them. Only the drawing changes: the item strings — and so the Speed /
+// Dur parameters and the presets that store their index — stay as they are.
+namespace NoteValue
+{
+    struct Parsed
+    {
+        int  div = 0;   // 1, 2, 4 ... 128
+        bool dotted = false, triplet = false;
+        bool valid() const { return div > 0; }
+    };
+
+    inline Parsed parse (const String& text)
+    {
+        Parsed p;
+        auto t = text.trim();
+        if      (t.endsWith ("nd")) { p.dotted  = true; t = t.dropLastCharacters (2); }
+        else if (t.endsWith ("nt")) { p.triplet = true; t = t.dropLastCharacters (2); }
+        else if (t.endsWith ("n"))  {                   t = t.dropLastCharacters (1); }
+        else return {};
+        if (t.isEmpty() || ! t.containsOnly ("0123456789")) return {};
+        const int d = t.getIntValue();
+        if (d < 1 || d > 128 || ! isPowerOfTwo (d)) return {};
+        p.div = d;
+        return p;
+    }
+
+    inline String fraction (Parsed p)
+    {
+        return "1/" + String (p.div) + (p.dotted ? "." : p.triplet ? "t" : "");
+    }
+
+    // a combo whose every item is a note value (Speed / Dur)
+    inline bool isNoteValueBox (const ComboBox& box)
+    {
+        if (box.getNumItems() == 0) return false;
+        for (int i = 0; i < box.getNumItems(); i++)
+            if (! parse (box.getItemText (i)).valid()) return false;
+        return true;
+    }
+
+    inline Font font (float height) { return Font (FontOptions (height)); }
+
+    // width drawGlyph() uses for a glyph of the given height
+    inline float glyphWidth (float noteH) { return noteH * 0.70f; }
+
+    // Note head at the bottom-left, stem rising from its right edge, one flag per
+    // halving below a quarter (8th = 1 ... 128th = 5), an augmentation dot for
+    // dotted values and a small "3" over the head for triplets.
+    inline void drawGlyph (Graphics& g, Rectangle<float> area, Parsed p, Colour c)
+    {
+        const float noteH = area.getHeight();
+        const float headW = noteH * 0.40f, headH = noteH * 0.29f;
+        const float headCX = area.getX() + headW * 0.55f;
+        const float headCY = area.getBottom() - headH * 0.5f - 0.5f;
+        const float stemX  = headCX + headW * 0.42f;
+        const float stemTop = area.getY() + 0.5f;
+        const float stemBot = headCY - headH * 0.15f;
+
+        g.setColour (c);
+        Path head;
+        head.addEllipse (headCX - headW * 0.5f, headCY - headH * 0.5f, headW, headH);
+        head.applyTransform (AffineTransform::rotation (-0.35f, headCX, headCY));
+
+        if (p.div <= 2)
+            g.strokePath (head, PathStrokeType (1.2f));     // whole / half: open head
+        else
+            g.fillPath (head);
+
+        if (p.div >= 2)
+            g.drawLine (stemX, stemBot, stemX, stemTop, 1.1f);
+
+        int flags = 0;
+        for (int d = p.div; d >= 8; d /= 2) flags++;
+        const float spacing = noteH * 0.15f, reach = headW * 0.75f;
+        for (int f = 0; f < flags; f++)
+        {
+            const float fy = stemTop + (float) f * spacing;
+            Path flag;
+            flag.startNewSubPath (stemX, fy);
+            flag.quadraticTo (stemX + reach * 0.9f, fy + spacing * 0.4f, stemX + reach, fy + spacing * 1.3f);
+            g.strokePath (flag, PathStrokeType (1.1f));
+        }
+
+        if (p.dotted)
+        {
+            const float r = jmax (1.1f, noteH * 0.075f);
+            g.fillEllipse (headCX + headW * 0.78f - r, headCY - headH * 0.55f - r, r * 2.0f, r * 2.0f);
+        }
+
+        if (p.triplet)
+        {
+            g.setFont (font (noteH * 0.46f).boldened());
+            g.drawText ("3", Rectangle<float> (area.getX() - 1.0f, area.getY() - 1.0f,
+                                               stemX - area.getX(), noteH * 0.5f),
+                        Justification::centred, false);
+        }
+    }
+
+    // glyph + fraction in `area` (centred, or left-aligned so a column of them
+    // lines up); the font shrinks if the pair doesn't fit
+    inline void drawValue (Graphics& g, Rectangle<float> area, Parsed p, Colour c,
+                           float noteH, float fontH, bool centred = true)
+    {
+        const auto text = fraction (p);
+        const float gap = 3.0f, gw = glyphWidth (noteH);
+        float textW = GlyphArrangement::getStringWidth (font (fontH), text);
+        while (gw + gap + textW > area.getWidth() && fontH > 8.0f)
+        {
+            fontH -= 0.5f;
+            textW = GlyphArrangement::getStringWidth (font (fontH), text);
+        }
+        const float x = centred ? jmax (area.getX(), area.getCentreX() - (gw + gap + textW) * 0.5f)
+                                : area.getX();
+
+        drawGlyph (g, { x, area.getCentreY() - noteH * 0.5f, gw, noteH }, p, c);
+        g.setColour (c);
+        g.setFont (font (fontH));
+        g.drawText (text, Rectangle<float> (x + gw + gap, area.getY(), area.getRight() - (x + gw + gap), area.getHeight()),
+                    Justification::centredLeft, false);
+    }
+}
+
 class MyLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
@@ -119,12 +243,74 @@ private:
         path.lineTo          (cx + 3.0f, cy - 1.5f);
         g.setColour (box.isEnabled() ? Theme::textSecondary : Theme::textDim);
         g.strokePath (path, PathStrokeType (1.4f, PathStrokeType::curved, PathStrokeType::rounded));
+
+        // note-value boxes: glyph + fraction (their label is hidden, see below)
+        if (auto p = NoteValue::parse (box.getText()); p.valid() && NoteValue::isNoteValueBox (box))
+        {
+            auto c = box.findColour (ComboBox::textColourId);
+            NoteValue::drawValue (g, Rectangle<float> (4.0f, 0.0f, (float) width - 20.0f, (float) height),
+                                  p, box.isEnabled() ? c : c.withAlpha (0.4f),
+                                  jmin (14.0f, height * 0.6f), jmin (11.5f, height * 0.5f));
+        }
     }
 
     void positionComboBoxText (ComboBox& box, Label& label) override
     {
         label.setBounds (6, 1, box.getWidth() - 22, box.getHeight() - 2);
         label.setFont (getComboBoxFont (box));
+        // drawComboBox draws note values itself; ComboBox re-applies the label
+        // colour on every look-and-feel / colour change and then calls this
+        if (NoteValue::isNoteValueBox (box))
+            label.setColour (Label::textColourId, Colours::transparentBlack);
+    }
+
+    // Popup rows for note values: glyph + fraction, the current one framed.
+    void drawPopupMenuItem (Graphics& g, const Rectangle<int>& area,
+                            bool isSeparator, bool isActive, bool isHighlighted, bool isTicked,
+                            bool hasSubMenu, const String& text, const String& shortcutKeyText,
+                            const Drawable* icon, const Colour* textColour) override
+    {
+        auto p = NoteValue::parse (text);
+        if (isSeparator || ! p.valid())
+        {
+            LookAndFeel_V4::drawPopupMenuItem (g, area, isSeparator, isActive, isHighlighted, isTicked,
+                                               hasSubMenu, text, shortcutKeyText, icon, textColour);
+            return;
+        }
+
+        auto r = area.toFloat().reduced (2.0f, 1.0f);
+        auto c = textColour != nullptr ? *textColour : findColour (PopupMenu::textColourId);
+        if (isHighlighted && isActive)
+        {
+            g.setColour (findColour (PopupMenu::highlightedBackgroundColourId));
+            g.fillRoundedRectangle (r, Theme::radSm);
+            c = findColour (PopupMenu::highlightedTextColourId);
+        }
+        else if (isTicked)
+        {
+            c = Theme::accentBright;
+        }
+        if (isTicked)
+        {
+            g.setColour (Theme::accentBright);
+            g.drawRoundedRectangle (r.reduced (0.5f), Theme::radSm, 1.2f);
+        }
+
+        NoteValue::drawValue (g, r.reduced (10.0f, 0.0f), p,
+                              isActive ? c : c.withAlpha (0.4f),
+                              jmin (15.0f, r.getHeight() * 0.72f), 12.0f, false);
+    }
+
+    void getIdealPopupMenuItemSize (const String& text, bool isSeparator, int standardMenuItemHeight,
+                                    int& idealWidth, int& idealHeight) override
+    {
+        if (! isSeparator && NoteValue::parse (text).valid())
+        {
+            idealWidth  = 78;
+            idealHeight = standardMenuItemHeight > 0 ? standardMenuItemHeight : 22;
+            return;
+        }
+        LookAndFeel_V4::getIdealPopupMenuItemSize (text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight);
     }
 
 private:
@@ -189,6 +375,44 @@ public:
         int next = juce::jlimit (0, getNumItems() - 1, cur + dir);
         if (next != cur)
             setSelectedItemIndex (next, juce::sendNotificationSync);
+    }
+
+    // Note-value boxes open as a grid instead of a 24-row list: one column per
+    // kind (dotted / straight / triplet), one row per length. Items keep their
+    // ids, so the selection (and any parameter attachment) is unaffected.
+    void showPopup() override
+    {
+        if (! NoteValue::isNoteValueBox (*this))
+        {
+            juce::ComboBox::showPopup();
+            return;
+        }
+
+        static const char* headers[] = { "Dotted", "Straight", "Triplet" };
+        const int selected = getSelectedId();
+        juce::PopupMenu m;
+        for (int col = 0; col < 3; col++)
+        {
+            if (col > 0) m.addColumnBreak();
+            m.addSectionHeader (headers[col]);
+            for (int i = 0; i < getNumItems(); i++)
+            {
+                auto p = NoteValue::parse (getItemText (i));
+                const int kind = p.dotted ? 0 : p.triplet ? 2 : 1;
+                if (kind == col)
+                    m.addItem (getItemId (i), getItemText (i), true, getItemId (i) == selected);
+            }
+        }
+
+        m.setLookAndFeel (&getLookAndFeel());
+        m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withStandardItemHeight (22),
+                         [safe = juce::Component::SafePointer<WheelComboBox> (this)] (int result)
+                         {
+                             if (safe == nullptr) return;
+                             safe->hidePopup();   // clears ComboBox's "menu open" flag
+                             if (result != 0)
+                                 safe->setSelectedId (result);
+                         });
     }
 private:
     static constexpr juce::uint32 stepIntervalMs = 50;    // tunable feel

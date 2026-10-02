@@ -50,7 +50,12 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     gridDurationCombo.getLookAndFeel().setColour (ComboBox::textColourId, Colours::lightgrey);
     gridDurationCombo.getLookAndFeel().setColour (PopupMenu::backgroundColourId, Colours::black);
     gridDurationCombo.getLookAndFeel().setColour (ComboBox::backgroundColourId, Colours::black);
-    
+    // popup styling shared by the combos and the pads' condition menu
+    myLookAndFeel.setColour (PopupMenu::textColourId, Theme::textPrimary);
+    myLookAndFeel.setColour (PopupMenu::headerTextColourId, Theme::accentBright);
+    myLookAndFeel.setColour (PopupMenu::highlightedBackgroundColourId, Theme::accent);
+    myLookAndFeel.setColour (PopupMenu::highlightedTextColourId, Theme::screen);
+
     subGrids =  std::make_unique<SubGrids>(*this,audioProcessor,myLine,SELECTEDGRID);
     subGrids2 =  std::make_unique<SubGrids>(*this,audioProcessor,myLine,FOLLOWGRID);
     addAndMakeVisible(subGrids.get());
@@ -295,8 +300,9 @@ void Grids::resized()
     gridShuffleSlider.setBounds( area.removeFromRight(50));
     gridEventSlider.setBounds( area.removeFromRight(50));
     gridVelSlider.setBounds( area.removeFromRight(50));
-    gridDurationCombo.setBounds(area.removeFromRight(56).reduced(2,8)/*.withHeight(area.getHeight()-10)*/);
-    gridSpeedCombo.setBounds(area.removeFromRight(56).reduced(2,8)/*.withHeight(area.getHeight()-)*/);
+    // wide enough for a note glyph + "1/128t"
+    gridDurationCombo.setBounds(area.removeFromRight(66).reduced(2,8)/*.withHeight(area.getHeight()-10)*/);
+    gridSpeedCombo.setBounds(area.removeFromRight(66).reduced(2,8)/*.withHeight(area.getHeight()-)*/);
     gridNumberSlider.setBounds( area.removeFromRight(50)/*.withHeight(area.getHeight()+5)*/);
     
     
@@ -457,11 +463,21 @@ void MultiStateButton::mouseDown (const MouseEvent& e)
 {
     shiftPressed = false;
 
+    // Real right button only: on macOS ctrl+left-click also counts as a popup
+    // click (isPopupMenu), but ctrl+click is already "paint an Event cell".
+    if (e.mods.isRightButtonDown())
+    {
+        showCondMenu();
+        return;
+    }
+
     if (juce::ModifierKeys::currentModifiers.isShiftDown())
     {
-        shiftPressed = true;
+        shiftPressed = true;                // shift+drag = step velocity
         y = e.getPosition().getY();
-        Button::mouseDown (e);              // shift = velocity nudge (unchanged)
+        if (auto* p = stepVelParam())
+            p->beginChangeGesture();
+        showVelPopup();
         return;
     }
 
@@ -486,11 +502,10 @@ void MultiStateButton::mouseDrag (const MouseEvent& e)
         auto p = e.getPosition().getY();
         float z = y - p;
         y = p;
-        juce::String tmp_s;
-        tmp_s << valueTreeNames[VELGRIDBUTTON] << myLine << myStep;
-        float value = audioProcesor.getVelButton (myLine, myStep) + z / 127.0f;
-        value = jlimit (0.0f, 1.0f, value);
-        audioProcesor.valueTreeState.getParameter (tmp_s)->setValueNotifyingHost (value);
+        // read the step's own value: getVelButton() reports 1.0 in "In Vel" mode
+        if (auto* param = stepVelParam())
+            param->setValueNotifyingHost (jlimit (0.0f, 1.0f, param->getValue() + z / 127.0f));
+        updateVelPopup();
         return;
     }
 
@@ -501,10 +516,111 @@ void MultiStateButton::mouseDrag (const MouseEvent& e)
 
 void MultiStateButton::mouseUp (const MouseEvent& e)
 {
+    if (shiftPressed)
+    {
+        if (auto* p = stepVelParam())
+            p->endChangeGesture();
+        hideVelPopup();
+        shiftPressed = false;
+    }
+
     // The origin pad was already painted on mouseDown; suppress the Button click
     // so the attachment doesn't double-toggle it.
     if (ownerGrid != nullptr)
         ownerGrid->endPaint();
+}
+
+juce::RangedAudioParameter* MultiStateButton::stepVelParam() const
+{
+    juce::String id;
+    id << valueTreeNames[VELGRIDBUTTON] << myLine << myStep;
+    return audioProcesor.valueTreeState.getParameter (id);
+}
+
+void MultiStateButton::showVelPopup()
+{
+    // the lane's parent is the editor content: room to float above the row
+    auto* host = ownerGrid != nullptr ? ownerGrid->getParentComponent() : nullptr;
+    if (host == nullptr) return;
+
+    velPopup = std::make_unique<VelocityPopup> (colourarray[myLine]);
+    host->addAndMakeVisible (*velPopup);
+    velPopup->placeFor (*this, *host);
+    updateVelPopup();
+    repaint();
+}
+
+void MultiStateButton::updateVelPopup()
+{
+    if (velPopup == nullptr) return;
+    auto* p = stepVelParam();
+    const int value = p != nullptr ? juce::roundToInt (p->convertFrom0to1 (p->getValue())) : 0;
+    // "In Vel" on: the engine plays the incoming MIDI velocity, not this one
+    const bool ignored = *audioProcesor.valueTreeState.getRawParameterValue (valueTreeNames[GLOABLINORFIXVEL]) != 0;
+    velPopup->setValue (value, ignored);
+}
+
+void MultiStateButton::hideVelPopup()
+{
+    velPopup.reset();   // ~Component removes it from the editor content
+    repaint();
+}
+
+void MultiStateButton::showCondMenu()
+{
+    enum { clearLaneId = 1000 };   // condition items use id = condition + 1
+
+    const int current = audioProcesor.getStepCond (myLine, myStep);
+    auto item = [current] (juce::PopupMenu& m, int cond, const juce::String& text)
+    {
+        m.addItem (cond + 1, text, true, cond == current);
+    };
+
+    juce::PopupMenu m;
+    m.addSectionHeader ("Lane " + juce::String (myLine + 1) + "  -  step " + juce::String (myStep + 1) + " condition");
+    item (m, CondNone, "Always");
+    m.addSeparator();
+    item (m, Cond1of2, "1:2   1st of every 2 loops");
+    item (m, Cond2of2, "2:2   2nd of every 2 loops");
+    item (m, Cond1of3, "1:3   1st of every 3 loops");
+    item (m, Cond2of3, "2:3   2nd of every 3 loops");
+    item (m, Cond3of3, "3:3   3rd of every 3 loops");
+    item (m, Cond1of4, "1:4   1st of every 4 loops");
+    item (m, Cond2of4, "2:4   2nd of every 4 loops");
+    item (m, Cond3of4, "3:4   3rd of every 4 loops");
+    item (m, Cond4of4, "4:4   4th of every 4 loops");
+    m.addSeparator();
+    item (m, CondFirst,    "1ST   first loop after play only");
+    item (m, CondNotFirst, "!1ST  every loop but the first");
+    m.addSeparator();
+    item (m, CondPre,    "PRE   if this lane's previous condition passed");
+    item (m, CondNotPre, "!PRE  if it failed");
+    item (m, CondNei,    "NEI   if lane " + juce::String ((myLine + numOfLine - 1) % numOfLine + 1) + "'s last condition passed");
+    item (m, CondNotNei, "!NEI  if it failed");
+    m.addSeparator();
+    m.addItem (clearLaneId, "Clear all conditions in this lane");
+
+    if (ownerGrid != nullptr)
+        m.setLookAndFeel (&ownerGrid->getMenuLookAndFeel());
+
+    juce::Component::SafePointer<MultiStateButton> safe (this);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                     [safe] (int result)
+                     {
+                         if (safe == nullptr || result == 0) return;
+                         auto& p = safe->audioProcesor;
+                         if (result == clearLaneId)
+                         {
+                             for (int s = 0; s < numOfStep; s++)   // notify the host once, on the last
+                                 p.setStepCond (safe->myLine, s, CondNone, s == numOfStep - 1);
+                         }
+                         else
+                         {
+                             p.setStepCond (safe->myLine, safe->myStep, result - 1, true);
+                         }
+                         if (auto* lane = safe->getParentComponent())
+                             lane->repaint();
+                     });
 }
 
 // Walk the sibling lanes (all the Grids that share our parent editor).

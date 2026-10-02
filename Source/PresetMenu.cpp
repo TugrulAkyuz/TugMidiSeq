@@ -57,8 +57,10 @@ void TugMidiSeqAudioProcessor::resetAllParam()
         tmp_s.clear();
         tmp_s << valueTreeNames[GRIDMIDIROUTE] << j;
         valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
-        
+
     }
+    clearStepConds();
+    updateHostDisplay (ChangeDetails{}.withNonParameterStateChanged (true));
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOBALRESTBAR];
     valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
@@ -107,6 +109,14 @@ var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
             tmp_s.clear();
             tmp_s <<valueTreeNames[VELGRIDBUTTON]<< i << j;
             newObj.getDynamicObject()->setProperty(tmp_s, prg.gridVelArr[i][j]);
+
+            // sparse: only steps that actually carry a condition
+            if (prg.stepCond[i][j] != CondNone)
+            {
+                tmp_s.clear();
+                tmp_s << stepCondKey << i << j;
+                newObj.getDynamicObject()->setProperty(tmp_s, prg.stepCond[i][j]);
+            }
         }
 
         tmp_s.clear();
@@ -236,6 +246,11 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
             else
                 v =  90;
             p.gridVelArr[i][j] = v;
+
+            tmp_s.clear();
+            tmp_s << stepCondKey << i << j;
+            if (preset.hasProperty(tmp_s))
+                p.stepCond[i][j] = jlimit(0, NumTrigConds - 1, (int) preset.getProperty(tmp_s, var()));
 
         }
         tmp_s.clear();
@@ -404,7 +419,8 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
             tmp_s <<valueTreeNames[VELGRIDBUTTON]<< i << j;
             
             paramProg.gridVelArr[i][j] = *valueTreeState.getRawParameterValue(tmp_s);
-            
+
+            paramProg.stepCond[i][j] = getStepCond(i, j);
         }
         tmp_s.clear();
         tmp_s <<valueTreeNames[SPEEED]<< i;
