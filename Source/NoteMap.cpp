@@ -36,6 +36,7 @@ NoteMap::NoteMap (TugMidiSeqAudioProcessor& p) : audioProcessor (p)
     comboLookAndFeel.setColour (PopupMenu::textColourId, Theme::textPrimary);
     comboLookAndFeel.setColour (PopupMenu::highlightedBackgroundColourId, Theme::accent);
     comboLookAndFeel.setColour (PopupMenu::highlightedTextColourId, Theme::screen);
+    comboLookAndFeel.setColour (PopupMenu::headerTextColourId, Theme::accentBright);
     keyBox.addItemList (scaleKeyNames, 1);
     scaleBox.addItemList (scaleTypeNames, 1);
     for (auto* box : { &keyBox, &scaleBox })
@@ -47,6 +48,7 @@ NoteMap::NoteMap (TugMidiSeqAudioProcessor& p) : audioProcessor (p)
     keyAttachment   = std::make_unique<AudioProcessorValueTreeState::ComboBoxAttachment> (audioProcessor.valueTreeState, valueTreeNames[SCALEKEY], keyBox);
     scaleAttachment = std::make_unique<AudioProcessorValueTreeState::ComboBoxAttachment> (audioProcessor.valueTreeState, valueTreeNames[SCALETYPE], scaleBox);
 
+    midiExport.menuLookAndFeel = &comboLookAndFeel;
     addAndMakeVisible (midiExport);
 
     for (auto* b : { &undoButton, &redoButton })
@@ -225,6 +227,8 @@ void MidiExportButton::showMenu()
         m.addItem (barsBase + bars, juce::String (bars) + (bars == 1 ? " bar" : " bars"), true, bars == current);
     m.addSeparator();
     m.addItem (saveId, "Save as .mid file...");
+    if (menuLookAndFeel != nullptr)
+        m.setLookAndFeel (menuLookAndFeel);
 
     juce::Component::SafePointer<MidiExportButton> safe (this);
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this), [safe] (int r)

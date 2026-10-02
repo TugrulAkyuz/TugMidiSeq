@@ -501,7 +501,7 @@ void Grids::resized()
     
     for ( int i = 0; i < n;i++)
     {
-        auto r = audioProcessor.getSfuffleRatios(myLine,i);
+        auto r = audioProcessor.getStepDisplayRatio (myLine, i);
          w_tmp = w*r;
         sumButton =  sumButton + w_tmp ;
         
@@ -577,7 +577,7 @@ void  SubGrids::paint (juce::Graphics& g)
     {
         const int s_x = ownerGrid.getParam (GETCOORDOFBUTTON, i);
         if (s_x == -1) continue;   // off pad
-        auto sr = audioProcessor.getSfuffleRatios (myLine, i);
+        auto sr = audioProcessor.getStepDisplayRatio (myLine, i);
         const bool lit = i == playing && audioProcessor.midiState[myLine];
         const float alpha = lit ? 1.0f : (audioProcessor.getGridButtonState (myLine, i) == 2 ? eventProb : 1.0f) * 0.8f;
         g.setColour (colourarray[myLine].withAlpha (alpha));

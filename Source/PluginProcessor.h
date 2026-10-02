@@ -617,6 +617,18 @@ public:
         
     }
     
+    // Shuffle ratio of the time slot a grid step is played in, for drawing.
+    // Reverse (and Ping-Pong's way back) plays step k in slot n-1-k, so the
+    // pads, note strips and Satellite arcs mirror the slot lengths and the
+    // playhead sweeps at an even speed. Random has no fixed slot: own ratio.
+    float getStepDisplayRatio (int line, int step)
+    {
+        const int n = jlimit (1, numOfStep, (int) *numOfGrid[line]);
+        const int slot = isPlayheadBackward (line) ? n - 1 - step : step;
+        const float r = getSfuffleRatios (line, jlimit (0, numOfStep - 1, slot));
+        return std::isfinite (r) ? jlimit (0.0f, 2.0f, r) : 0.0f;
+    }
+
     float getSfuffleRatios(int line, int step)
     {
         // if (myIsPlaying == false) return -1;

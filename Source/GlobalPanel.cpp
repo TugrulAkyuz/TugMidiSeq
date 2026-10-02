@@ -102,6 +102,8 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     
     globalNameLabel.setText("GLOBAL CONTROLS", juce::dontSendNotification);
     globalNameLabel.setColour(juce::Label::ColourIds::textColourId, myTextLabelColour);
+    globalNameLabel.setFont (Theme::labelFont (10.5f));
+    globalNameLabel.setMinimumHorizontalScale (1.0f);
     
     addAndMakeVisible(globalNameLabel);
     loopBarlenghtSliderLabel.setFont (juce::Font (12, juce::Font::italic));
@@ -465,7 +467,7 @@ void GlobalPanel::resized()
     {
         randomButton.getUnchecked(i)->setBounds(d.removeFromRight(48).reduced(3, 2));
     }
-    globalNameLabel.setBounds(top_area.removeFromLeft(100).reduced(3, 0));
+    globalNameLabel.setBounds(top_area.removeFromLeft(140).reduced(3, 0));   // room for the whole caption
     auto r = randomButton.getUnchecked(2);
 
     midiPort.setBounds(dd.reduced(2, 2));

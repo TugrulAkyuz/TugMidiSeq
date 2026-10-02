@@ -73,7 +73,7 @@ void Satellite::paint (juce::Graphics& g)
           // A step's real ratio is 1 +/- shuffle, so anything outside [0, 2] is a
           // value the audio thread hasn't recomputed yet (e.g. just after #Grid
           // was automated up).
-          auto sr = audioProcessor.getSfuffleRatios(i,  j);
+          auto sr = audioProcessor.getStepDisplayRatio (i, j);
           if (! std::isfinite (sr)) sr = 0.0f;
           sr = jlimit (0.0f, 2.0f, sr);
           startplacediff =  startplacediff + (sr -1);
@@ -122,7 +122,7 @@ void Satellite::paint (juce::Graphics& g)
         {
             auto ratio = [&] (int k)
             {
-                auto sr = audioProcessor.getSfuffleRatios (i, k);
+                auto sr = audioProcessor.getStepDisplayRatio (i, k);
                 return std::isfinite (sr) ? jlimit (0.0f, 2.0f, sr) : 0.0f;
             };
             float start = 0.0f;

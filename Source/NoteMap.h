@@ -30,6 +30,8 @@ public:
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
 
+    juce::LookAndFeel* menuLookAndFeel = nullptr;   // the strip's popup style
+
 private:
     void showMenu();
     TugMidiSeqAudioProcessor& proc;

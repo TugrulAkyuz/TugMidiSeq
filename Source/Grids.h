@@ -130,33 +130,62 @@ public:
         g.strokePath (tip, juce::PathStrokeType (1.0f));
 
         Theme::drawRaisedPanel (g, body, Theme::radMd);
-        auto inner = body.reduced (6.0f, 4.0f);
+        auto inner = body.reduced (4.0f, 3.0f);
 
-        // caption + number on one row
-        auto top = inner.removeFromTop (12.0f);
-        Theme::drawCaption (g, caption, top.toNearestInt(),
-                            juce::Justification::centredLeft, isDim ? Theme::textDim : Theme::textSecondary, 9.0f);
-        g.setColour (isDim ? Theme::textDim : Theme::textValue);
-        g.setFont (Theme::valueFont (12.0f));
-        g.drawText (valueText, top, juce::Justification::centredRight, false);
+        Theme::drawCaption (g, caption, inner.removeFromTop (11.0f).toNearestInt(),
+                            juce::Justification::centred, isDim ? Theme::textDim : Theme::textSecondary, 8.5f);
 
-        // meter in the lane colour
-        inner.removeFromTop (3.0f);
-        auto meter = inner.removeFromTop (5.0f);
-        Theme::drawRecessedWell (g, meter, 2.0f);
-        g.setColour (isDim ? Theme::textDim : lane);
-        const float x0 = meter.getX() + meter.getWidth() * jmin (meterFrom, meterTo);
-        const float x1 = meter.getX() + meter.getWidth() * jmax (meterFrom, meterTo);
-        g.fillRoundedRectangle (meter.withX (x0).withWidth (jmax (2.0f, x1 - x0)), 2.0f);
-        if (meterFrom == 0.5f)   // centre-zero meter (pitch): mark the zero
+        // A knob drawn like the panel's own (MyLookAndFeel::drawRotarySlider,
+        // CustomRoratySlider's 270-degree sweep), value in the cap. The arc runs
+        // from meterFrom to meterTo, so a centre-zero value (pitch) grows from
+        // the top.
+        const float start = MathConstants<float>::pi * 1.5f, end = MathConstants<float>::pi * 3.0f;
+        auto knob    = inner.withSizeKeepingCentre (jmin (inner.getWidth(), inner.getHeight()),
+                                                    jmin (inner.getWidth(), inner.getHeight()));
+        auto centre  = knob.getCentre();
+        auto radius  = knob.getWidth() * 0.5f;
+        auto lineW   = jmax (2.5f, radius * 0.16f);
+        auto arcR    = radius - lineW * 0.5f;
+        auto angleAt = [&] (float f) { return start + jlimit (0.0f, 1.0f, f) * (end - start); };
+        const auto stroke = PathStrokeType (lineW, PathStrokeType::curved, PathStrokeType::rounded);
+
+        Path track;
+        track.addCentredArc (centre.x, centre.y, arcR, arcR, 0.0f, start, end, true);
+        g.setColour (Theme::hairline);
+        g.strokePath (track, stroke);
+
+        if (std::abs (meterTo - meterFrom) > 0.001f)
         {
-            g.setColour (Theme::textSecondary);
-            g.fillRect (meter.getCentreX() - 0.5f, meter.getY() - 1.5f, 1.0f, meter.getHeight() + 3.0f);
+            Path value;
+            value.addCentredArc (centre.x, centre.y, arcR, arcR, 0.0f,
+                                 angleAt (jmin (meterFrom, meterTo)), angleAt (jmax (meterFrom, meterTo)), true);
+            g.setColour (isDim ? Theme::textDim : lane);
+            g.strokePath (value, stroke);
         }
+
+        auto capR = radius - lineW - 2.5f;
+        Rectangle<float> cap (capR * 2.0f, capR * 2.0f);
+        cap.setCentre (centre);
+        g.setColour (Theme::surfaceAlt);
+        g.fillEllipse (cap);
+        g.setColour (Theme::highlight);
+        g.drawEllipse (cap.reduced (0.5f), 1.0f);
+        g.setColour (Theme::shadow);
+        g.drawEllipse (cap.reduced (0.75f), 0.75f);
+
+        const float a = angleAt (meterTo) - MathConstants<float>::halfPi;
+        g.setColour (isDim ? Theme::textDim : Theme::textPrimary);
+        g.drawLine (centre.x + capR * 0.62f * std::cos (a), centre.y + capR * 0.62f * std::sin (a),
+                    centre.x + (capR - 1.5f) * std::cos (a), centre.y + (capR - 1.5f) * std::sin (a),
+                    jmax (1.6f, lineW * 0.7f));
+
+        g.setFont (Theme::valueFont (11.0f));
+        g.setColour (isDim ? Theme::textDim : Theme::textValue);
+        g.drawText (valueText, cap, juce::Justification::centred, false);
     }
 
 private:
-    static constexpr int width = 88, height = 36, gap = 1;
+    static constexpr int width = 72, height = 72, gap = 1;
     static constexpr float arrow = 5.0f;
     juce::Colour lane;
     juce::String caption, valueText;
@@ -659,6 +688,7 @@ private:
     std::unique_ptr  <SubGrids> subGrids2;
     
     bool dirt = false;
+    bool laidOutBackward = false;
     int step;
     int myLine;
     int myMidiNote;
@@ -666,9 +696,12 @@ private:
     {
         repaint();
         int st = audioProcessor.getSteps(myLine);
-        if(step != st)
+        // pad widths mirror while the lane travels backward (getStepDisplayRatio)
+        const bool backward = audioProcessor.isPlayheadBackward (myLine);
+        if(step != st || backward != laidOutBackward)
         {
             step = st;
+            laidOutBackward = backward;
             resized();
         }
         int midi = audioProcessor.getMidi(myLine);
