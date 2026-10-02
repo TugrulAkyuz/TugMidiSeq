@@ -353,7 +353,6 @@ public:
     int  getPlayMode (int line) const        { return (int) *gridsPlayModeAtomic[line]; }
     int  getSpread (int line) const          { return (int) *gridsSpreadAtomic[line]; }
     void setLanePlayMode (int line, int mode);   // one undo step
-    void setLaneSpread (int line, int ms);       // one undo step
     void setLaneMutate (int line, int percent);   // one undo step
     void requestMutationReset (int line)     { mutateResetRequest[line].store (true); }
     bool isStepMutated (int line, int step) const

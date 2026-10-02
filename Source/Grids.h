@@ -683,6 +683,8 @@ private:
     
     juce::TextButton midiInNote;
     juce::Slider octaveSlider;
+    CustomRoratySlider spreadKnob;   // strum spread; live only in strum modes
+    std::unique_ptr<AudioProcessorValueTreeState::SliderAttachment> spreadAttachment;
     juce::Label myLineLabel;
     std::unique_ptr  <SubGrids> subGrids;
     std::unique_ptr  <SubGrids> subGrids2;
@@ -695,6 +697,8 @@ private:
     void timerCallback() override
     {
         repaint();
+        spreadKnob.setEnabled (audioProcessor.getPlayMode (myLine) >= PlayStrumUp);
+
         int st = audioProcessor.getSteps(myLine);
         // pad widths mirror while the lane travels backward (getStepDisplayRatio)
         const bool backward = audioProcessor.isPlayheadBackward (myLine);

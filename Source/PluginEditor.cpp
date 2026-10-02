@@ -71,9 +71,14 @@ void EditorContent::resized()
     allarea.reduce (3, 3);
     auto label_area = allarea.removeFromTop (20);
     label_area.removeFromLeft (26);
-    topInLabel[0]->setBounds (label_area.removeFromLeft (50));
-    topInLabel[1]->setBounds (label_area.removeFromLeft (60));
-    topInLabel[2]->setBounds (label_area.removeFromLeft (445));
+    // the three narrow columns left of the grid: no label insets, or the
+    // captions get cut to "O..." / "STR..."
+    for (int i : { 0, 1, 12 })
+        topInLabel[i]->setBorderSize ({});
+    topInLabel[0]->setBounds (label_area.removeFromLeft (48));
+    topInLabel[1]->setBounds (label_area.removeFromLeft (26));    // octave slider
+    topInLabel[12]->setBounds (label_area.removeFromLeft (44));   // strum spread knob
+    topInLabel[2]->setBounds (label_area.removeFromLeft (437));
     topInLabel[3]->setBounds (label_area.removeFromLeft (52));
     topInLabel[4]->setBounds (label_area.removeFromLeft (64));   // speed / duration combos are 66 wide
     topInLabel[5]->setBounds (label_area.removeFromLeft (65));

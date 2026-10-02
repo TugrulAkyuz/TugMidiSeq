@@ -38,7 +38,10 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     octaveSlider.setColour(Slider::textBoxOutlineColourId , juce::Colours::black.withAlpha(0.0f));
     //octaveSlider.gette
     octaveSlider.setLookAndFeel(&myLookAndFeel);
-    octaveSlider.setTextBoxStyle(juce::Slider::TextBoxRight, true, 40, 25);
+    // no number box: the value reads from the ticks drawn beside the slider,
+    // and a bubble shows it while dragging (the room went to the spread knob)
+    octaveSlider.setTextBoxStyle(juce::Slider::NoTextBox, true, 0, 0);
+    octaveSlider.setPopupDisplayEnabled (true, true, nullptr);
     octaveSlider.setColour(Slider::textBoxTextColourId,  Theme::textValue);
     addAndMakeVisible(midiInNote);
     midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, Theme::surfaceAlt);
@@ -152,6 +155,13 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     tmp_s.clear();
     tmp_s << valueTreeNames[OCTAVE]<<line;
     octaveAttachment = std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, octaveSlider);
+
+    addAndMakeVisible (spreadKnob);
+    spreadKnob.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    spreadKnob.setColour (juce::Slider::rotarySliderFillColourId, colourarray[myLine]);
+    spreadAttachment = std::make_unique<AudioProcessorValueTreeState::SliderAttachment> (
+        audioProcessor.valueTreeState, valueTreeNames[SPREAD] + juce::String (line), spreadKnob);
+    spreadKnob.setEnabled (audioProcessor.getPlayMode (myLine) >= PlayStrumUp);   // the timer keeps it in step
     
     tmp_s.clear();
     tmp_s << valueTreeNames[EVENT] << line;
@@ -272,7 +282,16 @@ void Grids::paint (juce::Graphics& g)
         g.drawLine (0, 0.5f, bounds.getRight(), 0.5f, 1.0f);
 
     g.setColour (Theme::hairline.withAlpha (0.45f));
-    g.drawLine (octaveSlider.getRight() + 2.0f, 5.0f, octaveSlider.getRight() + 2.0f, getHeight() - 5.0f, 1.0f);
+    g.drawLine (spreadKnob.getRight() + 2.0f, 5.0f, spreadKnob.getRight() + 2.0f, getHeight() - 5.0f, 1.0f);
+
+    // octave ticks (-2..+2) beside the slider, the 0 one longer
+    g.setColour (Theme::textDim);
+    for (int v = -2; v <= 2; v++)
+    {
+        const float y = (float) octaveSlider.getY() + (float) octaveSlider.getPositionOfValue ((double) v);
+        const float len = v == 0 ? 4.0f : 2.5f;
+        g.drawLine ((float) octaveSlider.getX(), y, (float) octaveSlider.getX() + len, y, 1.0f);
+    }
     g.drawLine (gridNumberSlider.getX() - 5.0f, 5.0f, gridNumberSlider.getX() - 5.0f, getHeight() - 5.0f, 1.0f);
 
     // MIDI-activity LED
@@ -342,7 +361,7 @@ void Grids::mouseDown (const juce::MouseEvent& e)
 void Grids::showLaneMenu()
 {
     enum { dirBase = 10, euclidId = 20, copyId = 30, pasteId, shiftLeftId = 40, shiftRightId, clearId,
-           mutateBase = 100, mutateResetId = 300, playBase = 400, spreadBase = 500 };
+           mutateBase = 100, mutateResetId = 300, playBase = 400 };
     static const int mutateAmounts[] = { 0, 5, 10, 25, 50, 100 };
 
     const int dir = audioProcessor.getDirection (myLine);
@@ -354,13 +373,6 @@ void Grids::showLaneMenu()
                                  : p == PlayChord ? juce::String ("Chord  (all held notes at once)")
                                                   : playModeNames[p],
                    true, p == play);
-    {
-        juce::PopupMenu spreadMenu;
-        const int spread = audioProcessor.getSpread (myLine);
-        for (int ms : { 5, 10, 20, 35, 50, 80 })
-            spreadMenu.addItem (spreadBase + ms, juce::String (ms) + " ms", true, ms == spread);
-        m.addSubMenu ("Strum spread  (" + juce::String (spread) + " ms)", spreadMenu, play >= PlayStrumUp);
-    }
     m.addSectionHeader ("Direction");
     for (int d = 0; d < directionNames.size(); d++)
         m.addItem (dirBase + d, directionNames[d], true, d == dir);
@@ -397,7 +409,6 @@ void Grids::showLaneMenu()
                          else if (r >= mutateBase && r <= mutateBase + 100)      p.setLaneMutate (line, r - mutateBase);
                          else if (r == mutateResetId) p.requestMutationReset (line);
                          else if (r >= playBase && r < playBase + playModeNames.size()) p.setLanePlayMode (line, r - playBase);
-                         else if (r > spreadBase && r <= spreadBase + 100)            p.setLaneSpread (line, r - spreadBase);
                          else if (r == copyId)       p.copyLane (line);
                          else if (r == pasteId)      p.pasteLane (line);
                          else if (r == shiftLeftId)  p.shiftLane (line, -1);
@@ -507,7 +518,8 @@ void Grids::resized()
     directionArea = laneTab.removeFromBottom (13).withTrimmedRight (2);
     myLineLabel.setBounds (laneTab.withTrimmedTop (4));
     midiInNote.setBounds(area.removeFromLeft(40).reduced(0,10));
-    octaveSlider.setBounds(area.removeFromLeft(50));
+    octaveSlider.setBounds(area.removeFromLeft(16));
+    spreadKnob.setBounds(area.removeFromLeft(34));
     
     subGrids->setBounds(area);
     area.removeFromTop(7);
