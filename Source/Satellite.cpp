@@ -69,11 +69,21 @@ void Satellite::paint (juce::Graphics& g)
           Path p;
           float delay = 0 ;//2.0*juce::double_Pi*audioProcessor.getDelayRatio(i);
           float angle = delay + 2.0*(j + startplacediff )*juce::double_Pi/(*audioProcessor.numOfGrid[i]);
-          
+
+          // A step's real ratio is 1 +/- shuffle, so anything outside [0, 2] is a
+          // value the audio thread hasn't recomputed yet (e.g. just after #Grid
+          // was automated up).
           auto sr = audioProcessor.getSfuffleRatios(i,  j);
           if (! std::isfinite (sr)) sr = 0.0f;
+          sr = jlimit (0.0f, 2.0f, sr);
           startplacediff =  startplacediff + (sr -1);
           if(*audioProcessor.gridsArr[i][j] == 0) continue;
+
+          // addCentredArc steps from the start angle in pi/100 increments; at a
+          // large float magnitude the increment is lost to rounding and the loop
+          // never ends, growing the path until memory runs out. Keep it on [0, 2pi).
+          if (! std::isfinite (angle)) continue;
+          angle = std::fmod (angle, MathConstants<float>::twoPi);
 
           // Path::addCentredArc emits a line segment every pi/100 radians, so the
           // sweep must stay bounded. A long note duration over a very short step

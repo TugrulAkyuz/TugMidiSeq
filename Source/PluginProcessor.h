@@ -508,8 +508,11 @@ private:
     int stepResetInterval[5] = {};
     int stepmidStopSampleInterval[5] = {-1,-1,-1,-1,-1};
     
-    int stepmidStopSampleIntervalForShuffle[5][numOfStep];
-    int stepResetIntervalForShuffle[5][numOfStep];
+    // Zero-initialised: only the first numOfGrid entries of a lane are ever
+    // written, but the GUI reads up to the *current* #Grid, which can be ahead
+    // of the audio thread right after an automation change.
+    int stepmidStopSampleIntervalForShuffle[5][numOfStep] = {};
+    int stepResetIntervalForShuffle[5][numOfStep] = {};
    // int forGuiStepResetIntervalForShuffle[5][numOfStep];
 
     int stepmidStopSampleCounter[5] = {-1,-1,-1,-1,-1};
