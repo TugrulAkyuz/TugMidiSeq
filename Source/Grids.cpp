@@ -23,7 +23,9 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     myLineLabel.setText(std::to_string(myLine + 1), juce::NotificationType::dontSendNotification);
     myLineLabel.setColour(juce::Label::ColourIds::textColourId, colourarray[myLine]);
     myLineLabel.setJustificationType(Justification::right);
-    
+    myLineLabel.setMouseCursor (juce::MouseCursor::PointingHandCursor);
+    myLineLabel.addMouseListener (this, false);   // -> Grids::mouseDown: lane menu
+
     addAndMakeVisible(myLineLabel);
     addAndMakeVisible(octaveSlider);
     addAndMakeVisible(stepArrow);
@@ -243,6 +245,10 @@ void Grids::paint (juce::Graphics& g)
     g.setColour (colourarray[myLine].withAlpha (0.85f));
     g.fillRect (0.0f, 2.0f, 3.0f, bounds.getHeight() - 4.0f);
 
+    // play direction, under the lane number
+    drawDirectionGlyph (g, directionArea.toFloat().withSizeKeepingCentre (11.0f, 9.0f)
+                                                 .withX ((float) directionArea.getRight() - 12.0f));
+
     // hairline separators (row bottom, top for the first lane, control columns)
     g.setColour (Theme::hairline.withAlpha (0.7f));
     g.drawLine (0, bounds.getBottom() - 0.5f, bounds.getRight(), bounds.getBottom() - 0.5f, 1.0f);
@@ -268,6 +274,148 @@ void Grids::paint (juce::Graphics& g)
         g.fillEllipse (lx, 2.0f, 5.0f, 5.0f);
     }
 
+}
+
+// Forward is the default, so it's drawn faint; any other direction stands out.
+void Grids::drawDirectionGlyph (juce::Graphics& g, juce::Rectangle<float> r) const
+{
+    const int dir = audioProcessor.getDirection (myLine);
+    g.setColour (colourarray[myLine].withAlpha (dir == DirForward ? 0.35f : 0.95f));
+
+    const float cy = r.getCentreY(), head = 3.0f;
+    auto arrowHead = [&] (float tipX, float dirSign)
+    {
+        juce::Path p;
+        p.addTriangle (tipX, cy, tipX - dirSign * head, cy - head, tipX - dirSign * head, cy + head);
+        g.fillPath (p);
+    };
+
+    switch (dir)
+    {
+        case DirForward:
+            g.drawLine (r.getX(), cy, r.getRight() - head, cy, 1.4f);
+            arrowHead (r.getRight(), 1.0f);
+            break;
+        case DirReverse:
+            g.drawLine (r.getX() + head, cy, r.getRight(), cy, 1.4f);
+            arrowHead (r.getX(), -1.0f);
+            break;
+        case DirPingPong:
+            g.drawLine (r.getX() + head, cy, r.getRight() - head, cy, 1.4f);
+            arrowHead (r.getRight(), 1.0f);
+            arrowHead (r.getX(), -1.0f);
+            break;
+        default:   // random: a die
+        {
+            auto die = r.withSizeKeepingCentre (8.0f, 8.0f);
+            g.drawRoundedRectangle (die, 1.5f, 1.1f);
+            g.fillEllipse (die.getX() + 1.6f, die.getY() + 1.6f, 1.8f, 1.8f);
+            g.fillEllipse (die.getRight() - 3.4f, die.getBottom() - 3.4f, 1.8f, 1.8f);
+            break;
+        }
+    }
+}
+
+void Grids::mouseDown (const juce::MouseEvent& e)
+{
+    if (e.eventComponent == &myLineLabel
+        || (e.eventComponent == this && directionArea.contains (e.getPosition())))
+        showLaneMenu();
+}
+
+void Grids::showLaneMenu()
+{
+    enum { dirBase = 10, euclidId = 20, copyId = 30, pasteId, shiftLeftId = 40, shiftRightId, clearId };
+
+    const int dir = audioProcessor.getDirection (myLine);
+    juce::PopupMenu m;
+    m.addSectionHeader ("Lane " + juce::String (myLine + 1) + "  -  direction");
+    for (int d = 0; d < directionNames.size(); d++)
+        m.addItem (dirBase + d, directionNames[d], true, d == dir);
+    m.addSeparator();
+    m.addItem (euclidId, "Euclidean fill...");
+    m.addSeparator();
+    m.addItem (copyId,  "Copy lane");
+    m.addItem (pasteId, "Paste lane", audioProcessor.hasLaneClipboard());
+    m.addSeparator();
+    m.addItem (shiftLeftId,  "Shift steps left");
+    m.addItem (shiftRightId, "Shift steps right");
+    m.addItem (clearId,      "Clear lane");
+
+    m.setLookAndFeel (&myLookAndFeel);
+    juce::Component::SafePointer<Grids> safe (this);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&myLineLabel),
+                     [safe] (int r)
+                     {
+                         if (safe == nullptr || r == 0) return;
+                         auto& p = safe->audioProcessor;
+                         const int line = safe->myLine;
+                         if (r >= dirBase && r < dirBase + directionNames.size()) p.setLaneDirection (line, r - dirBase);
+                         else if (r == copyId)       p.copyLane (line);
+                         else if (r == pasteId)      p.pasteLane (line);
+                         else if (r == shiftLeftId)  p.shiftLane (line, -1);
+                         else if (r == shiftRightId) p.shiftLane (line, +1);
+                         else if (r == clearId)      p.clearLane (line);
+                         else if (r == euclidId)
+                             juce::CallOutBox::launchAsynchronously (std::make_unique<EuclidPanel> (p, line),
+                                                                     safe->myLineLabel.getScreenBounds(), nullptr);
+                         safe->repaint();
+                     });
+}
+
+//== Euclidean fill call-out ===================================================
+
+EuclidPanel::EuclidPanel (TugMidiSeqAudioProcessor& p, int l)
+    : proc (p), line (l), length (juce::jlimit (1, numOfStep, (int) *p.numOfGrid[l]))
+{
+    // start from the lane's current number of active steps, unrotated; nothing
+    // is written until a knob moves
+    int active = 0;
+    for (int s = 0; s < length; s++)
+        if (*proc.gridsArr[line][s] != 0) active++;
+
+    for (auto* k : { &hits, &rotate })
+    {
+        k->setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+        k->setColour (juce::Slider::rotarySliderFillColourId, colourarray[line]);
+        addAndMakeVisible (*k);
+    }
+    hits.setRange (0, length, 1);
+    rotate.setRange (0, juce::jmax (1, length - 1), 1);
+    hits.setValue (active, juce::dontSendNotification);
+    rotate.setValue (0, juce::dontSendNotification);
+
+    proc.beginUndoStep();
+    auto apply = [this] { proc.euclidLane (line, (int) hits.getValue(), (int) rotate.getValue()); };
+    hits.onValueChange   = apply;
+    rotate.onValueChange = apply;
+
+    setSize (150, 96);
+}
+
+EuclidPanel::~EuclidPanel()
+{
+    proc.endUndoStep();
+}
+
+void EuclidPanel::paint (juce::Graphics& g)
+{
+    g.fillAll (Theme::section);
+    auto b = getLocalBounds().reduced (8, 4);
+    Theme::drawCaption (g, "Euclidean  -  " + juce::String (length) + " steps", b.removeFromTop (14),
+                        juce::Justification::centred, Theme::textSecondary, 10.0f);
+    auto labels = b.removeFromBottom (12);
+    Theme::drawCaption (g, "Hits",   labels.removeFromLeft (labels.getWidth() / 2), juce::Justification::centred, Theme::textDim, 9.0f);
+    Theme::drawCaption (g, "Rotate", labels, juce::Justification::centred, Theme::textDim, 9.0f);
+}
+
+void EuclidPanel::resized()
+{
+    auto b = getLocalBounds().reduced (8, 4);
+    b.removeFromTop (14);
+    b.removeFromBottom (12);
+    hits.setBounds (b.removeFromLeft (b.getWidth() / 2));
+    rotate.setBounds (b);
 }
 
 void Grids::paintOverChildren (juce::Graphics& g)
@@ -307,7 +455,10 @@ void Grids::resized()
     
     
     //auto tmp =
-    myLineLabel.setBounds(area.removeFromLeft(25));
+    // lane number on top, its play-direction glyph underneath (both open the lane menu)
+    auto laneTab = area.removeFromLeft(25);
+    directionArea = laneTab.removeFromBottom (13).withTrimmedRight (2);
+    myLineLabel.setBounds (laneTab.withTrimmedTop (4));
     midiInNote.setBounds(area.removeFromLeft(40).reduced(0,10));
     octaveSlider.setBounds(area.removeFromLeft(50));
     
@@ -398,57 +549,63 @@ void Grids::resized()
 
 void  SubGrids::paint (juce::Graphics& g)
 {
-    float ratio =   audioProcessor.getGridContinousRatio(myLine);
     auto soloLane = audioProcessor.getSoloState();
     if( soloLane != -1 &&  soloLane != myLine) return;
-     DropShadow ds(Theme::accentBright.withAlpha(0.9f), 3, {0,0});
-    float thickness = 2;
-    Rectangle<int>  area;
-    if(ratio >= 0)
-    {
-        area = Rectangle<int>  (10,getHeight() -7,ratio*(getWidth() -20),2);
-        g.setColour (Theme::accent);
-        g.fillRect (area);
-        ds.drawForRectangle(g, area);
 
-        g.setColour (Theme::accentBright);
-         Line<float> line(10 + ratio*(getWidth() -20),getHeight() -6, 20 + ratio*(getWidth() -20) ,getHeight() -6);
-        g.drawArrow(line, 4, 4, 5);
+    const int numSteps = ownerGrid.getParam (GETNUMOF);
+    const int playing  = audioProcessor.getPlayheadStep (myLine);   // -1 when stopped
 
-    }
+    // note-length strips above the active pads; the one being played lights up
     float len = audioProcessor.getGridSampleLen( myLine);
-    int  s_x = 0;
-    Rectangle<int> area2;
-    bool passed = false;
-  
     auto eventProb = audioProcessor.getEventRandom(myLine);
-    
-    for(int i = ownerGrid.getParam(GETNUMOF) - 1 ; i >= 0; i--)
+    for (int i = numSteps - 1; i >= 0; i--)
     {
-        s_x = ownerGrid.getParam(GETCOORDOFBUTTON,i);
-        auto sr = audioProcessor.getSfuffleRatios(myLine,  i);
-        if(s_x != -1)
-        {
-            float tmpEvent = eventProb;
-            auto bState = audioProcessor.getGridButtonState(myLine,i);
-            if(bState != 2) tmpEvent = 1;
-            g.setColour(colourarray[myLine].withAlpha(tmpEvent*0.8f));
-            area2 = Rectangle<int> (s_x, 4 ,  (int)(0.95*len*sr*getWidth()), 5);
-            g.fillRect(area2);
-            if(area.getRight() < area2.getRight() && area.getRight() > area2.getX()  && audioProcessor.midiState[myLine] == true && passed == false)
-            {
-                g.setColour(colourarray[myLine].withAlpha(1.0f));
-                g.fillRect(area2);
-                passed = true;
-                
-                
-            }
-
-        }
-
+        const int s_x = ownerGrid.getParam (GETCOORDOFBUTTON, i);
+        if (s_x == -1) continue;   // off pad
+        auto sr = audioProcessor.getSfuffleRatios (myLine, i);
+        const bool lit = i == playing && audioProcessor.midiState[myLine];
+        const float alpha = lit ? 1.0f : (audioProcessor.getGridButtonState (myLine, i) == 2 ? eventProb : 1.0f) * 0.8f;
+        g.setColour (colourarray[myLine].withAlpha (alpha));
+        g.fillRect (Rectangle<int> (s_x, 4, (int) (0.95 * len * sr * getWidth()), 5));
     }
-    
-    
+
+    if (playing >= 0 && playing < numSteps)
+        drawPlayhead (g, playing, numSteps);
+}
+
+void SubGrids::drawPlayhead (juce::Graphics& g, int step, int numSteps)
+{
+    const auto pad      = ownerGrid.padBounds (step);
+    const bool backward = audioProcessor.isPlayheadBackward (myLine);
+    const float frac    = audioProcessor.getPlayheadFraction (myLine);
+    const float y       = (float) getHeight() - 6.0f;
+    const float sign    = backward ? -1.0f : 1.0f;
+    const float headX   = backward ? pad.getRight() - frac * pad.getWidth()
+                                   : pad.getX()     + frac * pad.getWidth();
+
+    // travelling bar: from where this pass started up to the head
+    float startX = backward ? ownerGrid.padBounds (numSteps - 1).getRight() : ownerGrid.padBounds (0).getX();
+    if (audioProcessor.getDirection (myLine) == DirRandom)
+    {
+        // no pass to show: the steps jump. The last two played pads keep a
+        // fading underline so the jumps can be followed.
+        for (int k = 0; k < 2; k++)
+            if (trail[k] >= 0 && trail[k] < numSteps && trail[k] != step)
+            {
+                auto t = ownerGrid.padBounds (trail[k]);
+                g.setColour (Theme::accent.withAlpha (k == 0 ? 0.22f : 0.45f));
+                g.fillRect (t.getX(), y - 1.0f, t.getWidth(), 2.0f);
+            }
+        startX = pad.getX();
+    }
+
+    auto bar = juce::Rectangle<float> (juce::jmin (startX, headX), y - 1.0f, std::abs (headX - startX), 2.0f);
+    g.setColour (Theme::accent);
+    g.fillRect (bar);
+    DropShadow (Theme::accentBright.withAlpha (0.9f), 3, {}).drawForRectangle (g, bar.toNearestInt());
+
+    g.setColour (Theme::accentBright);
+    g.drawArrow (juce::Line<float> (headX, y, headX + sign * 10.0f, y), 4.0f, 4.0f, 5.0f);
 }
 
 void  SubGrids::resized ()
@@ -462,12 +619,13 @@ void  SubGrids::resized ()
 void MultiStateButton::mouseDown (const MouseEvent& e)
 {
     shiftPressed = false;
+    audioProcesor.beginUndoStep();   // one undo step per gesture (paint, velocity drag, menu)
 
     // Real right button only: on macOS ctrl+left-click also counts as a popup
     // click (isPopupMenu), but ctrl+click is already "paint an Event cell".
     if (e.mods.isRightButtonDown())
     {
-        showCondMenu();
+        showStepMenu();
         return;
     }
 
@@ -566,18 +724,23 @@ void MultiStateButton::hideVelPopup()
     repaint();
 }
 
-void MultiStateButton::showCondMenu()
+void MultiStateButton::showStepMenu()
 {
-    enum { clearLaneId = 1000 };   // condition items use id = condition + 1
+    enum { ratchetBase = 100, clearLaneId = 1000 };   // condition items use id = condition + 1
 
     const int current = audioProcesor.getStepCond (myLine, myStep);
+    const int ratchet = audioProcesor.getStepRatchet (myLine, myStep);
     auto item = [current] (juce::PopupMenu& m, int cond, const juce::String& text)
     {
         m.addItem (cond + 1, text, true, cond == current);
     };
 
     juce::PopupMenu m;
-    m.addSectionHeader ("Lane " + juce::String (myLine + 1) + "  -  step " + juce::String (myStep + 1) + " condition");
+    m.addSectionHeader ("Lane " + juce::String (myLine + 1) + "  -  step " + juce::String (myStep + 1) + " ratchet");
+    for (int r = 1; r <= maxRatchet; r++)
+        m.addItem (ratchetBase + r, r == 1 ? juce::String ("x1   single hit") : "x" + juce::String (r) + "   " + juce::String (r) + " hits per step",
+                   true, r == ratchet);
+    m.addSectionHeader ("Condition");
     item (m, CondNone, "Always");
     m.addSeparator();
     item (m, Cond1of2, "1:2   1st of every 2 loops");
@@ -598,6 +761,9 @@ void MultiStateButton::showCondMenu()
     item (m, CondNei,    "NEI   if lane " + juce::String ((myLine + numOfLine - 1) % numOfLine + 1) + "'s last condition passed");
     item (m, CondNotNei, "!NEI  if it failed");
     m.addSeparator();
+    item (m, CondFill,    "FILL  only while Fill is held");
+    item (m, CondNotFill, "!FILL except while Fill is held");
+    m.addSeparator();
     m.addItem (clearLaneId, "Clear all conditions in this lane");
 
     if (ownerGrid != nullptr)
@@ -609,15 +775,22 @@ void MultiStateButton::showCondMenu()
                      {
                          if (safe == nullptr || result == 0) return;
                          auto& p = safe->audioProcesor;
-                         if (result == clearLaneId)
+                         if (result > ratchetBase && result <= ratchetBase + maxRatchet)
                          {
-                             for (int s = 0; s < numOfStep; s++)   // notify the host once, on the last
-                                 p.setStepCond (safe->myLine, s, CondNone, s == numOfStep - 1);
+                             p.undoableEdit ([&] { p.setStepRatchetUndoable (safe->myLine, safe->myStep, result - ratchetBase); });
+                         }
+                         else if (result == clearLaneId)
+                         {
+                             p.undoableEdit ([&] {
+                                 for (int s = 0; s < numOfStep; s++)
+                                     p.setStepCondUndoable (safe->myLine, s, CondNone);
+                             });
                          }
                          else
                          {
-                             p.setStepCond (safe->myLine, safe->myStep, result - 1, true);
+                             p.undoableEdit ([&] { p.setStepCondUndoable (safe->myLine, safe->myStep, result - 1); });
                          }
+                         p.notifyStateChanged();
                          if (auto* lane = safe->getParentComponent())
                              lane->repaint();
                      });

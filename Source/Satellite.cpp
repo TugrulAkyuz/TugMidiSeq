@@ -111,8 +111,26 @@ void Satellite::paint (juce::Graphics& g)
     {
  
         if(audioProcessor.stepLoopResetInterval[i] == 0) return;
-        float angle = audioProcessor.sampleNumber[i]*2.0*juce::double_Pi/(audioProcessor.stepLoopResetInterval[i]);
-       // if (audioProcessor.myIsPlaying == false) angle = 0;
+
+        // On the arc of the step being played (arcs above are laid out by the
+        // same shuffle ratios), moving the way the lane travels: clockwise, or
+        // anticlockwise for Reverse / Ping-Pong's way back; Random jumps.
+        float angle = 0.0f;
+        const int n    = (int) *audioProcessor.numOfGrid[i];
+        const int step = audioProcessor.getPlayheadStep (i);
+        if (step >= 0 && step < n)
+        {
+            auto ratio = [&] (int k)
+            {
+                auto sr = audioProcessor.getSfuffleRatios (i, k);
+                return std::isfinite (sr) ? jlimit (0.0f, 2.0f, sr) : 0.0f;
+            };
+            float start = 0.0f;
+            for (int k = 0; k < step; k++) start += ratio (k);
+            const float frac = audioProcessor.getPlayheadFraction (i);
+            const float pos  = start + (audioProcessor.isPlayheadBackward (i) ? 1.0f - frac : frac) * ratio (step);
+            angle = MathConstants<float>::twoPi * pos / (float) n;
+        }
         float x =  center_x+r[i]*sin(angle);
         float y =  center_y-r[i]*cos(angle);
         juce::String tmp = std::to_string(i+1);

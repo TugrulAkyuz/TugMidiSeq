@@ -58,9 +58,18 @@ void TugMidiSeqAudioProcessor::resetAllParam()
         tmp_s << valueTreeNames[GRIDMIDIROUTE] << j;
         valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
 
+        tmp_s.clear();
+        tmp_s << valueTreeNames[DIRECTION] << j;
+        valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
     }
-    clearStepConds();
-    updateHostDisplay (ChangeDetails{}.withNonParameterStateChanged (true));
+    // through the undo history: Reset is undoable (GlobalPanel wraps it)
+    for (int j = 0; j < numOfLine; j++)
+        for (int i = 0; i < numOfStep; i++)
+        {
+            setStepCondUndoable (j, i, CondNone);
+            setStepRatchetUndoable (j, i, 1);
+        }
+    notifyStateChanged();
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOBALRESTBAR];
     valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
@@ -110,12 +119,18 @@ var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
             tmp_s <<valueTreeNames[VELGRIDBUTTON]<< i << j;
             newObj.getDynamicObject()->setProperty(tmp_s, prg.gridVelArr[i][j]);
 
-            // sparse: only steps that actually carry a condition
+            // sparse: only steps that actually carry a condition / ratchet
             if (prg.stepCond[i][j] != CondNone)
             {
                 tmp_s.clear();
                 tmp_s << stepCondKey << i << j;
                 newObj.getDynamicObject()->setProperty(tmp_s, prg.stepCond[i][j]);
+            }
+            if (prg.stepRatchet[i][j] > 1)
+            {
+                tmp_s.clear();
+                tmp_s << stepRatchetKey << i << j;
+                newObj.getDynamicObject()->setProperty(tmp_s, prg.stepRatchet[i][j]);
             }
         }
 
@@ -154,6 +169,10 @@ var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
         tmp_s.clear();
         tmp_s <<valueTreeNames[GRIDMIDIROUTE]<< i;
         newObj.getDynamicObject()->setProperty(tmp_s, prg.gridsMidiRoute[i]);
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[DIRECTION]<< i;
+        newObj.getDynamicObject()->setProperty(tmp_s, prg.direction[i]);
     }
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOBALRESTBAR];
@@ -252,6 +271,11 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
             if (preset.hasProperty(tmp_s))
                 p.stepCond[i][j] = jlimit(0, NumTrigConds - 1, (int) preset.getProperty(tmp_s, var()));
 
+            tmp_s.clear();
+            tmp_s << stepRatchetKey << i << j;
+            if (preset.hasProperty(tmp_s))
+                p.stepRatchet[i][j] = jlimit(1, maxRatchet, (int) preset.getProperty(tmp_s, var()));
+
         }
         tmp_s.clear();
         tmp_s <<valueTreeNames[SPEEED]<< i;
@@ -302,6 +326,11 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
             v =   valueTreeState.getParameter(tmp_s)->convertFrom0to1(  valueTreeState.getParameter(tmp_s)->getDefaultValue()); //
         }
         p.gridsMidiRoute[i] = v;
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[DIRECTION]<< i;
+        if (preset.hasProperty(tmp_s))
+            p.direction[i] = jlimit(0, directionNames.size() - 1, (int) preset.getProperty(tmp_s, var()));
 
     }
     tmp_s.clear();
@@ -421,6 +450,7 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
             paramProg.gridVelArr[i][j] = *valueTreeState.getRawParameterValue(tmp_s);
 
             paramProg.stepCond[i][j] = getStepCond(i, j);
+            paramProg.stepRatchet[i][j] = getStepRatchet(i, j);
         }
         tmp_s.clear();
         tmp_s <<valueTreeNames[SPEEED]<< i;
@@ -466,6 +496,10 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
         tmp_s <<valueTreeNames[GRIDMIDIROUTE]<< i;
         
         paramProg.gridsMidiRoute[i] = *valueTreeState.getRawParameterValue(tmp_s);;
+
+        tmp_s.clear();
+        tmp_s <<valueTreeNames[DIRECTION]<< i;
+        paramProg.direction[i] = (int) *valueTreeState.getRawParameterValue(tmp_s);
         
         
     }

@@ -51,13 +51,23 @@ public:
     }
     void timerCallback()  override
     {
-       
-        
-        //if(ratio == -1 ) return;
+        // remember the last couple of played steps: Random draws them as a trail
+        const int st = audioProcessor.getPlayheadStep (myLine);
+        if (st != lastPlayStep)
+        {
+            if (st < 0)                 { trail[0] = trail[1] = -1; }
+            else if (lastPlayStep >= 0) { trail[0] = trail[1]; trail[1] = lastPlayStep; }
+            lastPlayStep = st;
+        }
         repaint();
-        
     }
 private:
+    // Playhead under the pads, at the step actually being played and moving the
+    // way the lane travels: rightward, leftward (Reverse / Ping-Pong's way back),
+    // or, for Random, just under the current pad with a fading trail.
+    void drawPlayhead (juce::Graphics& g, int step, int numSteps);
+    int lastPlayStep = -1;
+    int trail[2] = { -1, -1 };   // older, newer
     int subGridType;
     TugMidiSeqAudioProcessor& audioProcessor;
     Grids& ownerGrid;
@@ -143,6 +153,24 @@ private:
     bool isIgnored = false;
     bool pointsDown = true;
     float arrowX = 0.0f;
+};
+
+// Call-out from the lane menu: Euclidean fill with live Hits / Rotate knobs.
+// The whole session (open -> close) is one undo step.
+class EuclidPanel : public juce::Component
+{
+public:
+    EuclidPanel (TugMidiSeqAudioProcessor& p, int line);
+    ~EuclidPanel() override;
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    TugMidiSeqAudioProcessor& proc;
+    int line, length;
+    CustomRoratySlider hits, rotate;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EuclidPanel)
 };
 
 class MultiStateButton : public juce::Button ,  private AudioProcessorValueTreeState::Listener,
@@ -267,6 +295,10 @@ public:
         if (cond != CondNone)
             drawCondTag (g, b, cond, currentState != State::ButtonOffState);
 
+        const int ratchet = audioProcesor.getStepRatchet (myLine, myStep);
+        if (ratchet > 1)
+            drawRatchetMarks (g, b, ratchet, currentState != State::ButtonOffState);
+
         // being shift-dragged: outline the pad the velocity popup points at
         if (velPopup != nullptr)
         {
@@ -301,8 +333,20 @@ public:
         g.drawText (trigCondNames[cond], chip, juce::Justification::centred, false);
     }
 
-    // Right-click: pick this step's trig condition. Defined in Grids.cpp.
-    void showCondMenu();
+    // Ratchet: the pad's upper half is split into as many parts as the step has
+    // hits, like a subdivided note.
+    void drawRatchetMarks (juce::Graphics& g, juce::Rectangle<float> b, int hits, bool active)
+    {
+        g.setColour (active ? Theme::screen.withAlpha (0.75f) : colourarray[myLine].withAlpha (0.6f));
+        for (int k = 1; k < hits; k++)
+        {
+            const float x = b.getX() + b.getWidth() * (float) k / (float) hits;
+            g.drawLine (x, b.getY() + 2.0f, x, b.getY() + b.getHeight() * 0.45f, 1.3f);
+        }
+    }
+
+    // Right-click: this step's ratchet and trig condition. Defined in Grids.cpp.
+    void showStepMenu();
 
     // Shift+drag velocity editing: the popup is parented to the editor content
     // (the lane's parent) so it can sit outside this pad and the lane row.
@@ -510,7 +554,21 @@ public:
 
     // the pads' popup menus share the lane's look and feel
     juce::LookAndFeel& getMenuLookAndFeel() { return myLookAndFeel; }
+
+    // a pad's bounds in the SubGrids overlay's coordinates
+    juce::Rectangle<float> padBounds (int step) const
+    {
+        if (step < 0 || step >= buttons.size()) return {};
+        return buttons[step]->getBounds().toFloat()
+                   .translated (-(float) subGrids->getX(), -(float) subGrids->getY());
+    }
+
+    // clicks on the lane number open the lane menu
+    void mouseDown (const juce::MouseEvent& e) override;
 private:
+    void showLaneMenu();
+    void drawDirectionGlyph (juce::Graphics& g, juce::Rectangle<float> area) const;
+    juce::Rectangle<int> directionArea;   // under the lane number
     // Stamp any pad under screenPos in THIS lane with brush state s.
     void paintLocal (juce::Point<int> screenPos, MultiStateButton::State s);
     void resetPainted() { for (auto& p : paintedStep) p = false; }

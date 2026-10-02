@@ -61,6 +61,10 @@ private:
     Snapshot shown;
 
     juce::TextButton latchButton;
+    juce::TextButton fillButton;   // momentary: Fill is on while held
+    bool fillHeld = false;
+    void setFill (bool on);
+    juce::TextButton undoButton, redoButton;   // right end of the strip
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> latchAttachment;
 
     juce::Rectangle<float> keyboard;

@@ -324,12 +324,13 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
         r->onClick = [this,r]
         {
             randomButton.indexOf(r);
-            audioProcessor.randomizeGrids(4 -randomButton.indexOf(r));
+            const int lane = 4 - randomButton.indexOf(r);
+            audioProcessor.undoableEdit ([&] { audioProcessor.randomizeGrids (lane); });
         };
     };
     resetButton.onClick = [this]
     {
-        audioProcessor.resetAllParam();
+        audioProcessor.undoableEdit ([this] { audioProcessor.resetAllParam(); });
     };
     sortedOrFirstEmptySelectButton.onClick = [this]
     {
@@ -395,7 +396,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
         if(presetCombo.getNumItems() == 0) return;
         auto x = presetCombo.getSelectedId();
         if(x == 0) return;
-        audioProcessor.setCurrentProgram(x);
+        audioProcessor.undoableEdit ([this, x] { audioProcessor.setCurrentProgram (x); });
 
     };
     deleteButton.onClick = [&]

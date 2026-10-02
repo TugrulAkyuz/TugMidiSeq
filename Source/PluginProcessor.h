@@ -26,12 +26,17 @@ const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL
 };
+
+// Lane play direction. Time still runs forward (shuffle, delay and note
+// durations stay on the time slots); only which grid step a slot plays changes.
+enum LaneDirection { DirForward = 0, DirReverse, DirPingPong, DirRandom };
+const juce::StringArray directionNames = { "Forward", "Reverse", "Ping-Pong", "Random" };
 
 // Elektron-style trig conditions, one per step. A step only fires when its
 // condition passes (and, for an Event cell, its probability roll too).
@@ -45,14 +50,21 @@ enum TrigCond
     CondFirst, CondNotFirst,   // first loop since play / every loop but the first
     CondPre,   CondNotPre,     // this lane's previous condition result
     CondNei,   CondNotNei,     // the lane below's most recent condition result
+    CondFill,  CondNotFill,    // while the Fill button / "fill" parameter is held
+    // new conditions go here, at the end: presets and projects store these numbers
     NumTrigConds
 };
 const juce::StringArray trigCondNames =
 {
-    "", "1:2","2:2","1:3","2:3","3:3","1:4","2:4","3:4","4:4", "1ST","!1ST", "PRE","!PRE", "NEI","!NEI"
+    "", "1:2","2:2","1:3","2:3","3:3","1:4","2:4","3:4","4:4", "1ST","!1ST", "PRE","!PRE", "NEI","!NEI", "FILL","!FILL"
 };
 // preset-JSON / state-tree key prefix for step conditions (cond<lane><step>)
 const juce::String stepCondKey = "cond";
+
+// Ratchet: a step fires 1..maxRatchet times, spread evenly over its slot.
+// Stored like the conditions (not a host parameter); preset key ratchet<lane><step>.
+constexpr int maxRatchet = 4;
+const juce::String stepRatchetKey = "ratchet";
 
 extern juce::CriticalSection midiOutputMutex;
 
@@ -81,6 +93,9 @@ public:
     TugMidiSeqProgram(juce::String name)
     {
         myProgramname = name;
+        for (auto& lane : stepRatchet)
+            for (auto& r : lane)
+                r = 1;
     }
     
     juce::String myProgramname;
@@ -91,6 +106,8 @@ public:
     int grids[numOfLine][numOfStep];
     int gridVelArr[numOfLine][numOfStep];
     int stepCond[numOfLine][numOfStep] = {};
+    int stepRatchet[numOfLine][numOfStep];   // 1..maxRatchet, set to 1 in the constructor
+    int direction[numOfLine] = {};
     int numOfGrid[numOfLine];
     int octave[numOfLine];
     int gridsSpeed[numOfLine];
@@ -280,11 +297,21 @@ public:
     void setPresetFolder(const juce::File& dir);
     
     juce::AudioProcessorValueTreeState valueTreeState;
+    // the grid step lane i is on (after its play direction), -1 when stopped
     int getSteps(int i)
     {
         if (myIsPlaying == false) return -1;
-        return steps[i];
+        return playStep[i];
     }
+    int getDirection (int line) const { return (int) *gridsDirectionAtomic[line]; }
+
+    // Playhead for the GUI, published once per block (see publishNoteMap): the
+    // grid step being played (-1 when stopped), how far through its time slot,
+    // and whether the lane is travelling right-to-left (Reverse, or the
+    // backward pass of Ping-Pong).
+    int   getPlayheadStep (int line) const      { return pubPlayStep[line].load (std::memory_order_relaxed); }
+    float getPlayheadFraction (int line) const  { return pubPlayFrac[line].load (std::memory_order_relaxed); }
+    bool  isPlayheadBackward (int line) const   { return pubBackward[line].load (std::memory_order_relaxed); }
     void setSpeedofLine(int index, int line)
     {
         gridsSpeed[line] = index;
@@ -342,12 +369,62 @@ public:
         if (notifyHost)
             updateHostDisplay (ChangeDetails{}.withNonParameterStateChanged (true));
     }
-    void clearStepConds()
+    void clearStepData()
     {
         for (auto& lane : stepCond)
             for (auto& c : lane)
                 c.store (CondNone, std::memory_order_relaxed);
+        for (auto& lane : stepRatchet)
+            for (auto& r : lane)
+                r.store (1, std::memory_order_relaxed);
     }
+
+    int getStepRatchet (int line, int step) const
+    {
+        return stepRatchet[line][step].load (std::memory_order_relaxed);
+    }
+    void setStepRatchet (int line, int step, int hits)
+    {
+        stepRatchet[line][step].store (jlimit (1, maxRatchet, hits), std::memory_order_relaxed);
+    }
+    void setStepRatchetUndoable (int line, int step, int hits);
+    bool isFillOn() const { return *fillAtomic > 0.5f; }
+    // GUI edit of a step condition, recorded in the undo history
+    void setStepCondUndoable (int line, int step, int cond);
+    void notifyStateChanged();
+
+    //==========================================================================
+    // Undo / redo (message thread only). Parameter changes are recorded by the
+    // APVTS itself (it was created with undoManager); these group them into one
+    // step per user action and add the non-parameter edits (step conditions).
+    void beginUndoStep() { undoManager.beginNewTransaction(); }
+    // closes a step opened with beginUndoStep() whose edits went through
+    // parameters (flushes them into the tree first, like undoableEdit)
+    void endUndoStep() { (void) valueTreeState.copyState(); undoManager.beginNewTransaction(); }
+    // Runs `edit` as a single undo step. The APVTS copies parameter values into
+    // its tree (where undo records them) on a timer, so flush before returning:
+    // otherwise the changes could land in whatever step the next click starts.
+    template <typename Fn> void undoableEdit (Fn&& edit)
+    {
+        undoManager.beginNewTransaction();
+        edit();
+        (void) valueTreeState.copyState();   // copyState() flushes parameters to the tree
+        undoManager.beginNewTransaction();
+    }
+    bool canUndo() const { return undoManager.canUndo(); }
+    bool canRedo() const { return undoManager.canRedo(); }
+    void undo() { (void) valueTreeState.copyState(); undoManager.undo(); notifyStateChanged(); myGridChangeListener.sendChangeMessage(); }
+    void redo() { (void) valueTreeState.copyState(); undoManager.redo(); notifyStateChanged(); myGridChangeListener.sendChangeMessage(); }
+
+    //==========================================================================
+    // Lane edits (message thread, each one undo step)
+    void copyLane (int line);
+    void pasteLane (int line);
+    bool hasLaneClipboard() const;
+    void shiftLane (int line, int delta);                 // rotate within the lane length
+    void euclidLane (int line, int hits, int rotation);   // without its own undo step: see EuclidPanel
+    void clearLane (int line);
+    void setLaneDirection (int line, int dir);
     int getLoopMeasure()
     {
         if (myIsPlaying == false) return + 1;
@@ -394,7 +471,8 @@ public:
     std::atomic<float> * gridsArr[numOfLine][numOfStep];
     std::atomic<float> * gridVelArrAtomic[numOfLine][numOfStep];
     
-    int steps[5] = {};
+    int steps[5] = {};      // time slot each lane is in
+    int playStep[5] = {};   // grid step that slot plays (see LaneDirection)
     int new_steps[5] = {};
     
     std::atomic<float> *numOfGrid[5];
@@ -595,6 +673,9 @@ private:
     std::atomic<float> *gridsShuffleAtomic[numOfLine];
     std::atomic<float> *gridsDelayAtomic[numOfLine];
     std::atomic<float> *gridsMidiRouteAtomic[numOfLine];
+    std::atomic<float> *gridsDirectionAtomic[numOfLine];
+    int directedStep (int line, int slot) const;
+    bool cellActiveAtSlot (int line, int slot) const;
     std::atomic<float> *GlobalInOrFixedAtomic;;
     std::atomic<float> *inBuiltSynthAtomic;
     std::atomic<float> *sortedOrFirstEmptySelectAtomic;
@@ -610,15 +691,24 @@ private:
     void clearHeldNotes();
     void releaseUnheldNotes();
 
+    std::atomic<float> *fillAtomic;
+
     // Trig-condition engine state (audio thread only).
     std::atomic<int> stepCond[numOfLine][numOfStep];
+    std::atomic<int> stepRatchet[numOfLine][numOfStep];
+
+    // Ratchet repeats still to play in the current step, per lane (audio thread).
+    int ratchetLeft[numOfLine] = {}, ratchetCountdown[numOfLine] = {}, ratchetInterval[numOfLine] = {};
+    int ratchetDuration[numOfLine] = {};
+    juce::MidiMessage ratchetNote[numOfLine];
+    void emitLaneNote (int line, juce::MidiMessage note, int durationSamples, juce::MidiBuffer& midiMessages, int sample);
     int  loopCount[numOfLine] = {};
     int  lastStep[numOfLine] = {};
     bool lastCondResult[numOfLine] = {};
     void resetTrigCondState();
     bool evaluateTrigCond (int line, int step) const;
-    void writeStepCondsTo (juce::ValueTree& state) const;
-    void readStepCondsFrom (const juce::ValueTree& state);
+    void writeStepDataTo (juce::ValueTree& state) const;   // conditions + ratchets
+    void readStepDataFrom (const juce::ValueTree& state);
 
     // Snapshot for the GUI's note map, published once per block.
     int lastOutNote[numOfLine] = {};
@@ -626,6 +716,9 @@ private:
     std::atomic<int> laneOutNote[numOfLine];
     std::atomic<uint64_t> heldMask[2];
     std::atomic<uint64_t> physMask[2];
+    std::atomic<int>   pubPlayStep[numOfLine];
+    std::atomic<float> pubPlayFrac[numOfLine];
+    std::atomic<bool>  pubBackward[numOfLine];
     void publishNoteMap();
 
     // On-screen keyboard -> audio thread (single producer, single consumer).

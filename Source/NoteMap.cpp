@@ -21,6 +21,29 @@ NoteMap::NoteMap (TugMidiSeqAudioProcessor& p) : audioProcessor (p)
     latchAttachment = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment> (
         audioProcessor.valueTreeState, valueTreeNames[LATCH], latchButton);
 
+    fillButton.setButtonText ("Fill");
+    fillButton.setColour (TextButton::textColourOffId, Theme::textSecondary);
+    fillButton.setColour (TextButton::textColourOnId, Theme::screen);
+    fillButton.setColour (TextButton::buttonColourId, Theme::surfaceAlt);
+    fillButton.setColour (TextButton::buttonOnColourId, Theme::accentBright);
+    fillButton.setColour (ComboBox::outlineColourId, Theme::hairline);
+    fillButton.setMouseCursor (juce::MouseCursor::NormalCursor);
+    fillButton.onStateChange = [this] { setFill (fillButton.isDown()); };
+    addAndMakeVisible (fillButton);
+
+    for (auto* b : { &undoButton, &redoButton })
+    {
+        b->setColour (TextButton::textColourOffId, Theme::textSecondary);
+        b->setColour (TextButton::buttonColourId, Theme::surfaceAlt);
+        b->setColour (ComboBox::outlineColourId, Theme::hairline);
+        b->setMouseCursor (juce::MouseCursor::NormalCursor);
+        addAndMakeVisible (*b);
+    }
+    undoButton.setButtonText ("Undo");
+    redoButton.setButtonText ("Redo");
+    undoButton.onClick = [this] { audioProcessor.undo(); };
+    redoButton.onClick = [this] { audioProcessor.redo(); };
+
     if (playable)
         setMouseCursor (juce::MouseCursor::PointingHandCursor);
 
@@ -31,6 +54,19 @@ NoteMap::NoteMap (TugMidiSeqAudioProcessor& p) : audioProcessor (p)
 NoteMap::~NoteMap()
 {
     stopTimer();
+    setFill (false);   // don't leave Fill stuck on if the editor closes mid-press
+}
+
+void NoteMap::setFill (bool on)
+{
+    if (on == fillHeld) return;
+    fillHeld = on;
+    if (auto* p = audioProcessor.valueTreeState.getParameter (valueTreeNames[FILL]))
+    {
+        p->beginChangeGesture();
+        p->setValueNotifyingHost (on ? 1.0f : 0.0f);
+        p->endChangeGesture();
+    }
 }
 
 NoteMap::Snapshot NoteMap::takeSnapshot() const
@@ -53,6 +89,11 @@ NoteMap::Snapshot NoteMap::takeSnapshot() const
 // only repaint when what's held or sounding actually changed
 void NoteMap::timerCallback()
 {
+    undoButton.setEnabled (audioProcessor.canUndo());
+    redoButton.setEnabled (audioProcessor.canRedo());
+    // lit while held here or while the host automates the parameter
+    fillButton.setToggleState (audioProcessor.isFillOn(), juce::dontSendNotification);
+
     auto now = takeSnapshot();
     if (now != shown)
     {
@@ -66,7 +107,13 @@ void NoteMap::resized()
     auto area = getLocalBounds();
     area.removeFromLeft (26);                                    // line up with the lane-number column
     latchButton.setBounds (area.removeFromLeft (52).reduced (2, 4));
+    fillButton.setBounds (area.removeFromLeft (44).reduced (2, 4));
     area.removeFromLeft (8);
+
+    area.removeFromRight (6);
+    redoButton.setBounds (area.removeFromRight (48).reduced (2, 4));
+    undoButton.setBounds (area.removeFromRight (48).reduced (2, 4));
+    area.removeFromRight (8);
 
     keyboard = area.reduced (2, 4).toFloat();
     int whites = 0;

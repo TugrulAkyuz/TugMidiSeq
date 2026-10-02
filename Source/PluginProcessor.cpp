@@ -162,7 +162,7 @@ valueTreeState(*this, &undoManager)
         tmp_s << valueTreeNames[GRIDMIDIROUTE] << j;
         valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s,1,16,j + 10));
         gridsMidiRouteAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
-        
+
         //*numOfGrid[j] = 16;
         //*gridsSpeedAtomic[j] = 16;
         //*gridsDurationAtomic[j] = 16;
@@ -206,12 +206,30 @@ valueTreeState(*this, &undoManager)
     valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s,false));
     latchAtomic = valueTreeState.getRawParameterValue(tmp_s);
 
+    // appended after everything else so existing parameter indices don't move
+    for (int j = 0; j < numOfLine; j++)
+    {
+        tmp_s.clear();
+        tmp_s << valueTreeNames[DIRECTION] << j;
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterChoice>(ParameterID{tmp_s,1}, tmp_s, directionNames, DirForward));
+        gridsDirectionAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
+    }
+
+    // held by the Fill button; steps with a FILL / !FILL condition follow it
+    tmp_s.clear();
+    tmp_s << valueTreeNames[FILL];
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s,false));
+    fillAtomic = valueTreeState.getRawParameterValue(tmp_s);
+
     // C++17: std::atomic members start uninitialised
-    clearStepConds();
+    clearStepData();
     for (int i = 0; i < numOfLine; i++)
     {
         laneInNote[i].store (-1);
         laneOutNote[i].store (-1);
+        pubPlayStep[i].store (-1);
+        pubPlayFrac[i].store (0.0f);
+        pubBackward[i].store (false);
     }
     for (int i = 0; i < 2; i++)
     {
@@ -322,6 +340,9 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
     // setParamValue() rather than the message-thread-only juce::Value API.
     const auto& prog = myProgram.at(program - 1);
     String tmp_s;
+    // The undo history is message-thread only; a load from the GUI is undoable
+    // (GlobalPanel wraps it), one from a host thread just sets the conditions.
+    const bool undoable = juce::MessageManager::existsAndIsCurrentThread();
 
         for(int i = 0 ; i <  numOfLine; i++)
         {
@@ -335,7 +356,8 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
                 tmp_s << valueTreeNames[VELGRIDBUTTON] << i << j;
                 setParamValue(tmp_s, prog.gridVelArr[i][j]);
 
-                setStepCond(i, j, prog.stepCond[i][j]);
+                if (undoable) { setStepCondUndoable (i, j, prog.stepCond[i][j]); setStepRatchetUndoable (i, j, prog.stepRatchet[i][j]); }
+                else          { setStepCond (i, j, prog.stepCond[i][j]);         setStepRatchet (i, j, prog.stepRatchet[i][j]); }
             }
             tmp_s.clear();
             tmp_s << valueTreeNames[SPEEED] << i;
@@ -366,6 +388,10 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
             tmp_s.clear();
             tmp_s << valueTreeNames[GRIDMIDIROUTE] << i;
             setParamValue(tmp_s, prog.gridsMidiRoute[i]);
+
+            tmp_s.clear();
+            tmp_s << valueTreeNames[DIRECTION] << i;
+            setParamValue(tmp_s, prog.direction[i]);
 
         }
     setParamValue(valueTreeNames[GLOBALRESTBAR],  prog.globalResyncBar);
@@ -516,6 +542,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         {
             initForVariables();
             resetTrigCondState();   // conditions count loops from the next play
+            for (auto& r : ratchetLeft) r = 0;   // no leftover repeats on the next play
         }
         if(myIsPlaying == true &&  positionInfo.isPlaying == false )/**ppq ye bakma code*/
         {
@@ -598,10 +625,13 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 
                 calculateAndUpdateSetup(i);
 
-                // the step index going backwards means the lane's pattern wrapped
+                // the slot index going backwards means the lane's pattern wrapped
+                const bool newSlot = steps[i] != lastStep[i];
                 if (steps[i] < lastStep[i])
                     ++loopCount[i];
                 lastStep[i] = steps[i];
+                if (newSlot)
+                    playStep[i] = directedStep (i, steps[i]);   // after the loop count: ping-pong reads it
 
                 if(stepmidStopSampleCounter[i] != -1)
                 {
@@ -616,9 +646,17 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     stepmidStopSampleCounter[i] = -1;
                     midiState[i] = false;
                 }
+                // ratchet repeats of the step that fired last
+                if (ratchetLeft[i] > 0 && --ratchetCountdown[i] <= 0)
+                {
+                    emitLaneNote (i, ratchetNote[i], ratchetDuration[i], midiMessages, s);
+                    if (--ratchetLeft[i] > 0)
+                        ratchetCountdown[i] = ratchetInterval[i];
+                }
+
                 if(stpSample[i] == 0)
                 {
-                    const int st   = steps[i];
+                    const int st   = playStep[i];
                     const int cell = (int) *gridsArr[i][st];   // 0 off, 1 on, 2 event
                     if (cell != 0)
                     {
@@ -686,7 +724,7 @@ void TugMidiSeqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     // as intermediaries to make it easy to save and load complex data.
     auto state = valueTreeState.copyState();
     state.setProperty ("currentProgram", program, nullptr);
-    writeStepCondsTo (state);
+    writeStepDataTo (state);
     std::unique_ptr<XmlElement> xml (state.createXml());
     copyXmlToBinary (*xml, destData);
    
@@ -701,7 +739,7 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
         if (xmlState->hasTagName (valueTreeState.state.getType()))
         {
             auto restored = ValueTree::fromXml (*xmlState);
-            readStepCondsFrom (restored);
+            readStepDataFrom (restored);
             valueTreeState.replaceState (restored);
 
             // Force every parameter to reflect the restored value-tree value.
@@ -851,7 +889,7 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
                 sum =  sum + stepResetIntervalForShuffle[i][s];
                 if(prevmidistep != -1)
                 {
-                    if( *gridsArr[i][s] != 0)
+                    if( cellActiveAtSlot (i, s))
                     {
                         
                         if(stepmidStopSampleIntervalForShuffle[i][prevmidistep] > sum)
@@ -862,7 +900,7 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
                     }
                 }
                 
-                if(*gridsArr[i][s] != 0)
+                if(cellActiveAtSlot (i, s))
                 {
                     prevmidistep = s;
                     sum = stepResetIntervalForShuffle[i][s];
@@ -918,7 +956,7 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         }
         
         float velTmp = *gridsVelAtomic[i]/ 90.0f;
-        velTmp = jlimit(0.0f,1.0f,velTmp**gridVelArrAtomic[i][steps[i]]/ 127.0f);
+        velTmp = jlimit(0.0f,1.0f,velTmp**gridVelArrAtomic[i][playStep[i]]/ 127.0f);
         if(*GlobalInOrFixedAtomic == 0)
            it.setVelocity(velTmp);
     
@@ -926,24 +964,56 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         
         if (myIsPlaying == false) return false;
         it.setChannel(midRouteIndex);
-        midiMessages.addEvent(it, s);
-        lastOutNote[i] = it.getNoteNumber();
-        //midiProcessor->sendMidiBuffer(midiMessages,mySampleRate);
-        //midiProcessor->sendMidiMessage(it,midRouteIndex);
-        
-        stepmidStopSampleCounter[i] = 1;
-        RealMidiNoteList tmp;
-        tmp.sentMidi = it;
-        tmp.lineNo = midRouteIndex;
+
         // Shuffle/duration maths can drive this interval to 0 or below, which would
         // otherwise produce a never-expiring note.
-        tmp.durationsample = jmax (0, stepmidStopSampleIntervalForShuffle[i][steps[i]] - 1);
-        inRealMidiNoteList.push_back(tmp);
-        
-        //DBG(" Channel: "  << it.getChannel());
-        midiState[i] = true;
+        int duration = jmax (0, stepmidStopSampleIntervalForShuffle[i][steps[i]] - 1);
+
+        // Ratchet: the remaining hits are spread evenly over this slot and played
+        // by the per-sample countdown in processBlock. Each hit is gated to at
+        // most 3/4 of its share so repeats stay audibly separate.
+        const int hits = getStepRatchet (i, playStep[i]);
+        ratchetLeft[i] = 0;
+        if (hits > 1)
+        {
+            const int interval = jmax (1, stepResetIntervalForShuffle[i][steps[i]] / hits);
+            duration = jmax (1, jmin (duration, interval * 3 / 4));
+            ratchetLeft[i]      = hits - 1;
+            ratchetInterval[i]  = interval;
+            ratchetCountdown[i] = interval;
+            ratchetDuration[i]  = duration;
+            ratchetNote[i]      = it;
+        }
+        emitLaneNote (i, it, duration, midiMessages, s);
     }
     return true;
+}
+
+// Sends one note for lane `line` (cutting an identical note that's still
+// sounding) and books its note-off.
+void TugMidiSeqAudioProcessor::emitLaneNote (int line, juce::MidiMessage note, int durationSamples,
+                                             juce::MidiBuffer& midiMessages, int sample)
+{
+    auto same = [&] (const RealMidiNoteList& l) { return l.sentMidi.getNoteNumber() == note.getNoteNumber(); };
+    auto sounding = std::find_if (inRealMidiNoteList.begin(), inRealMidiNoteList.end(), same);
+    if (sounding != inRealMidiNoteList.end())
+    {
+        sounding->sentMidi.setVelocity (0.0f);
+        sounding->sentMidi.setChannel (sounding->lineNo);
+        midiMessages.addEvent (sounding->sentMidi, sample);
+        inRealMidiNoteList.erase (sounding);
+    }
+
+    midiMessages.addEvent (note, sample);
+    lastOutNote[line] = note.getNoteNumber();
+    stepmidStopSampleCounter[line] = 1;
+
+    RealMidiNoteList tmp;
+    tmp.sentMidi = note;
+    tmp.lineNo = note.getChannel();
+    tmp.durationsample = jmax (0, durationSamples);
+    inRealMidiNoteList.push_back (tmp);
+    midiState[line] = true;
 }
 
 void TugMidiSeqAudioProcessor::calculateAndUpdateSetup(int myLine)
@@ -1144,6 +1214,203 @@ void TugMidiSeqAudioProcessor::releaseUnheldNotes()
 }
 
 //==============================================================================
+// Undoable step conditions and lane edits
+
+namespace
+{
+    // A per-step value that isn't a parameter (condition or ratchet).
+    struct StepValueAction : juce::UndoableAction
+    {
+        enum Field { Cond, Ratchet };
+        StepValueAction (TugMidiSeqAudioProcessor& p, Field f, int l, int s, int from, int to)
+            : proc (p), field (f), line (l), step (s), oldValue (from), newValue (to) {}
+        // the host is told once per edit / undo, not per step (see notifyStateChanged)
+        bool perform() override { set (newValue); return true; }
+        bool undo() override    { set (oldValue); return true; }
+        int getSizeInUnits() override { return 1; }
+
+        void set (int v)
+        {
+            if (field == Cond) proc.setStepCond (line, step, v);
+            else               proc.setStepRatchet (line, step, v);
+        }
+
+        TugMidiSeqAudioProcessor& proc;
+        Field field;
+        int line, step, oldValue, newValue;
+    };
+
+    // One lane's pattern and settings. File-static so a lane copied in one
+    // instance of the plugin can be pasted into another in the same host.
+    struct LaneClipboard
+    {
+        bool  valid = false;
+        float cells[numOfStep] = {}, vels[numOfStep] = {};
+        int   conds[numOfStep] = {}, ratchets[numOfStep] = {};
+        std::map<juce::String, float> settings;   // base name -> value
+    };
+    LaneClipboard laneClipboard;
+
+    // per-lane settings a copy carries (not the MIDI channel: that's routing)
+    const int copiedSettings[] = { GRIDNUM, SPEEED, DUR, OCTAVE, VEL, EVENT, GRIDSHUFFLE, GRIDDELAY, DIRECTION };
+
+    juce::String cellID (int base, int line, int step)
+    {
+        juce::String s;
+        s << valueTreeNames[base] << line << step;
+        return s;
+    }
+}
+
+void TugMidiSeqAudioProcessor::setStepCondUndoable (int line, int step, int cond)
+{
+    const int old = getStepCond (line, step);
+    if (old != cond)
+        undoManager.perform (new StepValueAction (*this, StepValueAction::Cond, line, step, old, cond));
+}
+
+void TugMidiSeqAudioProcessor::setStepRatchetUndoable (int line, int step, int hits)
+{
+    const int old = getStepRatchet (line, step);
+    hits = jlimit (1, maxRatchet, hits);
+    if (old != hits)
+        undoManager.perform (new StepValueAction (*this, StepValueAction::Ratchet, line, step, old, hits));
+}
+
+// Step conditions aren't parameters, so the host doesn't see them change on
+// its own: without this it wouldn't mark the project as modified.
+void TugMidiSeqAudioProcessor::notifyStateChanged()
+{
+    updateHostDisplay (ChangeDetails{}.withNonParameterStateChanged (true));
+}
+
+static float paramValue (juce::AudioProcessorValueTreeState& s, const juce::String& id)
+{
+    auto* p = s.getParameter (id);
+    return p != nullptr ? p->convertFrom0to1 (p->getValue()) : 0.0f;
+}
+
+void TugMidiSeqAudioProcessor::copyLane (int line)
+{
+    for (int s = 0; s < numOfStep; s++)
+    {
+        laneClipboard.cells[s] = paramValue (valueTreeState, cellID (BLOCK, line, s));
+        laneClipboard.vels[s]  = paramValue (valueTreeState, cellID (VELGRIDBUTTON, line, s));
+        laneClipboard.conds[s] = getStepCond (line, s);
+        laneClipboard.ratchets[s] = getStepRatchet (line, s);
+    }
+    for (int base : copiedSettings)
+        laneClipboard.settings[valueTreeNames[base]] = paramValue (valueTreeState, valueTreeNames[base] + juce::String (line));
+    laneClipboard.valid = true;
+}
+
+bool TugMidiSeqAudioProcessor::hasLaneClipboard() const { return laneClipboard.valid; }
+
+void TugMidiSeqAudioProcessor::pasteLane (int line)
+{
+    if (! laneClipboard.valid) return;
+    undoableEdit ([&]
+    {
+        for (auto& [base, value] : laneClipboard.settings)
+            setParamValue (base + juce::String (line), value);
+        for (int s = 0; s < numOfStep; s++)
+        {
+            setParamValue (cellID (BLOCK, line, s), laneClipboard.cells[s]);
+            setParamValue (cellID (VELGRIDBUTTON, line, s), laneClipboard.vels[s]);
+            setStepCondUndoable (line, s, laneClipboard.conds[s]);
+            setStepRatchetUndoable (line, s, laneClipboard.ratchets[s]);
+        }
+    });
+    notifyStateChanged();
+    myGridChangeListener.sendChangeMessage();
+}
+
+void TugMidiSeqAudioProcessor::shiftLane (int line, int delta)
+{
+    const int n = jlimit (1, numOfStep, (int) *numOfGrid[line]);
+    float cells[numOfStep], vels[numOfStep];
+    int conds[numOfStep], ratchets[numOfStep];
+    for (int s = 0; s < n; s++)
+    {
+        cells[s] = paramValue (valueTreeState, cellID (BLOCK, line, s));
+        vels[s]  = paramValue (valueTreeState, cellID (VELGRIDBUTTON, line, s));
+        conds[s] = getStepCond (line, s);
+        ratchets[s] = getStepRatchet (line, s);
+    }
+    undoableEdit ([&]
+    {
+        for (int s = 0; s < n; s++)
+        {
+            const int from = ((s - delta) % n + n) % n;   // delta +1 moves everything one step right
+            setParamValue (cellID (BLOCK, line, s), cells[from]);
+            setParamValue (cellID (VELGRIDBUTTON, line, s), vels[from]);
+            setStepCondUndoable (line, s, conds[from]);
+            setStepRatchetUndoable (line, s, ratchets[from]);
+        }
+    });
+    notifyStateChanged();
+}
+
+// Even spread of `hits` over the lane's length (the Bresenham form of the
+// Euclidean rhythm), turned by `rotation`. Steps beyond the length are left
+// alone. The caller owns the undo step, so a knob drag is one undo.
+void TugMidiSeqAudioProcessor::euclidLane (int line, int hits, int rotation)
+{
+    const int n = jlimit (1, numOfStep, (int) *numOfGrid[line]);
+    hits = jlimit (0, n, hits);
+    for (int s = 0; s < n; s++)
+    {
+        const int pos = ((s - rotation) % n + n) % n;
+        const bool on = (pos * hits) % n < hits;
+        setParamValue (cellID (BLOCK, line, s), on ? 1.0f : 0.0f);
+    }
+}
+
+void TugMidiSeqAudioProcessor::clearLane (int line)
+{
+    undoableEdit ([&]
+    {
+        for (int s = 0; s < numOfStep; s++)
+        {
+            setParamValue (cellID (BLOCK, line, s), 0.0f);
+            setStepCondUndoable (line, s, CondNone);
+            setStepRatchetUndoable (line, s, 1);
+        }
+    });
+    notifyStateChanged();
+}
+
+void TugMidiSeqAudioProcessor::setLaneDirection (int line, int dir)
+{
+    undoableEdit ([&] { setParamValue (valueTreeNames[DIRECTION] + juce::String (line), (float) dir); });
+}
+
+//==============================================================================
+// Play direction
+
+int TugMidiSeqAudioProcessor::directedStep (int line, int slot) const
+{
+    const int n = jlimit (1, numOfStep, (int) *numOfGrid[line]);
+    slot = jlimit (0, n - 1, slot);   // #Grid may have just shrunk under the slot
+    switch ((int) *gridsDirectionAtomic[line])
+    {
+        case DirReverse:  return n - 1 - slot;
+        case DirPingPong: return jmax (0, loopCount[line]) % 2 == 0 ? slot : n - 1 - slot;
+        case DirRandom:   return juce::Random::getSystemRandom().nextInt (n);
+        default:          return slot;
+    }
+}
+
+// Whether the step a slot will play is active — used to keep a note from
+// running into the next one. Random is unknown ahead, so every slot counts.
+bool TugMidiSeqAudioProcessor::cellActiveAtSlot (int line, int slot) const
+{
+    if ((int) *gridsDirectionAtomic[line] == DirRandom)
+        return true;
+    return *gridsArr[line][directedStep (line, slot)] != 0;
+}
+
+//==============================================================================
 // On-screen keyboard
 
 void TugMidiSeqAudioProcessor::pushScreenNote (int note, bool on)
@@ -1208,35 +1475,48 @@ bool TugMidiSeqAudioProcessor::evaluateTrigCond (int line, int step) const
         case CondNotPre:   return ! lastCondResult[line];
         case CondNei:      return   lastCondResult[neighbour];
         case CondNotNei:   return ! lastCondResult[neighbour];
+        case CondFill:     return   isFillOn();
+        case CondNotFill:  return ! isFillOn();
         default:           return true;
     }
 }
 
-// One comma-separated property per lane under a "stepConds" child, so the
-// conditions round-trip with the DAW project alongside the parameters.
-void TugMidiSeqAudioProcessor::writeStepCondsTo (juce::ValueTree& state) const
+// One comma-separated property per lane under a "stepConds" / "stepRatchets"
+// child, so the per-step data round-trips with the DAW project alongside the
+// parameters.
+void TugMidiSeqAudioProcessor::writeStepDataTo (juce::ValueTree& state) const
 {
-    auto node = state.getOrCreateChildWithName ("stepConds", nullptr);
-    for (int i = 0; i < numOfLine; i++)
+    auto write = [&state] (const char* nodeName, auto&& valueAt)
     {
-        juce::StringArray values;
-        for (int j = 0; j < numOfStep; j++)
-            values.add (juce::String (getStepCond (i, j)));
-        node.setProperty (juce::Identifier ("lane" + juce::String (i)), values.joinIntoString (","), nullptr);
-    }
+        auto node = state.getOrCreateChildWithName (nodeName, nullptr);
+        for (int i = 0; i < numOfLine; i++)
+        {
+            juce::StringArray values;
+            for (int j = 0; j < numOfStep; j++)
+                values.add (juce::String (valueAt (i, j)));
+            node.setProperty (juce::Identifier ("lane" + juce::String (i)), values.joinIntoString (","), nullptr);
+        }
+    };
+    write ("stepConds",    [this] (int i, int j) { return getStepCond (i, j); });
+    write ("stepRatchets", [this] (int i, int j) { return getStepRatchet (i, j); });
 }
 
-void TugMidiSeqAudioProcessor::readStepCondsFrom (const juce::ValueTree& state)
+void TugMidiSeqAudioProcessor::readStepDataFrom (const juce::ValueTree& state)
 {
-    clearStepConds();   // projects saved before conditions existed have none
-    auto node = state.getChildWithName ("stepConds");
-    if (! node.isValid()) return;
-    for (int i = 0; i < numOfLine; i++)
+    clearStepData();   // projects saved before these existed have none
+    auto read = [&state] (const char* nodeName, auto&& setAt)
     {
-        auto values = juce::StringArray::fromTokens (node.getProperty (juce::Identifier ("lane" + juce::String (i))).toString(), ",", "");
-        for (int j = 0; j < numOfStep && j < values.size(); j++)
-            setStepCond (i, j, values[j].getIntValue());
-    }
+        auto node = state.getChildWithName (nodeName);
+        if (! node.isValid()) return;
+        for (int i = 0; i < numOfLine; i++)
+        {
+            auto values = juce::StringArray::fromTokens (node.getProperty (juce::Identifier ("lane" + juce::String (i))).toString(), ",", "");
+            for (int j = 0; j < numOfStep && j < values.size(); j++)
+                setAt (i, j, values[j].getIntValue());
+        }
+    };
+    read ("stepConds",    [this] (int i, int j, int v) { setStepCond (i, j, v); });
+    read ("stepRatchets", [this] (int i, int j, int v) { setStepRatchet (i, j, v); });
 }
 
 //==============================================================================
@@ -1274,6 +1554,14 @@ void TugMidiSeqAudioProcessor::publishNoteMap()
         }
         laneInNote[i].store (in, std::memory_order_relaxed);
         laneOutNote[i].store (myIsPlaying && midiState[i] ? lastOutNote[i] : -1, std::memory_order_relaxed);
+
+        const int slotLen = stepResetIntervalForShuffle[i][jlimit (0, numOfStep - 1, steps[i])];
+        const int dir     = getDirection (i);
+        pubPlayStep[i].store (myIsPlaying ? playStep[i] : -1, std::memory_order_relaxed);
+        pubPlayFrac[i].store (slotLen > 0 ? jlimit (0.0f, 1.0f, (float) stpSample[i] / (float) slotLen) : 0.0f,
+                              std::memory_order_relaxed);
+        pubBackward[i].store (dir == DirReverse || (dir == DirPingPong && jmax (0, loopCount[i]) % 2 == 1),
+                              std::memory_order_relaxed);
     }
 }
 
