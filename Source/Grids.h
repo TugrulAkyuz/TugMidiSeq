@@ -342,40 +342,35 @@ public:
             g.fillRoundedRectangle (b, Theme::radSm);
         }
 
-        if (currentState == State::ButtonEventState)
+        // The markings get their own compartments so none lands on another:
+        //   top row:    step pitch (left); the Event dot (top-right corner)
+        //   bottom row: trig condition
+        //   middle:     the Event bow-tie, only if there's room left for it
+        // (Ratchet isn't drawn here: the note-length strip above the pad splits
+        // into its hits, see SubGrids::paint.)
+        const bool active = currentState != State::ButtonOffState;
+        const bool event  = currentState == State::ButtonEventState;
+        const int  cond   = audioProcesor.getStepCond (myLine, myStep);
+        const int  pitch  = audioProcesor.getStepPitch (myLine, myStep);
+
+        auto inner = b.reduced (1.5f);
+        auto top    = pitch != 0       ? inner.removeFromTop (markRowH)    : juce::Rectangle<float>();
+        auto bottom = cond != CondNone ? inner.removeFromBottom (markRowH) : juce::Rectangle<float>();
+        auto middle = inner;
+
+        if (event)
         {
-            // probability "dice" mark: event bow-tie + accent corner dot
-            juce::Path p;
-            int   y     = getHeight() / 2;
-            float effet = cos (evenAlpha * 3.14 / 2) * y / 2;
-            g.setColour (Theme::screen.withAlpha (0.85f));
-            p.startNewSubPath (getWidth() / 5.0f, y + effet);
-            p.lineTo (1.5 * getWidth() / 5, y + effet);
-            p.lineTo (3.5 * getWidth() / 5, y - effet);
-            p.lineTo (4.0 * getWidth() / 5, y - effet);
-            g.strokePath (p, PathStrokeType (2.0f));
-            p.clear();
-            p.startNewSubPath (getWidth() / 5.0f, y - effet);
-            p.lineTo (1.5 * getWidth() / 5, y - effet);
-            p.lineTo (3.5 * getWidth() / 5, y + effet);
-            p.lineTo (4.0 * getWidth() / 5, y + effet);
-            g.strokePath (p, PathStrokeType (2.0f));
-
+            if (middle.getHeight() >= 5.0f)
+                drawEventMark (g, middle);
             g.setColour (Theme::accentBright);
-            g.fillEllipse ((float) getWidth() - 5.0f, 2.0f, 3.0f, 3.0f);
+            g.fillEllipse (b.getRight() - 4.5f, b.getY() + 1.5f, 3.0f, 3.0f);
+            if (! top.isEmpty())
+                top.removeFromRight (5.0f);   // keep the dot clear
         }
-
-        const int cond = audioProcesor.getStepCond (myLine, myStep);
-        if (cond != CondNone)
-            drawCondTag (g, b, cond, currentState != State::ButtonOffState);
-
-        const int ratchet = audioProcesor.getStepRatchet (myLine, myStep);
-        if (ratchet > 1)
-            drawRatchetMarks (g, b, ratchet, currentState != State::ButtonOffState);
-
-        const int pitch = audioProcesor.getStepPitch (myLine, myStep);
         if (pitch != 0)
-            drawPitchTag (g, b, pitch, currentState != State::ButtonOffState);
+            drawPitchTag (g, top, pitch, active);
+        if (cond != CondNone)
+            drawCondTag (g, bottom, cond, active);
 
         // flipped by Mutate for now: a dashed frame (the written state is unchanged)
         if (mutated)
@@ -396,61 +391,75 @@ public:
         }
     }
 
-    // Trig-condition tag: a dark chip along the pad's bottom edge with the
-    // condition's short name, or just a corner flag when the pad is too narrow
-    // for text (long lanes). Dimmed on an off pad, where it has no effect.
-    void drawCondTag (juce::Graphics& g, juce::Rectangle<float> b, int cond, bool active)
+    static constexpr float markRowH = 8.0f;   // height of the pitch / condition rows
+
+    // Event "dice" bow-tie, sized to the compartment it's given; its opening
+    // follows the lane's event probability.
+    void drawEventMark (juce::Graphics& g, juce::Rectangle<float> area)
+    {
+        const float cy = area.getCentreY();
+        const float open = std::cos (evenAlpha * MathConstants<float>::halfPi) * area.getHeight() * 0.4f;
+        const float x0 = area.getX() + area.getWidth() * 0.15f, x1 = area.getX() + area.getWidth() * 0.3f;
+        const float x2 = area.getX() + area.getWidth() * 0.7f,  x3 = area.getX() + area.getWidth() * 0.85f;
+        g.setColour (Theme::screen.withAlpha (0.85f));
+        for (float sgn : { 1.0f, -1.0f })
+        {
+            juce::Path p;
+            p.startNewSubPath (x0, cy + sgn * open);
+            p.lineTo (x1, cy + sgn * open);
+            p.lineTo (x2, cy - sgn * open);
+            p.lineTo (x3, cy - sgn * open);
+            g.strokePath (p, PathStrokeType (jmin (2.0f, area.getHeight() * 0.25f)));
+        }
+    }
+
+    // Trig condition, in the bottom row: a dark chip with the condition's
+    // short name, or a corner flag when the pad is too narrow for text.
+    // Dimmed on an off pad, where it has no effect.
+    void drawCondTag (juce::Graphics& g, juce::Rectangle<float> row, int cond, bool active)
     {
         auto lane = colourarray[myLine];
         const float alpha = active ? 1.0f : 0.45f;
-
-        if (b.getWidth() < 18.0f)
+        if (row.getWidth() < 16.0f)
         {
-            // dark on a lit pad, lane-coloured on an unlit one: readable in every lane
-            juce::Path flag;
-            flag.addTriangle (b.getX(), b.getBottom(), b.getX() + 7.0f, b.getBottom(), b.getX(), b.getBottom() - 7.0f);
+            juce::Path flag;   // dark on a lit pad, lane-coloured on an unlit one
+            flag.addTriangle (row.getX(), row.getBottom(), row.getX() + 6.0f, row.getBottom(), row.getX(), row.getBottom() - 6.0f);
             g.setColour (active ? Theme::screen.withAlpha (0.85f) : lane.withAlpha (alpha));
             g.fillPath (flag);
             return;
         }
-
-        auto chip = b.removeFromBottom (9.0f).reduced (1.5f, 0.5f);
-        g.setColour (Theme::screen.withAlpha (0.78f * alpha));
-        g.fillRoundedRectangle (chip, 2.0f);
+        g.setColour (Theme::screen.withAlpha (0.82f * alpha));
+        g.fillRoundedRectangle (row, 2.0f);
         g.setColour (lane.brighter (0.5f).withAlpha (alpha));
-        g.setFont (Theme::valueFont (8.5f));
-        g.drawText (trigCondNames[cond], chip, juce::Justification::centred, false);
+        g.setFont (Theme::valueFont (8.0f));
+        g.drawFittedText (trigCondNames[cond], row.toNearestInt(), juce::Justification::centred, 1, 0.8f);
     }
 
-    // Ratchet: the pad's upper half is split into as many parts as the step has
-    // hits, like a subdivided note.
-    void drawRatchetMarks (juce::Graphics& g, juce::Rectangle<float> b, int hits, bool active)
+    // Step pitch, in the top row: a dark chip with an arrow and the amount
+    // ("↑7" / "↓3"), or a small up / down triangle when there's no room for it.
+    void drawPitchTag (juce::Graphics& g, juce::Rectangle<float> row, int pitch, bool active)
     {
-        g.setColour (active ? Theme::screen.withAlpha (0.75f) : colourarray[myLine].withAlpha (0.6f));
-        for (int k = 1; k < hits; k++)
+        const float alpha = active ? 1.0f : 0.55f;
+        const juce::String arrow = juce::CharPointer_UTF8 (pitch > 0 ? "\xe2\x86\x91" : "\xe2\x86\x93");   // ↑ ↓
+        const auto text = arrow + juce::String (std::abs (pitch));
+        const auto font = Theme::valueFont (8.0f);
+        const float w = juce::GlyphArrangement::getStringWidth (font, text) + 3.0f;
+        if (w > row.getWidth())
         {
-            const float x = b.getX() + b.getWidth() * (float) k / (float) hits;
-            g.drawLine (x, b.getY() + 2.0f, x, b.getY() + b.getHeight() * 0.45f, 1.3f);
-        }
-    }
-
-    // Step pitch: "+3" / "-5" in the top-left corner, or a small up / down
-    // triangle when the pad is too narrow for text.
-    void drawPitchTag (juce::Graphics& g, juce::Rectangle<float> b, int pitch, bool active)
-    {
-        g.setColour (active ? Theme::screen.withAlpha (0.85f) : colourarray[myLine].withAlpha (0.75f));
-        if (b.getWidth() < 18.0f)
-        {
+            g.setColour (active ? Theme::screen.withAlpha (0.85f) : colourarray[myLine].withAlpha (0.75f));
             juce::Path t;
-            const float x = b.getX() + 2.0f, y = b.getY() + 2.0f;
+            const float x = row.getX() + 0.5f, y = row.getY() + 1.0f;
             if (pitch > 0) t.addTriangle (x, y + 5.0f, x + 6.0f, y + 5.0f, x + 3.0f, y);
             else           t.addTriangle (x, y, x + 6.0f, y, x + 3.0f, y + 5.0f);
             g.fillPath (t);
             return;
         }
-        g.setFont (Theme::valueFont (8.5f));
-        g.drawText ((pitch > 0 ? "+" : "") + juce::String (pitch),
-                    b.reduced (2.0f, 1.0f).removeFromTop (9.0f), juce::Justification::topLeft, false);
+        auto chip = row.withWidth (w);
+        g.setColour (Theme::screen.withAlpha (0.82f * alpha));
+        g.fillRoundedRectangle (chip, 2.0f);
+        g.setColour (Theme::accentBright.withAlpha (alpha));
+        g.setFont (font);
+        g.drawText (text, chip, juce::Justification::centred, false);
     }
 
     // Right-click: this step's ratchet, pitch reset and trig condition. Defined in Grids.cpp.
@@ -732,7 +741,11 @@ private:
             laidOutBackward = backward;
             resized();
         }
-        int midi = audioProcessor.getMidi(myLine);
+        // the box shows the lane's note, or ALL (+ strum direction) for a
+        // lane that plays every held note
+        const int play = audioProcessor.getPlayMode (myLine);
+        const int midi = play == PlayVoice ? audioProcessor.getMidi (myLine)
+                                           : (audioProcessor.getHeldNoteCount() > 0 ? 1000 + play : -1);
         if(myMidiNote != midi)
             setMidiName(midi);
      
@@ -744,8 +757,21 @@ private:
         myMidiNote =  midi;
     }
     
+    // m: a note number, -1 for nothing held, or 1000 + LanePlayMode for a
+    // chord / strum lane with notes held
     void setMidiName(int m)
     {
+        if (m >= 1000)
+        {
+            static const juce::String all = "ALL";
+            const juce::String arrows[] = { "", "", juce::CharPointer_UTF8 ("\xe2\x86\x91"),     // ↑
+                                            juce::CharPointer_UTF8 ("\xe2\x86\x93"),            // ↓
+                                            juce::CharPointer_UTF8 ("\xe2\x86\x95") };          // ↕
+            midiInNote.setButtonText (all + arrows[jlimit (0, 4, m - 1000)]);
+            midiInNote.setColour(juce::TextButton::ColourIds::buttonColourId, colourarray[myLine]);
+            midiInNote.setColour(juce::TextButton::textColourOffId, Theme::screen);
+            return;
+        }
         if(m ==  -1)
         {
             midiInNote.setButtonText("");

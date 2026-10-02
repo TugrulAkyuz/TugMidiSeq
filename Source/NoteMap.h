@@ -102,6 +102,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> latchAttachment;
 
     juce::Rectangle<float> keyboard;
+    juce::Rectangle<float> legend;   // under the keyboard: what the key markings mean, with counts
+    void drawLegend (juce::Graphics&) const;
     float whiteW = 1.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (NoteMap)

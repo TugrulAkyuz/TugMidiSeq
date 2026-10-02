@@ -391,6 +391,12 @@ public:
     {
         return ((heldMask[note >> 6].load (std::memory_order_relaxed) >> (note & 63)) & 1) != 0;
     }
+    int getHeldNoteCount() const
+    {
+        int n = 0;
+        for (auto& m : heldMask) n += (int) std::bitset<64> (m.load (std::memory_order_relaxed)).count();   // portable popcount
+        return n;
+    }
     bool isNotePhysicallyHeld (int note) const
     {
         return ((physMask[note >> 6].load (std::memory_order_relaxed) >> (note & 63)) & 1) != 0;

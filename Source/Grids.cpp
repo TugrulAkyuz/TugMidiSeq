@@ -635,7 +635,21 @@ void  SubGrids::paint (juce::Graphics& g)
         const bool lit = i == playing && audioProcessor.midiState[myLine];
         const float alpha = lit ? 1.0f : (audioProcessor.getGridButtonState (myLine, i) == 2 ? eventProb : 1.0f) * 0.8f;
         g.setColour (colourarray[myLine].withAlpha (alpha));
-        g.fillRect (Rectangle<int> (s_x, 4, (int) (0.95 * len * sr * getWidth()), 5));
+        const float noteW = (float) (0.95 * len * sr * getWidth());
+        const int hits = audioProcessor.getStepRatchet (myLine, i);
+        if (hits <= 1)
+        {
+            g.fillRect (Rectangle<float> ((float) s_x, 4.0f, noteW, 5.0f));
+        }
+        else
+        {
+            // a ratchet plays `hits` shorter notes across the step: one segment
+            // each, as long as the engine gates them (3/4 of a share at most)
+            const float share = ownerGrid.padBounds (i).getWidth() / (float) hits;
+            const float segW  = jmax (1.0f, jmin (noteW, share * 0.75f));
+            for (int k = 0; k < hits; k++)
+                g.fillRect (Rectangle<float> ((float) s_x + share * (float) k, 4.0f, segW, 5.0f));
+        }
     }
 
     if (playing >= 0 && playing < numSteps)

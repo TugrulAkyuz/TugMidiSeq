@@ -131,6 +131,7 @@ void NoteMap::timerCallback()
 void NoteMap::resized()
 {
     auto area = getLocalBounds();
+    auto legendRow = area.removeFromBottom (10);
     area.removeFromLeft (26);                                    // line up with the lane-number column
     latchButton.setBounds (area.removeFromLeft (52).reduced (2, 4));
     fillButton.setBounds (area.removeFromLeft (44).reduced (2, 4));
@@ -147,6 +148,7 @@ void NoteMap::resized()
     area.removeFromRight (8);
 
     keyboard = area.reduced (2, 4).toFloat();
+    legend = legendRow.toFloat().withX (keyboard.getX()).withWidth (keyboard.getWidth()).withTrimmedBottom (1.0f);
     int whites = 0;
     for (int n = lowNote; n <= highNote; n++)
         if (! isBlack (n)) whites++;
@@ -360,9 +362,48 @@ void NoteMap::drawRangeArrow (juce::Graphics& g, bool left, juce::Colour c) cons
     g.fillPath (p);
 }
 
+// A key-style swatch, a caption and a count for each way a key can be lit:
+// held on a MIDI keyboard, held by a click here, kept by Latch, and the dot of
+// a note being played.
+void NoteMap::drawLegend (juce::Graphics& g) const
+{
+    auto count = [] (const uint64_t* mask)
+    {
+        return (int) (std::bitset<64> (mask[0]).count() + std::bitset<64> (mask[1]).count());
+    };
+    const uint64_t midiOnly[2] = { shown.phys[0] & ~shown.screen[0], shown.phys[1] & ~shown.screen[1] };
+    const uint64_t latched[2]  = { shown.held[0] & ~shown.phys[0],   shown.held[1] & ~shown.phys[1] };
+
+    auto r = legend;
+    const float h = r.getHeight();
+    const auto swatchColour = Theme::textSecondary;
+    auto item = [&] (const juce::String& caption, int n, auto&& drawSwatch)
+    {
+        auto sw = r.removeFromLeft (h + 1.0f).reduced (1.5f, 1.0f);
+        drawSwatch (sw);
+        r.removeFromLeft (3.0f);
+        const auto text = n >= 0 ? caption + " " + juce::String (n) : caption;
+        const float w = juce::GlyphArrangement::getStringWidth (Theme::labelFont (8.0f), text.toUpperCase()) + 4.0f;
+        Theme::drawCaption (g, text, r.removeFromLeft (w).toNearestInt(), juce::Justification::centredLeft,
+                            n > 0 || n < 0 ? Theme::textSecondary : Theme::textDim, 8.0f);
+        r.removeFromLeft (12.0f);
+    };
+
+    item ("Midi", count (midiOnly), [&] (juce::Rectangle<float> s)
+          { g.setColour (swatchColour); g.fillRoundedRectangle (s, 1.0f); });
+    item ("Clicked", count (shown.screen), [&] (juce::Rectangle<float> s)
+          { g.setColour (swatchColour); g.fillRoundedRectangle (s, 1.0f);
+            g.setColour (Theme::accentBright); g.fillRect (s.removeFromBottom (2.0f)); });
+    item ("Latched", count (latched), [&] (juce::Rectangle<float> s)
+          { g.setColour (swatchColour); g.drawRoundedRectangle (s.reduced (0.5f), 1.0f, 1.0f); });
+    item ("Sounding", -1, [&] (juce::Rectangle<float> s)
+          { g.setColour (Theme::accentBright); g.fillEllipse (s.withSizeKeepingCentre (5.0f, 5.0f)); });
+}
+
 void NoteMap::paint (juce::Graphics& g)
 {
     g.fillAll (Theme::panel);
+    drawLegend (g);
     Theme::drawRecessedWell (g, keyboard.expanded (2.0f, 2.0f), Theme::radSm);
 
     for (int n = lowNote; n <= highNote; n++)

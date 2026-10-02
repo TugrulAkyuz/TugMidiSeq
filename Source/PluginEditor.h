@@ -20,7 +20,7 @@
 const std::vector <std::string> topLabel={"Midi","Oct","G R I D S","#Grid","Speed","Duration","Vel","Event","Shuffle","Delay","Chan","Note Satellite","Strm"};
 
 // The UI is authored at this fixed size; the editor scales it uniformly.
-static constexpr int kNoteMapH      = 30;
+static constexpr int kNoteMapH      = 40;   // 30 controls + keyboard, 10 legend
 static constexpr int kEditorDesignW = 1212;
 static constexpr int kEditorDesignH = 276 + kNoteMapH;
 
