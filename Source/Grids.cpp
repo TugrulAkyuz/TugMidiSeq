@@ -238,9 +238,13 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
  
     myGridChangeListener.addChangeListener(this);
     
+    // click: solo; shift+click: mute
     midiInNote.onClick = [this]()
     {
-        audioProcessor.setGridSolo(myLine);
+        if (juce::ModifierKeys::getCurrentModifiers().isShiftDown())
+            audioProcessor.setLaneMute (myLine, ! audioProcessor.isLaneMuted (myLine));
+        else
+            audioProcessor.setGridSolo(myLine);
     };
     
 }
@@ -377,13 +381,33 @@ void Grids::mouseDown (const juce::MouseEvent& e)
 void Grids::showLaneMenu()
 {
     enum { dirBase = 10, euclidId = 20, copyId = 30, pasteId, shiftLeftId = 40, shiftRightId, clearId, shiftAllLeftId, shiftAllRightId,
-           mutateBase = 100, mutateResetId = 300, playBase = 400 };
+           mutateBase = 100, mutateResetId = 300, playBase = 400, muteId = 500, soloId };
     static const int mutateAmounts[] = { 0, 5, 10, 25, 50, 100 };
 
     const int dir = audioProcessor.getDirection (myLine);
     juce::PopupMenu m;
+    const juce::String shiftSymbol =
+       #if JUCE_MAC
+        juce::CharPointer_UTF8 ("\xe2\x87\xa7");   // ⇧
+       #else
+        "Shift+";
+       #endif
+    m.addSectionHeader ("Lane " + juce::String (myLine + 1));
+    {
+        juce::PopupMenu::Item mute ("Mute");
+        mute.itemID = muteId;
+        mute.isTicked = audioProcessor.isLaneMuted (myLine);
+        mute.shortcutKeyDescription = shiftSymbol + "click the note box";
+        m.addItem (mute);
+        juce::PopupMenu::Item solo ("Solo");
+        solo.itemID = soloId;
+        solo.isTicked = audioProcessor.getSoloState() == myLine;
+        solo.shortcutKeyDescription = "click the note box";
+        m.addItem (solo);
+    }
+
     const int play = audioProcessor.getPlayMode (myLine);
-    m.addSectionHeader ("Lane " + juce::String (myLine + 1) + "  -  plays");
+    m.addSectionHeader ("Plays");
     for (int p = 0; p < playModeNames.size(); p++)
         m.addItem (playBase + p, p == PlayVoice ? juce::String ("Voice  (its own note of the chord)")
                                  : p == PlayChord ? juce::String ("Chord  (all held notes at once)")
@@ -431,7 +455,9 @@ void Grids::showLaneMenu()
                          if (safe == nullptr || r == 0) return;
                          auto& p = safe->audioProcessor;
                          const int line = safe->myLine;
-                         if (r >= dirBase && r < dirBase + directionNames.size()) p.setLaneDirection (line, r - dirBase);
+                         if (r == muteId)      p.setLaneMute (line, ! p.isLaneMuted (line));
+                         else if (r == soloId) p.setGridSolo (line);
+                         else if (r >= dirBase && r < dirBase + directionNames.size()) p.setLaneDirection (line, r - dirBase);
                          else if (r >= mutateBase && r <= mutateBase + 100)      p.setLaneMutate (line, r - mutateBase);
                          else if (r == mutateResetId) p.requestMutationReset (line);
                          else if (r >= playBase && r < playBase + playModeNames.size()) p.setLanePlayMode (line, r - playBase);
@@ -506,6 +532,16 @@ void EuclidPanel::resized()
 
 void Grids::paintOverChildren (juce::Graphics& g)
 {
+    if (audioProcessor.isLaneMuted (myLine))
+    {
+        // muted: shadowed like a lane outside a solo, and labelled over the grid
+        g.setColour (Colours::black.withAlpha (0.55f));
+        g.fillRect (getLocalBounds());
+        auto grid = subGrids->getBounds();
+        Theme::drawCaption (g, "Muted", grid, juce::Justification::centred, Theme::accentBright, 12.0f);
+        return;
+    }
+
     int solo = audioProcessor.getSoloState();
     if (solo == -1) return;               // no solo active: nothing to shade
 

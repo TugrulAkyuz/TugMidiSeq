@@ -26,11 +26,11 @@ const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread","Mute"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD,MUTE
 };
 
 // Lane play direction. Time still runs forward (shuffle, delay and note
@@ -351,6 +351,13 @@ public:
     // or "Reset mutations", starts again from the written pattern.
     int  getMutate (int line) const          { return (int) *gridsMutateAtomic[line]; }
     int  getPlayMode (int line) const        { return (int) *gridsPlayModeAtomic[line]; }
+
+    // Mute (per lane, automatable, saved with the project but not in presets):
+    // the lane keeps running (steps, conditions, mutations) but sends no notes,
+    // so lanes whose NEI / PRE conditions read it behave the same. Mute wins
+    // over solo.
+    bool isLaneMuted (int line) const        { return *gridsMuteAtomic[line] > 0.5f; }
+    void setLaneMute (int line, bool muted); // one undo step
     int  getSpread (int line) const          { return (int) *gridsSpreadAtomic[line]; }
     void setLanePlayMode (int line, int mode);   // one undo step
     void setLaneMutate (int line, int percent);   // one undo step
@@ -790,6 +797,7 @@ private:
     std::atomic<float> *gridsMutateAtomic[numOfLine];
     std::atomic<float> *gridsPlayModeAtomic[numOfLine];
     std::atomic<float> *gridsSpreadAtomic[numOfLine];
+    std::atomic<float> *gridsMuteAtomic[numOfLine];
 
     // Strum: notes of the current strum still waiting for their turn (audio
     // thread, fixed size, no allocation).

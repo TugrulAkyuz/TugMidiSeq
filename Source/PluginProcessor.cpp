@@ -251,6 +251,14 @@ valueTreeState(*this, &undoManager)
         mutateResetRequest[j].store (false);
     }
 
+    for (int j = 0; j < numOfLine; j++)
+    {
+        tmp_s.clear();
+        tmp_s << valueTreeNames[MUTE] << j;
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s, false));
+        gridsMuteAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
+    }
+
     // C++17: std::atomic members start uninitialised
     clearStepData();
     for (int i = 0; i < numOfLine; i++)
@@ -703,6 +711,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     stepmidStopSampleCounter[i] = -1;
                     midiState[i] = false;
                 }
+                // muted while a strum or ratchet was still going: drop the rest
+                if (isLaneMuted (i)) { strumCount[i] = 0; ratchetLeft[i] = 0; }
+
                 // ratchet repeats of the step that fired last
                 tickStrum (i, midiMessages, s);
                 if (ratchetLeft[i] > 0 && --ratchetCountdown[i] <= 0)
@@ -984,6 +995,7 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
 bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessages,int s)
 {
     if(soloLane != -1 && soloLane != i ) return true;
+    if (isLaneMuted (i)) return true;   // the step still counted for PRE / NEI, it just isn't played
 
     if (getPlayMode (i) != PlayVoice)
     {
@@ -1556,6 +1568,11 @@ void TugMidiSeqAudioProcessor::setLaneDirection (int line, int dir)
 void TugMidiSeqAudioProcessor::setLaneMutate (int line, int percent)
 {
     undoableEdit ([&] { setParamValue (valueTreeNames[MUTATE] + juce::String (line), (float) percent); });
+}
+
+void TugMidiSeqAudioProcessor::setLaneMute (int line, bool muted)
+{
+    undoableEdit ([&] { setParamValue (valueTreeNames[MUTE] + juce::String (line), muted ? 1.0f : 0.0f); });
 }
 
 void TugMidiSeqAudioProcessor::setLanePlayMode (int line, int mode)
