@@ -26,17 +26,24 @@ const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD
 };
 
 // Lane play direction. Time still runs forward (shuffle, delay and note
 // durations stay on the time slots); only which grid step a slot plays changes.
 enum LaneDirection { DirForward = 0, DirReverse, DirPingPong, DirRandom };
 const juce::StringArray directionNames = { "Forward", "Reverse", "Ping-Pong", "Random" };
+
+// What a lane plays on its steps: its own voice of the chord (the original
+// behaviour), or the whole held chord, at once or strummed with `Spread<lane>`
+// milliseconds between notes. Strum Up/Down alternates on every hit.
+enum LanePlayMode { PlayVoice = 0, PlayChord, PlayStrumUp, PlayStrumDown, PlayStrumUpDown };
+const juce::StringArray playModeNames = { "Voice", "Chord", "Strum Up", "Strum Down", "Strum Up/Down" };
+constexpr int maxStrumNotes = 16;
 
 // Elektron-style trig conditions, one per step. A step only fires when its
 // condition passes (and, for an Event cell, its probability roll too).
@@ -138,6 +145,8 @@ public:
     int scaleKey = 0, scaleType = 0;
     int direction[numOfLine] = {};
     int mutate[numOfLine] = {};
+    int playMode[numOfLine] = {};
+    int spread[numOfLine] = { 20, 20, 20, 20, 20 };
     int numOfGrid[numOfLine];
     int octave[numOfLine];
     int gridsSpeed[numOfLine];
@@ -341,6 +350,10 @@ public:
     // On / Event step rests); 0 % freezes the current mask, and every play,
     // or "Reset mutations", starts again from the written pattern.
     int  getMutate (int line) const          { return (int) *gridsMutateAtomic[line]; }
+    int  getPlayMode (int line) const        { return (int) *gridsPlayModeAtomic[line]; }
+    int  getSpread (int line) const          { return (int) *gridsSpreadAtomic[line]; }
+    void setLanePlayMode (int line, int mode);   // one undo step
+    void setLaneSpread (int line, int ms);       // one undo step
     void setLaneMutate (int line, int percent);   // one undo step
     void requestMutationReset (int line)     { mutateResetRequest[line].store (true); }
     bool isStepMutated (int line, int step) const
@@ -766,6 +779,17 @@ private:
     std::atomic<float> *gridsMidiRouteAtomic[numOfLine];
     std::atomic<float> *gridsDirectionAtomic[numOfLine];
     std::atomic<float> *gridsMutateAtomic[numOfLine];
+    std::atomic<float> *gridsPlayModeAtomic[numOfLine];
+    std::atomic<float> *gridsSpreadAtomic[numOfLine];
+
+    // Strum: notes of the current strum still waiting for their turn (audio
+    // thread, fixed size, no allocation).
+    struct StrumNote { int countdown; int duration; juce::MidiMessage note; };
+    StrumNote strumQueue[numOfLine][maxStrumNotes];
+    int  strumCount[numOfLine] = {};
+    bool strumDownNext[numOfLine] = {};
+    void playChord (int line, int duration, juce::MidiBuffer& midiMessages, int sample);
+    void tickStrum (int line, juce::MidiBuffer& midiMessages, int sample);
     uint32_t mutateMask[numOfLine] = {};                // audio thread
     std::atomic<uint32_t> pubMutateMask[numOfLine];     // for the pads
     std::atomic<bool> mutateResetRequest[numOfLine];

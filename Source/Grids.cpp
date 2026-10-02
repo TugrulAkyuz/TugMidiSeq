@@ -249,6 +249,22 @@ void Grids::paint (juce::Graphics& g)
     drawDirectionGlyph (g, directionArea.toFloat().withSizeKeepingCentre (11.0f, 9.0f)
                                                  .withX ((float) directionArea.getRight() - 12.0f));
 
+    // chord / strum lanes: stacked note bars left of the lane number, staggered for strums
+    const int play = audioProcessor.getPlayMode (myLine);
+    if (play != PlayVoice)
+    {
+        g.setColour (colourarray[myLine].withAlpha (0.95f));
+        const float x = 4.5f, y = (float) myLineLabel.getBounds().getCentreY() - 5.0f;
+        for (int k = 0; k < 3; k++)
+        {
+            float shift = 0.0f;
+            if (play == PlayStrumUp)   shift = (float) (2 - k) * 1.5f;   // low note (bottom) first
+            if (play == PlayStrumDown) shift = (float) k * 1.5f;
+            if (play == PlayStrumUpDown) shift = k == 1 ? 1.5f : 0.0f;
+            g.fillRect (x + shift, y + (float) k * 4.0f, 4.0f, 2.0f);
+        }
+    }
+
     // hairline separators (row bottom, top for the first lane, control columns)
     g.setColour (Theme::hairline.withAlpha (0.7f));
     g.drawLine (0, bounds.getBottom() - 0.5f, bounds.getRight(), bounds.getBottom() - 0.5f, 1.0f);
@@ -326,12 +342,26 @@ void Grids::mouseDown (const juce::MouseEvent& e)
 void Grids::showLaneMenu()
 {
     enum { dirBase = 10, euclidId = 20, copyId = 30, pasteId, shiftLeftId = 40, shiftRightId, clearId,
-           mutateBase = 100, mutateResetId = 300 };
+           mutateBase = 100, mutateResetId = 300, playBase = 400, spreadBase = 500 };
     static const int mutateAmounts[] = { 0, 5, 10, 25, 50, 100 };
 
     const int dir = audioProcessor.getDirection (myLine);
     juce::PopupMenu m;
-    m.addSectionHeader ("Lane " + juce::String (myLine + 1) + "  -  direction");
+    const int play = audioProcessor.getPlayMode (myLine);
+    m.addSectionHeader ("Lane " + juce::String (myLine + 1) + "  -  plays");
+    for (int p = 0; p < playModeNames.size(); p++)
+        m.addItem (playBase + p, p == PlayVoice ? juce::String ("Voice  (its own note of the chord)")
+                                 : p == PlayChord ? juce::String ("Chord  (all held notes at once)")
+                                                  : playModeNames[p],
+                   true, p == play);
+    {
+        juce::PopupMenu spreadMenu;
+        const int spread = audioProcessor.getSpread (myLine);
+        for (int ms : { 5, 10, 20, 35, 50, 80 })
+            spreadMenu.addItem (spreadBase + ms, juce::String (ms) + " ms", true, ms == spread);
+        m.addSubMenu ("Strum spread  (" + juce::String (spread) + " ms)", spreadMenu, play >= PlayStrumUp);
+    }
+    m.addSectionHeader ("Direction");
     for (int d = 0; d < directionNames.size(); d++)
         m.addItem (dirBase + d, directionNames[d], true, d == dir);
     const int mutate = audioProcessor.getMutate (myLine);
@@ -366,6 +396,8 @@ void Grids::showLaneMenu()
                          if (r >= dirBase && r < dirBase + directionNames.size()) p.setLaneDirection (line, r - dirBase);
                          else if (r >= mutateBase && r <= mutateBase + 100)      p.setLaneMutate (line, r - mutateBase);
                          else if (r == mutateResetId) p.requestMutationReset (line);
+                         else if (r >= playBase && r < playBase + playModeNames.size()) p.setLanePlayMode (line, r - playBase);
+                         else if (r > spreadBase && r <= spreadBase + 100)            p.setLaneSpread (line, r - spreadBase);
                          else if (r == copyId)       p.copyLane (line);
                          else if (r == pasteId)      p.pasteLane (line);
                          else if (r == shiftLeftId)  p.shiftLane (line, -1);

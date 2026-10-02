@@ -237,6 +237,16 @@ valueTreeState(*this, &undoManager)
         tmp_s << valueTreeNames[MUTATE] << j;
         valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s, 0, 100, 0));
         gridsMutateAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
+
+        tmp_s.clear();
+        tmp_s << valueTreeNames[PLAYMODE] << j;
+        valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterChoice>(ParameterID{tmp_s,1}, tmp_s, playModeNames, PlayVoice));
+        gridsPlayModeAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
+
+        tmp_s.clear();
+        tmp_s << valueTreeNames[SPREAD] << j;
+        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s, 0, 100, 20));
+        gridsSpreadAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         pubMutateMask[j].store (0);
         mutateResetRequest[j].store (false);
     }
@@ -427,6 +437,9 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
             tmp_s << valueTreeNames[MUTATE] << i;
             setParamValue(tmp_s, prog.mutate[i]);
 
+            setParamValue(valueTreeNames[PLAYMODE] + juce::String (i), prog.playMode[i]);
+            setParamValue(valueTreeNames[SPREAD] + juce::String (i), prog.spread[i]);
+
         }
     setParamValue(valueTreeNames[GLOBALRESTBAR],  prog.globalResyncBar);
     setParamValue(valueTreeNames[GLOABLINORFIXVEL], prog.GlobalInOrFixedVel);
@@ -579,6 +592,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             initForVariables();
             resetTrigCondState();   // conditions count loops from the next play
             for (auto& r : ratchetLeft) r = 0;   // no leftover repeats on the next play
+            for (auto& c : strumCount) c = 0;    // ... or strums
             for (auto& m : mutateMask) m = 0;    // every play starts from the written pattern
         }
         if(myIsPlaying == true &&  positionInfo.isPlaying == false )/**ppq ye bakma code*/
@@ -690,9 +704,13 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     midiState[i] = false;
                 }
                 // ratchet repeats of the step that fired last
+                tickStrum (i, midiMessages, s);
                 if (ratchetLeft[i] > 0 && --ratchetCountdown[i] <= 0)
                 {
-                    emitLaneNote (i, ratchetNote[i], ratchetDuration[i], midiMessages, s);
+                    if (getPlayMode (i) == PlayVoice)
+                        emitLaneNote (i, ratchetNote[i], ratchetDuration[i], midiMessages, s);
+                    else
+                        playChord (i, ratchetDuration[i], midiMessages, s);   // the whole chord / strum again
                     if (--ratchetLeft[i] > 0)
                         ratchetCountdown[i] = ratchetInterval[i];
                 }
@@ -966,6 +984,26 @@ void TugMidiSeqAudioProcessor::initPrepareValue()
 bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessages,int s)
 {
     if(soloLane != -1 && soloLane != i ) return true;
+
+    if (getPlayMode (i) != PlayVoice)
+    {
+        if (! myIsPlaying || inMidiNoteList.empty()) return true;
+        int duration = jmax (0, stepmidStopSampleIntervalForShuffle[i][steps[i]] - 1);
+        const int hits = getStepRatchet (i, playStep[i]);
+        ratchetLeft[i] = 0;
+        if (hits > 1)   // as below, but each repeat replays the chord
+        {
+            const int interval = jmax (1, stepResetIntervalForShuffle[i][steps[i]] / hits);
+            duration = jmax (1, jmin (duration, interval * 3 / 4));
+            ratchetLeft[i]      = hits - 1;
+            ratchetInterval[i]  = interval;
+            ratchetCountdown[i] = interval;
+            ratchetDuration[i]  = duration;
+        }
+        playChord (i, duration, midiMessages, s);
+        return true;
+    }
+
     int midRouteIndex = *gridsMidiRouteAtomic[i];
     bool  sortedofirs_Bool = inMidiNoteList.size() > i;
     if(*sortedOrFirstEmptySelectAtomic == true)
@@ -1034,6 +1072,66 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         emitLaneNote (i, it, duration, midiMessages, s);
     }
     return true;
+}
+
+// Chord / strum: every held note (low to high, max maxStrumNotes), each through
+// the lane's octave, the step's pitch and the scale lock. A strum puts Spread ms
+// between notes and shortens the later ones so they all end together, like
+// strings that were hit one after another. A new hit cuts a strum still
+// being played.
+void TugMidiSeqAudioProcessor::playChord (int line, int duration, juce::MidiBuffer& midiMessages, int sample)
+{
+    const int mode = getPlayMode (line);
+    int notes[maxStrumNotes];
+    float velocities[maxStrumNotes];
+    int count = 0;
+
+    float laneVel = jlimit (0.0f, 1.0f, (*gridsVelAtomic[line] / 90.0f) * (*gridVelArrAtomic[line][playStep[line]] / 127.0f));
+    for (const auto& held : inMidiNoteList)
+    {
+        if (count == maxStrumNotes) break;
+        const int n = pitchedNote (held.getNoteNumber() + (int) *octave[line] * 12, getStepPitch (line, playStep[line]));
+        bool dup = false;   // the scale lock can fold two keys onto one note
+        for (int k = 0; k < count; k++) dup |= notes[k] == n;
+        if (dup) continue;
+        notes[count] = n;
+        velocities[count] = *GlobalInOrFixedAtomic == 0 ? laneVel : held.getFloatVelocity();
+        count++;
+    }
+    if (count == 0) return;
+
+    bool downward = mode == PlayStrumDown;
+    if (mode == PlayStrumUpDown)
+    {
+        downward = strumDownNext[line];
+        strumDownNext[line] = ! strumDownNext[line];
+    }
+    const int spreadSamples = mode == PlayChord ? 0 : (int) (getSpread (line) * mySampleRate / 1000.0);
+    const int channel = (int) *gridsMidiRouteAtomic[line];
+
+    strumCount[line] = 0;
+    for (int k = 0; k < count; k++)
+    {
+        const int idx = downward ? count - 1 - k : k;
+        auto note = juce::MidiMessage::noteOn (channel, notes[idx], velocities[idx]);
+        const int delay = k * spreadSamples;
+        const int length = jmax (1, duration - delay);
+        if (delay == 0)
+            emitLaneNote (line, note, length, midiMessages, sample);
+        else
+            strumQueue[line][strumCount[line]++] = { delay, length, note };
+    }
+}
+
+void TugMidiSeqAudioProcessor::tickStrum (int line, juce::MidiBuffer& midiMessages, int sample)
+{
+    for (int k = 0; k < strumCount[line];)
+    {
+        auto& q = strumQueue[line][k];
+        if (--q.countdown > 0) { k++; continue; }
+        emitLaneNote (line, q.note, q.duration, midiMessages, sample);
+        q = strumQueue[line][--strumCount[line]];   // swap-remove; order no longer matters
+    }
 }
 
 // Sends one note for lane `line` (cutting an identical note that's still
@@ -1300,7 +1398,7 @@ namespace
     LaneClipboard laneClipboard;
 
     // per-lane settings a copy carries (not the MIDI channel: that's routing)
-    const int copiedSettings[] = { GRIDNUM, SPEEED, DUR, OCTAVE, VEL, EVENT, GRIDSHUFFLE, GRIDDELAY, DIRECTION, MUTATE };
+    const int copiedSettings[] = { GRIDNUM, SPEEED, DUR, OCTAVE, VEL, EVENT, GRIDSHUFFLE, GRIDDELAY, DIRECTION, MUTATE, PLAYMODE, SPREAD };
 
     juce::String cellID (int base, int line, int step)
     {
@@ -1449,6 +1547,16 @@ void TugMidiSeqAudioProcessor::setLaneDirection (int line, int dir)
 void TugMidiSeqAudioProcessor::setLaneMutate (int line, int percent)
 {
     undoableEdit ([&] { setParamValue (valueTreeNames[MUTATE] + juce::String (line), (float) percent); });
+}
+
+void TugMidiSeqAudioProcessor::setLanePlayMode (int line, int mode)
+{
+    undoableEdit ([&] { setParamValue (valueTreeNames[PLAYMODE] + juce::String (line), (float) mode); });
+}
+
+void TugMidiSeqAudioProcessor::setLaneSpread (int line, int ms)
+{
+    undoableEdit ([&] { setParamValue (valueTreeNames[SPREAD] + juce::String (line), (float) ms); });
 }
 
 // Audio thread, once per completed loop of the lane.
