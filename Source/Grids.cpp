@@ -360,7 +360,7 @@ void Grids::mouseDown (const juce::MouseEvent& e)
 
 void Grids::showLaneMenu()
 {
-    enum { dirBase = 10, euclidId = 20, copyId = 30, pasteId, shiftLeftId = 40, shiftRightId, clearId,
+    enum { dirBase = 10, euclidId = 20, copyId = 30, pasteId, shiftLeftId = 40, shiftRightId, clearId, shiftAllLeftId, shiftAllRightId,
            mutateBase = 100, mutateResetId = 300, playBase = 400 };
     static const int mutateAmounts[] = { 0, 5, 10, 25, 50, 100 };
 
@@ -393,8 +393,18 @@ void Grids::showLaneMenu()
     m.addItem (copyId,  "Copy lane");
     m.addItem (pasteId, "Paste lane", audioProcessor.hasLaneClipboard());
     m.addSeparator();
-    m.addItem (shiftLeftId,  "Shift steps left");
-    m.addItem (shiftRightId, "Shift steps right");
+    // the shortcuts work while the mouse is over a lane
+    auto shortcutItem = [&m] (int id, const juce::String& text, const juce::String& keys)
+    {
+        juce::PopupMenu::Item item (text);
+        item.itemID = id;
+        item.shortcutKeyDescription = keys;
+        m.addItem (item);
+    };
+    shortcutItem (shiftLeftId,     "Shift steps left",            ShortcutText::left);
+    shortcutItem (shiftRightId,    "Shift steps right",           ShortcutText::right);
+    shortcutItem (shiftAllLeftId,  "Shift all lanes left",        ShortcutText::shiftLeft);
+    shortcutItem (shiftAllRightId, "Shift all lanes right",       ShortcutText::shiftRight);
     m.addItem (clearId,      "Clear lane");
 
     m.setLookAndFeel (&myLookAndFeel);
@@ -413,6 +423,8 @@ void Grids::showLaneMenu()
                          else if (r == pasteId)      p.pasteLane (line);
                          else if (r == shiftLeftId)  p.shiftLane (line, -1);
                          else if (r == shiftRightId) p.shiftLane (line, +1);
+                         else if (r == shiftAllLeftId)  p.shiftAllLanes (-1);
+                         else if (r == shiftAllRightId) p.shiftAllLanes (+1);
                          else if (r == clearId)      p.clearLane (line);
                          else if (r == euclidId)
                              juce::CallOutBox::launchAsynchronously (std::make_unique<EuclidPanel> (p, line),

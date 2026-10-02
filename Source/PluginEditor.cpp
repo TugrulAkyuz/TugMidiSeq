@@ -38,6 +38,10 @@ EditorContent::EditorContent (TugMidiSeqAudioProcessor& p)
     for (auto i = 0; i < 5; i++)
         globalPanel.setGridComp (grids[i], i);
 
+    // takes the keyboard focus when anything inside is clicked (nothing below
+    // wants it), so keyPressed sees the shortcuts; unhandled keys go on to the host
+    setWantsKeyboardFocus (true);
+
     setSize (kEditorDesignW, kEditorDesignH);
 }
 
@@ -63,6 +67,44 @@ void EditorContent::paint (juce::Graphics& g)
     g.setFont (Theme::valueFont (9.0f));
     g.drawFittedText (ver, getWidth() - 62, topInLabel[11]->getBounds().getY(),
                       54, topInLabel[11]->getBounds().getHeight(), Justification::centredRight, 1);
+}
+
+Grids* EditorContent::laneUnderMouse() const
+{
+    const auto mouse = juce::Desktop::getMousePosition();
+    for (auto* g : grids)
+        if (g->getScreenBounds().contains (mouse))
+            return g;
+    return nullptr;
+}
+
+// Cmd+Z / Cmd+Shift+Z (Ctrl on Windows): undo / redo.
+// With the mouse over a lane: Left / Right shift that lane a step,
+// Shift+Left / Shift+Right shift every lane. Away from the lanes the arrows
+// are left to the host, as is every other key.
+bool EditorContent::keyPressed (const juce::KeyPress& key)
+{
+    const auto mods = key.getModifiers();
+    const int code = key.getKeyCode();
+
+    if (mods.isCommandDown() && juce::CharacterFunctions::toLowerCase ((juce::juce_wchar) code) == 'z')
+    {
+        if (mods.isShiftDown()) audioProcessor.redo();
+        else                    audioProcessor.undo();
+        return true;
+    }
+
+    if ((code == juce::KeyPress::leftKey || code == juce::KeyPress::rightKey)
+        && ! mods.isCommandDown() && ! mods.isAltDown() && ! mods.isCtrlDown())
+    {
+        auto* lane = laneUnderMouse();
+        if (lane == nullptr) return false;
+        const int delta = code == juce::KeyPress::leftKey ? -1 : 1;
+        if (mods.isShiftDown()) audioProcessor.shiftAllLanes (delta);
+        else                    audioProcessor.shiftLane (lane->getLine(), delta);
+        return true;
+    }
+    return false;
 }
 
 void EditorContent::resized()

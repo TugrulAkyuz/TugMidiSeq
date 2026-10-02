@@ -35,9 +35,11 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    bool keyPressed (const juce::KeyPress&) override;
 
 private:
     TugMidiSeqAudioProcessor& audioProcessor;
+    Grids* laneUnderMouse() const;
 
     juce::OwnedArray< Grids> grids;
     Satellite satellite;

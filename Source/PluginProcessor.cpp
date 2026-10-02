@@ -1481,7 +1481,8 @@ void TugMidiSeqAudioProcessor::pasteLane (int line)
     myGridChangeListener.sendChangeMessage();
 }
 
-void TugMidiSeqAudioProcessor::shiftLane (int line, int delta)
+// Rotates a lane's steps within its length; the caller owns the undo step.
+void TugMidiSeqAudioProcessor::rotateLaneSteps (int line, int delta)
 {
     const int n = jlimit (1, numOfStep, (int) *numOfGrid[line]);
     float cells[numOfStep], vels[numOfStep];
@@ -1494,18 +1495,26 @@ void TugMidiSeqAudioProcessor::shiftLane (int line, int delta)
         ratchets[s] = getStepRatchet (line, s);
         pitches[s] = getStepPitch (line, s);
     }
-    undoableEdit ([&]
+    for (int s = 0; s < n; s++)
     {
-        for (int s = 0; s < n; s++)
-        {
-            const int from = ((s - delta) % n + n) % n;   // delta +1 moves everything one step right
-            setParamValue (cellID (BLOCK, line, s), cells[from]);
-            setParamValue (cellID (VELGRIDBUTTON, line, s), vels[from]);
-            setStepCondUndoable (line, s, conds[from]);
-            setStepRatchetUndoable (line, s, ratchets[from]);
-            setStepPitchUndoable (line, s, pitches[from]);
-        }
-    });
+        const int from = ((s - delta) % n + n) % n;   // delta +1 moves everything one step right
+        setParamValue (cellID (BLOCK, line, s), cells[from]);
+        setParamValue (cellID (VELGRIDBUTTON, line, s), vels[from]);
+        setStepCondUndoable (line, s, conds[from]);
+        setStepRatchetUndoable (line, s, ratchets[from]);
+        setStepPitchUndoable (line, s, pitches[from]);
+    }
+}
+
+void TugMidiSeqAudioProcessor::shiftLane (int line, int delta)
+{
+    undoableEdit ([&] { rotateLaneSteps (line, delta); });
+    notifyStateChanged();
+}
+
+void TugMidiSeqAudioProcessor::shiftAllLanes (int delta)
+{
+    undoableEdit ([&] { for (int i = 0; i < numOfLine; i++) rotateLaneSteps (i, delta); });
     notifyStateChanged();
 }
 

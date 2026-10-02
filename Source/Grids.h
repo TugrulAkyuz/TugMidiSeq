@@ -30,6 +30,19 @@ enum  {
 };
 const std::string midiNotes[]={"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
 
+// Keyboard shortcuts as shown in menus (handled in EditorContent::keyPressed).
+namespace ShortcutText
+{
+   #if JUCE_MAC
+    const juce::String left       = juce::CharPointer_UTF8 ("\xe2\x86\x90");                  // ←
+    const juce::String right      = juce::CharPointer_UTF8 ("\xe2\x86\x92");                  // →
+    const juce::String shiftLeft  = juce::CharPointer_UTF8 ("\xe2\x87\xa7\xe2\x86\x90");      // ⇧←
+    const juce::String shiftRight = juce::CharPointer_UTF8 ("\xe2\x87\xa7\xe2\x86\x92");      // ⇧→
+   #else
+    const juce::String left = "Left", right = "Right", shiftLeft = "Shift+Left", shiftRight = "Shift+Right";
+   #endif
+}
+
 // Column widths of a lane row, left to right and then right to left; the grid
 // takes what's left in between. EditorContent places the header captions from
 // the same numbers, so they stay over their columns.
@@ -662,6 +675,7 @@ public:
 
     // clicks on the lane number open the lane menu
     void mouseDown (const juce::MouseEvent& e) override;
+    int getLine() const { return myLine; }
 private:
     void showLaneMenu();
     void drawDirectionGlyph (juce::Graphics& g, juce::Rectangle<float> area) const;

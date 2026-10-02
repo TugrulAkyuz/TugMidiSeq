@@ -473,20 +473,23 @@ public:
     // Undo / redo (message thread only). Parameter changes are recorded by the
     // APVTS itself (it was created with undoManager); these group them into one
     // step per user action and add the non-parameter edits (step conditions).
-    void beginUndoStep() { undoManager.beginNewTransaction(); }
+    // Flushing first matters as much as flushing after: a change that's still
+    // waiting for the APVTS timer would otherwise be recorded inside the new
+    // step, with the wrong "before" value, and undoing it would wipe it.
+    void beginUndoStep() { flushToUndo(); undoManager.beginNewTransaction(); }
     // closes a step opened with beginUndoStep() whose edits went through
     // parameters (flushes them into the tree first, like undoableEdit)
-    void endUndoStep() { (void) valueTreeState.copyState(); undoManager.beginNewTransaction(); }
+    void endUndoStep() { flushToUndo(); undoManager.beginNewTransaction(); }
     // Runs `edit` as a single undo step. The APVTS copies parameter values into
     // its tree (where undo records them) on a timer, so flush before returning:
     // otherwise the changes could land in whatever step the next click starts.
     template <typename Fn> void undoableEdit (Fn&& edit)
     {
-        undoManager.beginNewTransaction();
+        beginUndoStep();
         edit();
-        (void) valueTreeState.copyState();   // copyState() flushes parameters to the tree
-        undoManager.beginNewTransaction();
+        endUndoStep();
     }
+    void flushToUndo() { (void) valueTreeState.copyState(); }   // copyState() flushes parameters to the tree
     bool canUndo() const { return undoManager.canUndo(); }
     bool canRedo() const { return undoManager.canRedo(); }
     void undo() { (void) valueTreeState.copyState(); undoManager.undo(); notifyStateChanged(); myGridChangeListener.sendChangeMessage(); }
@@ -498,6 +501,7 @@ public:
     void pasteLane (int line);
     bool hasLaneClipboard() const;
     void shiftLane (int line, int delta);                 // rotate within the lane length
+    void shiftAllLanes (int delta);                       // every lane, as one undo step
     void euclidLane (int line, int hits, int rotation);   // without its own undo step: see EuclidPanel
     void clearLane (int line);
     void setLaneDirection (int line, int dir);
@@ -793,6 +797,7 @@ private:
     std::atomic<uint32_t> pubMutateMask[numOfLine];     // for the pads
     std::atomic<bool> mutateResetRequest[numOfLine];
     void mutateLane (int line);
+    void rotateLaneSteps (int line, int delta);
     int directedStep (int line, int slot) const;
     bool cellActiveAtSlot (int line, int slot) const;
     std::atomic<float> *GlobalInOrFixedAtomic;;
