@@ -689,6 +689,21 @@ public:
         return defaultW;
     }
 
+    //==========================================================================
+    // MIDI export (message thread). Plays the current pattern offline, in a
+    // private copy of this processor, for `bars` 4/4 bars with the notes
+    // currently held (or a default chord when none are) and writes a type-1
+    // MIDI file at 960 PPQ. Each lane keeps its own MIDI channel.
+    juce::File renderPatternToMidiFile (int bars);
+    juce::MidiMessageSequence renderPattern (int bars, const juce::Array<int>& notes);
+    juce::Array<int> notesForExport() const;
+    int  getExportBars() const   { return (int) valueTreeState.state.getChildWithName ("editor").getProperty ("exportBars", 4); }
+    void setExportBars (int bars) { valueTreeState.state.getOrCreateChildWithName ("editor", nullptr).setProperty ("exportBars", bars, nullptr); }
+
+    // set on the private copy used by renderPattern(): no external MIDI port,
+    // no in-built synth
+    bool offlineRender = false;
+
 private:
     int soloLane = -1;
     

@@ -594,7 +594,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         if(myIsPlaying == false)
         {
             midiHandling(midiMessagesStack,0,false);
-            if(*channelOnAtamic == true)
+            if(*channelOnAtamic == true && ! offlineRender)
             {
                 midiProcessor->sendMidiBuffer(midiMessagesStack, mySampleRate);
             }
@@ -717,7 +717,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     if(*inBuiltSynthAtomic == false)
         for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
             buffer.clear (i, 0, buffer.getNumSamples());
-    if(*channelOnAtamic == true)
+    if(*channelOnAtamic == true && ! offlineRender)
     {
 
         midiProcessor->sendMidiBuffer(midiMessages, mySampleRate);
@@ -783,7 +783,8 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
     program = valueTreeState.state.getProperty ("currentProgram", program);
 
     midiPortName = getMidiPortNameFromXml();
-    midiProcessor->setMidiPort(midiPortName);
+    if (! offlineRender)   // the export copy must not open the user's MIDI port
+        midiProcessor->setMidiPort(midiPortName);
 }
 
 void TugMidiSeqAudioProcessor::initPrepareValue()
@@ -1420,6 +1421,152 @@ void TugMidiSeqAudioProcessor::clearLane (int line)
 void TugMidiSeqAudioProcessor::setLaneDirection (int line, int dir)
 {
     undoableEdit ([&] { setParamValue (valueTreeNames[DIRECTION] + juce::String (line), (float) dir); });
+}
+
+//==============================================================================
+// MIDI export
+
+namespace
+{
+    // A transport that is always at `pos` samples into a 120 BPM 4/4 song.
+    // The engine's timing is all in note values, so the tempo only sets the
+    // sample <-> beat conversion and doesn't change the exported pattern.
+    struct OfflinePlayHead : juce::AudioPlayHead
+    {
+        static constexpr double sampleRate = 48000.0, bpm = 120.0;
+        juce::int64 pos = 0;
+        bool playing = false;
+
+        juce::Optional<PositionInfo> getPosition() const override
+        {
+            PositionInfo info;
+            info.setBpm (bpm);
+            info.setIsPlaying (playing);
+            info.setTimeInSamples (pos);
+            info.setPpqPosition ((double) pos / samplesPerBeat());
+            info.setTimeSignature (TimeSignature { 4, 4 });
+            return info;
+        }
+        static double samplesPerBeat() { return sampleRate * 60.0 / bpm; }
+    };
+}
+
+// The lanes' notes first, in lane order (so FirstIn mode hands each lane the
+// same note it has now), then any other held notes.
+juce::Array<int> TugMidiSeqAudioProcessor::notesForExport() const
+{
+    juce::Array<int> notes;
+    for (int i = 0; i < numOfLine; i++)
+        if (laneInNote[i].load() >= 0)
+            notes.addIfNotAlreadyThere (laneInNote[i].load());
+    for (int n = 0; n < 128; n++)
+        if (isNoteHeld (n))
+            notes.addIfNotAlreadyThere (n);
+    if (notes.isEmpty())
+        notes = { 60, 64, 67, 71, 74 };   // nothing held: a C major 9 voicing, one note per lane
+    return notes;
+}
+
+juce::MidiMessageSequence TugMidiSeqAudioProcessor::renderPattern (int bars, const juce::Array<int>& notes)
+{
+    constexpr int block = 512;
+    constexpr double ticksPerBeat = 960.0;
+
+    TugMidiSeqAudioProcessor copy;
+    copy.offlineRender = true;
+    juce::MemoryBlock state;
+    getStateInformation (state);
+    copy.setStateInformation (state.getData(), (int) state.getSize());
+    copy.setParamValue (valueTreeNames[INBUILTSYNTH], 0.0f);
+    copy.setParamValue (valueTreeNames[LATCH], 0.0f);   // the notes below are simply held
+
+    OfflinePlayHead playHead;
+    copy.setPlayHead (&playHead);
+    copy.prepareToPlay (OfflinePlayHead::sampleRate, block);
+    juce::AudioBuffer<float> buffer (2, block);
+
+    juce::MidiMessageSequence out;
+    auto runBlock = [&] (juce::MidiBuffer& midi, bool capture)
+    {
+        buffer.clear();
+        copy.processBlock (buffer, midi);
+        if (capture)
+            for (const auto meta : midi)
+            {
+                auto m = meta.getMessage();
+                if (! m.isNoteOnOrOff()) continue;
+                const double beats = (double) (playHead.pos + meta.samplePosition) / OfflinePlayHead::samplesPerBeat();
+                m.setTimeStamp (std::round (beats * ticksPerBeat));
+                out.addEvent (m);
+            }
+        playHead.pos += block;
+    };
+
+    // stopped: take the notes in and let the engine reset its lanes
+    {
+        juce::MidiBuffer in;
+        for (int n : notes)
+            in.addEvent (juce::MidiMessage::noteOn (1, n, (juce::uint8) 100), 0);
+        runBlock (in, false);
+        juce::MidiBuffer none;
+        runBlock (none, false);
+    }
+
+    // play from bar 1
+    const juce::int64 length = (juce::int64) std::llround (bars * 4 * OfflinePlayHead::samplesPerBeat());
+    playHead.pos = 0;
+    playHead.playing = true;
+    while (playHead.pos < length)
+    {
+        juce::MidiBuffer midi;
+        runBlock (midi, true);
+    }
+
+    // anything still sounding ends at the last bar line; drop what started after it
+    const double endTick = bars * 4 * ticksPerBeat;
+    for (int i = out.getNumEvents(); --i >= 0;)
+        if (out.getEventPointer (i)->message.getTimeStamp() >= endTick && out.getEventPointer (i)->message.isNoteOn())
+            out.deleteEvent (i, false);
+    out.updateMatchedPairs();
+    for (int i = 0; i < out.getNumEvents(); i++)
+    {
+        auto* e = out.getEventPointer (i);
+        if (! e->message.isNoteOn()) continue;
+        if (e->noteOffObject == nullptr)
+            out.addEvent (juce::MidiMessage::noteOff (e->message.getChannel(), e->message.getNoteNumber()), endTick);
+        else if (e->noteOffObject->message.getTimeStamp() > endTick)
+            e->noteOffObject->message.setTimeStamp (endTick);
+    }
+    for (int i = out.getNumEvents(); --i >= 0;)   // orphaned note-offs past the end
+        if (out.getEventPointer (i)->message.getTimeStamp() > endTick)
+            out.deleteEvent (i, false);
+    out.sort();
+    out.updateMatchedPairs();
+    return out;
+}
+
+juce::File TugMidiSeqAudioProcessor::renderPatternToMidiFile (int bars)
+{
+    auto sequence = renderPattern (bars, notesForExport());
+
+    juce::MidiMessageSequence meta;
+    meta.addEvent (juce::MidiMessage::textMetaEvent (3, "TugMidiSeq"), 0);   // track name
+    meta.addEvent (juce::MidiMessage::timeSignatureMetaEvent (4, 4), 0);
+
+    juce::MidiFile file;
+    file.setTicksPerQuarterNote (960);
+    file.addTrack (meta);
+    file.addTrack (sequence);
+
+    // a fresh name each time: some hosts keep reading the dropped file later
+    auto f = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                 .getChildFile ("TugMidiSeq " + juce::String (bars) + (bars == 1 ? " bar " : " bars ")
+                                + juce::Time::getCurrentTime().formatted ("%H-%M-%S") + ".mid")
+                 .getNonexistentSibling();
+    juce::FileOutputStream os (f);
+    if (! os.openedOk() || ! file.writeTo (os))
+        return {};
+    return f;
 }
 
 //==============================================================================

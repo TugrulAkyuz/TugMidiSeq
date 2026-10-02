@@ -47,6 +47,8 @@ NoteMap::NoteMap (TugMidiSeqAudioProcessor& p) : audioProcessor (p)
     keyAttachment   = std::make_unique<AudioProcessorValueTreeState::ComboBoxAttachment> (audioProcessor.valueTreeState, valueTreeNames[SCALEKEY], keyBox);
     scaleAttachment = std::make_unique<AudioProcessorValueTreeState::ComboBoxAttachment> (audioProcessor.valueTreeState, valueTreeNames[SCALETYPE], scaleBox);
 
+    addAndMakeVisible (midiExport);
+
     for (auto* b : { &undoButton, &redoButton })
     {
         b->setColour (TextButton::textColourOffId, Theme::textSecondary);
@@ -138,6 +140,8 @@ void NoteMap::resized()
     area.removeFromRight (6);
     redoButton.setBounds (area.removeFromRight (48).reduced (2, 4));
     undoButton.setBounds (area.removeFromRight (48).reduced (2, 4));
+    area.removeFromRight (4);
+    midiExport.setBounds (area.removeFromRight (94).reduced (2, 4));
     area.removeFromRight (8);
 
     keyboard = area.reduced (2, 4).toFloat();
@@ -170,6 +174,80 @@ int NoteMap::noteAt (juce::Point<float> pos) const
     for (int n = lowNote; n <= highNote; n++)
         if (! isBlack (n) && keyBounds (n).contains (pos)) return n;
     return -1;
+}
+
+//==============================================================================
+void MidiExportButton::paint (juce::Graphics& g)
+{
+    auto b = getLocalBounds().toFloat().reduced (0.5f);
+    Theme::drawRaisedPanel (g, b, Theme::radMd, isMouseOver() ? Theme::surface.brighter (0.08f) : Theme::surfaceAlt);
+
+    // "drag out" icon: an arrow dropping into a tray
+    auto icon = b.removeFromLeft (20.0f).withSizeKeepingCentre (10.0f, 12.0f);
+    g.setColour (Theme::accentBright);
+    const float cx = icon.getCentreX();
+    g.drawLine (cx, icon.getY(), cx, icon.getBottom() - 4.0f, 1.4f);
+    juce::Path head;
+    head.addTriangle (cx - 3.5f, icon.getBottom() - 6.0f, cx + 3.5f, icon.getBottom() - 6.0f, cx, icon.getBottom() - 2.5f);
+    g.fillPath (head);
+    g.drawLine (icon.getX(), icon.getBottom() - 0.5f, icon.getRight(), icon.getBottom() - 0.5f, 1.4f);
+
+    const int bars = proc.getExportBars();
+    Theme::drawCaption (g, "MIDI", b.removeFromLeft (32.0f).toNearestInt(), juce::Justification::centredLeft,
+                        Theme::textPrimary, 10.0f);
+    Theme::drawCaption (g, juce::String (bars) + (bars == 1 ? " bar" : " bars"), b.reduced (2.0f, 0.0f).toNearestInt(),
+                        juce::Justification::centredRight, Theme::textDim, 8.5f);
+}
+
+void MidiExportButton::mouseDrag (const juce::MouseEvent& e)
+{
+    if (dragStarted || e.getDistanceFromDragStart() < 4) return;
+    dragStarted = true;
+    auto file = proc.renderPatternToMidiFile (proc.getExportBars());
+    if (file.existsAsFile())
+        juce::DragAndDropContainer::performExternalDragDropOfFiles ({ file.getFullPathName() }, false, this);
+}
+
+void MidiExportButton::mouseUp (const juce::MouseEvent&)
+{
+    if (! dragStarted)
+        showMenu();
+}
+
+void MidiExportButton::showMenu()
+{
+    enum { barsBase = 100, saveId = 1 };
+    const int current = proc.getExportBars();
+
+    juce::PopupMenu m;
+    m.addSectionHeader ("Drag this button into your DAW");
+    for (int bars : { 1, 2, 4, 8, 16 })
+        m.addItem (barsBase + bars, juce::String (bars) + (bars == 1 ? " bar" : " bars"), true, bars == current);
+    m.addSeparator();
+    m.addItem (saveId, "Save as .mid file...");
+
+    juce::Component::SafePointer<MidiExportButton> safe (this);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this), [safe] (int r)
+    {
+        if (safe == nullptr || r == 0) return;
+        if (r > barsBase)
+        {
+            safe->proc.setExportBars (r - barsBase);
+            safe->repaint();
+            return;
+        }
+        auto rendered = safe->proc.renderPatternToMidiFile (safe->proc.getExportBars());
+        if (! rendered.existsAsFile()) return;
+        safe->chooser = std::make_shared<juce::FileChooser> ("Save pattern as MIDI file",
+            juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("TugMidiSeq pattern.mid"), "*.mid");
+        safe->chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+            [rendered] (const juce::FileChooser& fc)
+            {
+                auto target = fc.getResult();
+                if (target != juce::File())
+                    rendered.copyFileTo (target.withFileExtension ("mid"));
+            });
+    });
 }
 
 bool NoteMap::isBlack (int note)
