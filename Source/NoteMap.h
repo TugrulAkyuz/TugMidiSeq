@@ -11,6 +11,7 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 #include "Theme.h"
+#include "MyLookanAndFeels.h"
 
 // Each held input note is lit in the colour of the lane it feeds, with the lane
 // number on the key; notes held only by Latch are drawn hollow, and notes no
@@ -42,6 +43,7 @@ private:
     {
         uint64_t held[2] = {}, phys[2] = {}, screen[2] = {};
         int in[numOfLine] = {}, out[numOfLine] = {};
+        int scaleKey = 0, scaleType = 0;
         bool operator!= (const Snapshot& o) const
         {
             return std::memcmp (this, &o, sizeof (Snapshot)) != 0;
@@ -65,6 +67,11 @@ private:
     bool fillHeld = false;
     void setFill (bool on);
     juce::TextButton undoButton, redoButton;   // right end of the strip
+
+    // scale lock
+    MyLookAndFeel comboLookAndFeel;
+    WheelComboBox keyBox, scaleBox;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> keyAttachment, scaleAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> latchAttachment;
 
     juce::Rectangle<float> keyboard;

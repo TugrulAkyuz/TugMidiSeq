@@ -78,25 +78,28 @@ private:
 
 
 
-// Floating read-out for shift+drag velocity editing. It lives in the editor
-// content (not inside the tiny pad), sits just above the pad being edited and
-// points at it; created on shift+mouse-down, removed on mouse-up.
-class VelocityPopup : public juce::Component
+// Floating read-out for drag-editing a step value (shift+drag velocity,
+// alt+drag pitch). It lives in the editor content (not inside the tiny pad),
+// sits just above the pad being edited and points at it; created on
+// mouse-down, removed on mouse-up.
+class StepValuePopup : public juce::Component
 {
 public:
-    VelocityPopup (juce::Colour laneColour) : lane (laneColour)
+    StepValuePopup (juce::Colour laneColour) : lane (laneColour)
     {
         setInterceptsMouseClicks (false, false);
         setAlwaysOnTop (true);
     }
 
-    // value: step velocity 0..127; ignored: the global "In Vel" mode is on, so
-    // the engine uses the incoming MIDI velocity instead of this one
-    void setValue (int value, bool ignored)
+    // caption + value text, and a meter filled from `from` to `to` (0..1);
+    // dim: the value currently has no effect (e.g. step velocity in "In Vel" mode)
+    void setContent (const juce::String& newCaption, const juce::String& newValue,
+                     float from, float to, bool dim)
     {
-        if (value == vel && ignored == isIgnored) return;
-        vel = value;
-        isIgnored = ignored;
+        if (newCaption == caption && newValue == valueText && from == meterFrom && to == meterTo && dim == isDim)
+            return;
+        caption = newCaption; valueText = newValue;
+        meterFrom = from; meterTo = to; isDim = dim;
         repaint();
     }
 
@@ -131,26 +134,34 @@ public:
 
         // caption + number on one row
         auto top = inner.removeFromTop (12.0f);
-        Theme::drawCaption (g, isIgnored ? "in vel" : "step vel", top.toNearestInt(),
-                            juce::Justification::centredLeft, isIgnored ? Theme::textDim : Theme::textSecondary, 9.0f);
-        g.setColour (isIgnored ? Theme::textDim : Theme::textValue);
+        Theme::drawCaption (g, caption, top.toNearestInt(),
+                            juce::Justification::centredLeft, isDim ? Theme::textDim : Theme::textSecondary, 9.0f);
+        g.setColour (isDim ? Theme::textDim : Theme::textValue);
         g.setFont (Theme::valueFont (12.0f));
-        g.drawText (juce::String (vel), top, juce::Justification::centredRight, false);
+        g.drawText (valueText, top, juce::Justification::centredRight, false);
 
         // meter in the lane colour
         inner.removeFromTop (3.0f);
         auto meter = inner.removeFromTop (5.0f);
         Theme::drawRecessedWell (g, meter, 2.0f);
-        g.setColour (isIgnored ? Theme::textDim : lane);
-        g.fillRoundedRectangle (meter.withWidth (meter.getWidth() * (float) vel / 127.0f), 2.0f);
+        g.setColour (isDim ? Theme::textDim : lane);
+        const float x0 = meter.getX() + meter.getWidth() * jmin (meterFrom, meterTo);
+        const float x1 = meter.getX() + meter.getWidth() * jmax (meterFrom, meterTo);
+        g.fillRoundedRectangle (meter.withX (x0).withWidth (jmax (2.0f, x1 - x0)), 2.0f);
+        if (meterFrom == 0.5f)   // centre-zero meter (pitch): mark the zero
+        {
+            g.setColour (Theme::textSecondary);
+            g.fillRect (meter.getCentreX() - 0.5f, meter.getY() - 1.5f, 1.0f, meter.getHeight() + 3.0f);
+        }
     }
 
 private:
     static constexpr int width = 88, height = 36, gap = 1;
     static constexpr float arrow = 5.0f;
     juce::Colour lane;
-    int vel = -1;
-    bool isIgnored = false;
+    juce::String caption, valueText;
+    float meterFrom = 0.0f, meterTo = 0.0f;
+    bool isDim = false;
     bool pointsDown = true;
     float arrowX = 0.0f;
 };
@@ -299,8 +310,12 @@ public:
         if (ratchet > 1)
             drawRatchetMarks (g, b, ratchet, currentState != State::ButtonOffState);
 
+        const int pitch = audioProcesor.getStepPitch (myLine, myStep);
+        if (pitch != 0)
+            drawPitchTag (g, b, pitch, currentState != State::ButtonOffState);
+
         // being shift-dragged: outline the pad the velocity popup points at
-        if (velPopup != nullptr)
+        if (valuePopup != nullptr)
         {
             g.setColour (Theme::accentBright);
             g.drawRoundedRectangle (b, Theme::radSm, 1.5f);
@@ -345,15 +360,34 @@ public:
         }
     }
 
-    // Right-click: this step's ratchet and trig condition. Defined in Grids.cpp.
+    // Step pitch: "+3" / "-5" in the top-left corner, or a small up / down
+    // triangle when the pad is too narrow for text.
+    void drawPitchTag (juce::Graphics& g, juce::Rectangle<float> b, int pitch, bool active)
+    {
+        g.setColour (active ? Theme::screen.withAlpha (0.85f) : colourarray[myLine].withAlpha (0.75f));
+        if (b.getWidth() < 18.0f)
+        {
+            juce::Path t;
+            const float x = b.getX() + 2.0f, y = b.getY() + 2.0f;
+            if (pitch > 0) t.addTriangle (x, y + 5.0f, x + 6.0f, y + 5.0f, x + 3.0f, y);
+            else           t.addTriangle (x, y, x + 6.0f, y, x + 3.0f, y + 5.0f);
+            g.fillPath (t);
+            return;
+        }
+        g.setFont (Theme::valueFont (8.5f));
+        g.drawText ((pitch > 0 ? "+" : "") + juce::String (pitch),
+                    b.reduced (2.0f, 1.0f).removeFromTop (9.0f), juce::Justification::topLeft, false);
+    }
+
+    // Right-click: this step's ratchet, pitch reset and trig condition. Defined in Grids.cpp.
     void showStepMenu();
 
     // Shift+drag velocity editing: the popup is parented to the editor content
     // (the lane's parent) so it can sit outside this pad and the lane row.
     // Bodies in Grids.cpp.
-    void showVelPopup();
-    void updateVelPopup();
-    void hideVelPopup();
+    void showValuePopup();
+    void updateValuePopup();
+    void hideValuePopup();
     juce::RangedAudioParameter* stepVelParam() const;
 
     State getCurrentState() const
@@ -418,7 +452,9 @@ private:
     float y;
     std::atomic<float> evenAlpha { 1.0f };
     Grids* ownerGrid = nullptr;
-    std::unique_ptr<VelocityPopup> velPopup;
+    std::unique_ptr<StepValuePopup> valuePopup;
+    bool altPressed = false;   // alt+drag edits the step's pitch
+    float pitchDrag = 0.0f;    // drag distance not yet turned into a semitone / degree
     
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MultiStateButton)

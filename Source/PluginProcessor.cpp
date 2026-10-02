@@ -221,6 +221,16 @@ valueTreeState(*this, &undoManager)
     valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterBool>(ParameterID{tmp_s,1}, tmp_s,false));
     fillAtomic = valueTreeState.getRawParameterValue(tmp_s);
 
+    // scale lock (Scale "Off" by default, so nothing changes until it's set)
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SCALEKEY];
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterChoice>(ParameterID{tmp_s,1}, tmp_s, scaleKeyNames, 0));
+    scaleKeyAtomic = valueTreeState.getRawParameterValue(tmp_s);
+    tmp_s.clear();
+    tmp_s << valueTreeNames[SCALETYPE];
+    valueTreeState.createAndAddParameter(std::make_unique<juce::AudioParameterChoice>(ParameterID{tmp_s,1}, tmp_s, scaleTypeNames, 0));
+    scaleTypeAtomic = valueTreeState.getRawParameterValue(tmp_s);
+
     // C++17: std::atomic members start uninitialised
     clearStepData();
     for (int i = 0; i < numOfLine; i++)
@@ -356,8 +366,18 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
                 tmp_s << valueTreeNames[VELGRIDBUTTON] << i << j;
                 setParamValue(tmp_s, prog.gridVelArr[i][j]);
 
-                if (undoable) { setStepCondUndoable (i, j, prog.stepCond[i][j]); setStepRatchetUndoable (i, j, prog.stepRatchet[i][j]); }
-                else          { setStepCond (i, j, prog.stepCond[i][j]);         setStepRatchet (i, j, prog.stepRatchet[i][j]); }
+                if (undoable)
+                {
+                    setStepCondUndoable (i, j, prog.stepCond[i][j]);
+                    setStepRatchetUndoable (i, j, prog.stepRatchet[i][j]);
+                    setStepPitchUndoable (i, j, prog.stepPitch[i][j]);
+                }
+                else
+                {
+                    setStepCond (i, j, prog.stepCond[i][j]);
+                    setStepRatchet (i, j, prog.stepRatchet[i][j]);
+                    setStepPitch (i, j, prog.stepPitch[i][j]);
+                }
             }
             tmp_s.clear();
             tmp_s << valueTreeNames[SPEEED] << i;
@@ -400,6 +420,8 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
     setParamValue(valueTreeNames[SORTEDORFIRST],  prog.sortedOrFirst);
     setParamValue(valueTreeNames[SHUFFLE],        prog.shuffle);
     setParamValue(valueTreeNames[CHANNON],        prog.channelOn);
+    setParamValue(valueTreeNames[SCALEKEY],       prog.scaleKey);
+    setParamValue(valueTreeNames[SCALETYPE],      prog.scaleType);
 
     myGridChangeListener.sendChangeMessage();
 }
@@ -941,7 +963,8 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         }
         
         
-        it.setNoteNumber( it.getNoteNumber() + *octave[i]*12 );
+        it.setNoteNumber (pitchedNote (it.getNoteNumber() + (int) *octave[i] * 12,
+                                       getStepPitch (i, playStep[i])));
         
         auto midiNote = [&](const RealMidiNoteList& l){ return l.sentMidi.getNoteNumber() == it.getNoteNumber(); };
         auto it2 = std::find_if(inRealMidiNoteList.begin(), inRealMidiNoteList.end(),midiNote);
@@ -1221,7 +1244,7 @@ namespace
     // A per-step value that isn't a parameter (condition or ratchet).
     struct StepValueAction : juce::UndoableAction
     {
-        enum Field { Cond, Ratchet };
+        enum Field { Cond, Ratchet, Pitch };
         StepValueAction (TugMidiSeqAudioProcessor& p, Field f, int l, int s, int from, int to)
             : proc (p), field (f), line (l), step (s), oldValue (from), newValue (to) {}
         // the host is told once per edit / undo, not per step (see notifyStateChanged)
@@ -1231,8 +1254,9 @@ namespace
 
         void set (int v)
         {
-            if (field == Cond) proc.setStepCond (line, step, v);
-            else               proc.setStepRatchet (line, step, v);
+            if      (field == Cond)    proc.setStepCond (line, step, v);
+            else if (field == Ratchet) proc.setStepRatchet (line, step, v);
+            else                       proc.setStepPitch (line, step, v);
         }
 
         TugMidiSeqAudioProcessor& proc;
@@ -1246,7 +1270,7 @@ namespace
     {
         bool  valid = false;
         float cells[numOfStep] = {}, vels[numOfStep] = {};
-        int   conds[numOfStep] = {}, ratchets[numOfStep] = {};
+        int   conds[numOfStep] = {}, ratchets[numOfStep] = {}, pitches[numOfStep] = {};
         std::map<juce::String, float> settings;   // base name -> value
     };
     LaneClipboard laneClipboard;
@@ -1277,6 +1301,14 @@ void TugMidiSeqAudioProcessor::setStepRatchetUndoable (int line, int step, int h
         undoManager.perform (new StepValueAction (*this, StepValueAction::Ratchet, line, step, old, hits));
 }
 
+void TugMidiSeqAudioProcessor::setStepPitchUndoable (int line, int step, int offset)
+{
+    const int old = getStepPitch (line, step);
+    offset = jlimit (-maxStepPitch, maxStepPitch, offset);
+    if (old != offset)
+        undoManager.perform (new StepValueAction (*this, StepValueAction::Pitch, line, step, old, offset));
+}
+
 // Step conditions aren't parameters, so the host doesn't see them change on
 // its own: without this it wouldn't mark the project as modified.
 void TugMidiSeqAudioProcessor::notifyStateChanged()
@@ -1298,6 +1330,7 @@ void TugMidiSeqAudioProcessor::copyLane (int line)
         laneClipboard.vels[s]  = paramValue (valueTreeState, cellID (VELGRIDBUTTON, line, s));
         laneClipboard.conds[s] = getStepCond (line, s);
         laneClipboard.ratchets[s] = getStepRatchet (line, s);
+        laneClipboard.pitches[s] = getStepPitch (line, s);
     }
     for (int base : copiedSettings)
         laneClipboard.settings[valueTreeNames[base]] = paramValue (valueTreeState, valueTreeNames[base] + juce::String (line));
@@ -1319,6 +1352,7 @@ void TugMidiSeqAudioProcessor::pasteLane (int line)
             setParamValue (cellID (VELGRIDBUTTON, line, s), laneClipboard.vels[s]);
             setStepCondUndoable (line, s, laneClipboard.conds[s]);
             setStepRatchetUndoable (line, s, laneClipboard.ratchets[s]);
+            setStepPitchUndoable (line, s, laneClipboard.pitches[s]);
         }
     });
     notifyStateChanged();
@@ -1329,13 +1363,14 @@ void TugMidiSeqAudioProcessor::shiftLane (int line, int delta)
 {
     const int n = jlimit (1, numOfStep, (int) *numOfGrid[line]);
     float cells[numOfStep], vels[numOfStep];
-    int conds[numOfStep], ratchets[numOfStep];
+    int conds[numOfStep], ratchets[numOfStep], pitches[numOfStep];
     for (int s = 0; s < n; s++)
     {
         cells[s] = paramValue (valueTreeState, cellID (BLOCK, line, s));
         vels[s]  = paramValue (valueTreeState, cellID (VELGRIDBUTTON, line, s));
         conds[s] = getStepCond (line, s);
         ratchets[s] = getStepRatchet (line, s);
+        pitches[s] = getStepPitch (line, s);
     }
     undoableEdit ([&]
     {
@@ -1346,6 +1381,7 @@ void TugMidiSeqAudioProcessor::shiftLane (int line, int delta)
             setParamValue (cellID (VELGRIDBUTTON, line, s), vels[from]);
             setStepCondUndoable (line, s, conds[from]);
             setStepRatchetUndoable (line, s, ratchets[from]);
+            setStepPitchUndoable (line, s, pitches[from]);
         }
     });
     notifyStateChanged();
@@ -1375,6 +1411,7 @@ void TugMidiSeqAudioProcessor::clearLane (int line)
             setParamValue (cellID (BLOCK, line, s), 0.0f);
             setStepCondUndoable (line, s, CondNone);
             setStepRatchetUndoable (line, s, 1);
+            setStepPitchUndoable (line, s, 0);
         }
     });
     notifyStateChanged();
@@ -1383,6 +1420,51 @@ void TugMidiSeqAudioProcessor::clearLane (int line)
 void TugMidiSeqAudioProcessor::setLaneDirection (int line, int dir)
 {
     undoableEdit ([&] { setParamValue (valueTreeNames[DIRECTION] + juce::String (line), (float) dir); });
+}
+
+//==============================================================================
+// Step pitch and scale lock
+
+bool TugMidiSeqAudioProcessor::isInScale (int note) const
+{
+    const auto& scale = scaleIntervals[(size_t) jlimit (0, (int) scaleIntervals.size() - 1, getScaleType())];
+    if (scale.empty()) return true;
+    const int pc = ((note - getScaleKey()) % 12 + 12) % 12;
+    return std::find (scale.begin(), scale.end(), pc) != scale.end();
+}
+
+// Scale off: note + offset semitones. Scale on: the note is snapped to the
+// nearest scale tone (ties go down), then moved by `offset` scale degrees —
+// so in C major, +2 from C is E, and an incoming F# plays as F.
+int TugMidiSeqAudioProcessor::pitchedNote (int note, int offset) const
+{
+    const auto& scale = scaleIntervals[(size_t) jlimit (0, (int) scaleIntervals.size() - 1, getScaleType())];
+    if (scale.empty())
+        return jlimit (0, 127, note + offset);
+
+    const int key  = getScaleKey();
+    const int size = (int) scale.size();
+    const int rel  = note - key;                                   // relative to the key's C-octave
+    const int oct  = (rel >= 0 ? rel : rel - 11) / 12;             // floor division
+    const int pc   = rel - oct * 12;
+
+    // nearest scale degree to pc (searching down first, so ties go down)
+    int degree = 0, best = 99;
+    for (int d = 0; d < size; d++)
+        for (int shift : { 0, -12, 12 })                           // wrap across the octave
+        {
+            const int dist = std::abs (scale[(size_t) d] + shift - pc);
+            if (dist < best || (dist == best && scale[(size_t) d] + shift < pc))
+            {
+                best = dist;
+                degree = d + (shift < 0 ? -size : shift > 0 ? size : 0);
+            }
+        }
+
+    const int target    = degree + offset;
+    const int targetOct = (target >= 0 ? target : target - (size - 1)) / size;
+    const int targetDeg = target - targetOct * size;
+    return jlimit (0, 127, key + (oct + targetOct) * 12 + scale[(size_t) targetDeg]);
 }
 
 //==============================================================================
@@ -1499,6 +1581,7 @@ void TugMidiSeqAudioProcessor::writeStepDataTo (juce::ValueTree& state) const
     };
     write ("stepConds",    [this] (int i, int j) { return getStepCond (i, j); });
     write ("stepRatchets", [this] (int i, int j) { return getStepRatchet (i, j); });
+    write ("stepPitches",  [this] (int i, int j) { return getStepPitch (i, j); });
 }
 
 void TugMidiSeqAudioProcessor::readStepDataFrom (const juce::ValueTree& state)
@@ -1517,6 +1600,7 @@ void TugMidiSeqAudioProcessor::readStepDataFrom (const juce::ValueTree& state)
     };
     read ("stepConds",    [this] (int i, int j, int v) { setStepCond (i, j, v); });
     read ("stepRatchets", [this] (int i, int j, int v) { setStepRatchet (i, j, v); });
+    read ("stepPitches",  [this] (int i, int j, int v) { setStepPitch (i, j, v); });
 }
 
 //==============================================================================

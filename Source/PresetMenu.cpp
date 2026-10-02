@@ -68,6 +68,7 @@ void TugMidiSeqAudioProcessor::resetAllParam()
         {
             setStepCondUndoable (j, i, CondNone);
             setStepRatchetUndoable (j, i, 1);
+            setStepPitchUndoable (j, i, 0);
         }
     notifyStateChanged();
     tmp_s.clear();
@@ -93,6 +94,9 @@ void TugMidiSeqAudioProcessor::resetAllParam()
     tmp_s.clear();
     tmp_s << valueTreeNames[CHANNON];
     valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
+
+    for (int id : { SCALEKEY, SCALETYPE })
+        valueTreeState.getParameter(valueTreeNames[id])->setValueNotifyingHost(valueTreeState.getParameter(valueTreeNames[id])->getDefaultValue());
     
     // mySynth.clearSounds();
     
@@ -131,6 +135,12 @@ var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
                 tmp_s.clear();
                 tmp_s << stepRatchetKey << i << j;
                 newObj.getDynamicObject()->setProperty(tmp_s, prg.stepRatchet[i][j]);
+            }
+            if (prg.stepPitch[i][j] != 0)
+            {
+                tmp_s.clear();
+                tmp_s << stepPitchKey << i << j;
+                newObj.getDynamicObject()->setProperty(tmp_s, prg.stepPitch[i][j]);
             }
         }
 
@@ -197,6 +207,9 @@ var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
     tmp_s.clear();
     tmp_s << valueTreeNames[CHANNON];
     newObj.getDynamicObject()->setProperty(tmp_s, prg.channelOn);
+
+    newObj.getDynamicObject()->setProperty(valueTreeNames[SCALEKEY],  prg.scaleKey);
+    newObj.getDynamicObject()->setProperty(valueTreeNames[SCALETYPE], prg.scaleType);
 
     return newObj;
 }
@@ -275,6 +288,11 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
             tmp_s << stepRatchetKey << i << j;
             if (preset.hasProperty(tmp_s))
                 p.stepRatchet[i][j] = jlimit(1, maxRatchet, (int) preset.getProperty(tmp_s, var()));
+
+            tmp_s.clear();
+            tmp_s << stepPitchKey << i << j;
+            if (preset.hasProperty(tmp_s))
+                p.stepPitch[i][j] = jlimit(-maxStepPitch, maxStepPitch, (int) preset.getProperty(tmp_s, var()));
 
         }
         tmp_s.clear();
@@ -366,6 +384,11 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
         p.channelOn = v != 0;
     }
 
+    if (preset.hasProperty(valueTreeNames[SCALEKEY]))
+        p.scaleKey = jlimit(0, scaleKeyNames.size() - 1, (int) preset.getProperty(valueTreeNames[SCALEKEY], var()));
+    if (preset.hasProperty(valueTreeNames[SCALETYPE]))
+        p.scaleType = jlimit(0, scaleTypeNames.size() - 1, (int) preset.getProperty(valueTreeNames[SCALETYPE], var()));
+
     return p;
 }
 
@@ -451,6 +474,7 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
 
             paramProg.stepCond[i][j] = getStepCond(i, j);
             paramProg.stepRatchet[i][j] = getStepRatchet(i, j);
+            paramProg.stepPitch[i][j] = getStepPitch(i, j);
         }
         tmp_s.clear();
         tmp_s <<valueTreeNames[SPEEED]<< i;
@@ -530,6 +554,8 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
     tmp_s.clear();
     tmp_s << valueTreeNames[CHANNON];
     paramProg.channelOn = *valueTreeState.getRawParameterValue(tmp_s);;
+    paramProg.scaleKey  = (int) *valueTreeState.getRawParameterValue(valueTreeNames[SCALEKEY]);
+    paramProg.scaleType = (int) *valueTreeState.getRawParameterValue(valueTreeNames[SCALETYPE]);
     
     myProgram.push_back(paramProg);
     writeSinglePresetToFileJSON(myProgram.back());  // new presets get their own file

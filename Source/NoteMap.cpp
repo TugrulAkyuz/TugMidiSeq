@@ -31,6 +31,22 @@ NoteMap::NoteMap (TugMidiSeqAudioProcessor& p) : audioProcessor (p)
     fillButton.onStateChange = [this] { setFill (fillButton.isDown()); };
     addAndMakeVisible (fillButton);
 
+    comboLookAndFeel.setColour (ComboBox::textColourId, Theme::textValue);
+    comboLookAndFeel.setColour (PopupMenu::backgroundColourId, Theme::well);
+    comboLookAndFeel.setColour (PopupMenu::textColourId, Theme::textPrimary);
+    comboLookAndFeel.setColour (PopupMenu::highlightedBackgroundColourId, Theme::accent);
+    comboLookAndFeel.setColour (PopupMenu::highlightedTextColourId, Theme::screen);
+    keyBox.addItemList (scaleKeyNames, 1);
+    scaleBox.addItemList (scaleTypeNames, 1);
+    for (auto* box : { &keyBox, &scaleBox })
+    {
+        box->setLookAndFeel (&comboLookAndFeel);
+        box->setMouseCursor (juce::MouseCursor::NormalCursor);
+        addAndMakeVisible (*box);
+    }
+    keyAttachment   = std::make_unique<AudioProcessorValueTreeState::ComboBoxAttachment> (audioProcessor.valueTreeState, valueTreeNames[SCALEKEY], keyBox);
+    scaleAttachment = std::make_unique<AudioProcessorValueTreeState::ComboBoxAttachment> (audioProcessor.valueTreeState, valueTreeNames[SCALETYPE], scaleBox);
+
     for (auto* b : { &undoButton, &redoButton })
     {
         b->setColour (TextButton::textColourOffId, Theme::textSecondary);
@@ -54,6 +70,10 @@ NoteMap::NoteMap (TugMidiSeqAudioProcessor& p) : audioProcessor (p)
 NoteMap::~NoteMap()
 {
     stopTimer();
+    keyAttachment.reset();
+    scaleAttachment.reset();
+    for (auto* box : { &keyBox, &scaleBox })
+        box->setLookAndFeel (nullptr);
     setFill (false);   // don't leave Fill stuck on if the editor closes mid-press
 }
 
@@ -83,6 +103,8 @@ NoteMap::Snapshot NoteMap::takeSnapshot() const
         s.in[i]  = audioProcessor.getMidi (i);
         s.out[i] = audioProcessor.getLaneOutNote (i);
     }
+    s.scaleKey  = audioProcessor.getScaleKey();
+    s.scaleType = audioProcessor.getScaleType();
     return s;
 }
 
@@ -108,6 +130,9 @@ void NoteMap::resized()
     area.removeFromLeft (26);                                    // line up with the lane-number column
     latchButton.setBounds (area.removeFromLeft (52).reduced (2, 4));
     fillButton.setBounds (area.removeFromLeft (44).reduced (2, 4));
+    area.removeFromLeft (6);
+    keyBox.setBounds (area.removeFromLeft (46).reduced (2, 4));
+    scaleBox.setBounds (area.removeFromLeft (96).reduced (2, 4));
     area.removeFromLeft (8);
 
     area.removeFromRight (6);
@@ -178,9 +203,21 @@ void NoteMap::drawKey (juce::Graphics& g, int note, bool black) const
     const bool held = ((shown.held[note >> 6] >> (note & 63)) & 1) != 0;
     const bool phys = ((shown.phys[note >> 6] >> (note & 63)) & 1) != 0;
 
-    // base key
-    g.setColour (black ? Theme::well : Colour (0xff2b2c30));
+    // base key; with a scale set, keys outside it are darker
+    const bool scaleOn = shown.scaleType > 0;
+    const bool inScale = audioProcessor.isInScale (note);
+    Colour base = black ? Theme::well : Colour (0xff2b2c30);
+    if (scaleOn)
+        base = inScale ? (black ? Colour (0xff24262a) : Colour (0xff3a3c41))
+                       : (black ? Colour (0xff0b0c0d) : Colour (0xff1e1f22));
+    g.setColour (base);
     g.fillRoundedRectangle (r, 1.5f);
+    if (scaleOn && ((note - shown.scaleKey) % 12 + 12) % 12 == 0)
+    {
+        // tonic: a thin brass line along the bottom
+        g.setColour (Theme::accent.withAlpha (0.7f));
+        g.fillRect (r.getX() + 2.0f, r.getBottom() - 1.5f, r.getWidth() - 4.0f, 1.5f);
+    }
     if (black)
     {
         g.setColour (Theme::hairline.withAlpha (0.8f));

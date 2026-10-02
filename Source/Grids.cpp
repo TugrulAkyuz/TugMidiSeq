@@ -619,7 +619,8 @@ void  SubGrids::resized ()
 void MultiStateButton::mouseDown (const MouseEvent& e)
 {
     shiftPressed = false;
-    audioProcesor.beginUndoStep();   // one undo step per gesture (paint, velocity drag, menu)
+    altPressed = false;
+    audioProcesor.beginUndoStep();   // one undo step per gesture (paint, velocity / pitch drag, menu)
 
     // Real right button only: on macOS ctrl+left-click also counts as a popup
     // click (isPopupMenu), but ctrl+click is already "paint an Event cell".
@@ -635,7 +636,16 @@ void MultiStateButton::mouseDown (const MouseEvent& e)
         y = e.getPosition().getY();
         if (auto* p = stepVelParam())
             p->beginChangeGesture();
-        showVelPopup();
+        showValuePopup();
+        return;
+    }
+
+    if (e.mods.isAltDown())
+    {
+        altPressed = true;                  // alt+drag = step pitch
+        y = e.getPosition().getY();
+        pitchDrag = 0.0f;
+        showValuePopup();
         return;
     }
 
@@ -663,7 +673,24 @@ void MultiStateButton::mouseDrag (const MouseEvent& e)
         // read the step's own value: getVelButton() reports 1.0 in "In Vel" mode
         if (auto* param = stepVelParam())
             param->setValueNotifyingHost (jlimit (0.0f, 1.0f, param->getValue() + z / 127.0f));
-        updateVelPopup();
+        updateValuePopup();
+        return;
+    }
+
+    if (altPressed)
+    {
+        // one semitone / scale degree per 6px of vertical travel
+        auto p = (float) e.getPosition().getY();
+        pitchDrag += (y - p) / 6.0f;
+        y = p;
+        const int steps = (int) pitchDrag;   // towards zero, keeps the remainder
+        if (steps != 0)
+        {
+            pitchDrag -= (float) steps;
+            audioProcesor.setStepPitchUndoable (myLine, myStep, audioProcesor.getStepPitch (myLine, myStep) + steps);
+            updateValuePopup();
+            repaint();
+        }
         return;
     }
 
@@ -678,8 +705,14 @@ void MultiStateButton::mouseUp (const MouseEvent& e)
     {
         if (auto* p = stepVelParam())
             p->endChangeGesture();
-        hideVelPopup();
+        hideValuePopup();
         shiftPressed = false;
+    }
+    if (altPressed)
+    {
+        hideValuePopup();
+        altPressed = false;
+        audioProcesor.notifyStateChanged();   // step pitch isn't a parameter
     }
 
     // The origin pad was already painted on mouseDown; suppress the Button click
@@ -695,38 +728,49 @@ juce::RangedAudioParameter* MultiStateButton::stepVelParam() const
     return audioProcesor.valueTreeState.getParameter (id);
 }
 
-void MultiStateButton::showVelPopup()
+void MultiStateButton::showValuePopup()
 {
     // the lane's parent is the editor content: room to float above the row
     auto* host = ownerGrid != nullptr ? ownerGrid->getParentComponent() : nullptr;
     if (host == nullptr) return;
 
-    velPopup = std::make_unique<VelocityPopup> (colourarray[myLine]);
-    host->addAndMakeVisible (*velPopup);
-    velPopup->placeFor (*this, *host);
-    updateVelPopup();
+    valuePopup = std::make_unique<StepValuePopup> (colourarray[myLine]);
+    host->addAndMakeVisible (*valuePopup);
+    valuePopup->placeFor (*this, *host);
+    updateValuePopup();
     repaint();
 }
 
-void MultiStateButton::updateVelPopup()
+void MultiStateButton::updateValuePopup()
 {
-    if (velPopup == nullptr) return;
+    if (valuePopup == nullptr) return;
+
+    if (altPressed)
+    {
+        // pitch: centre-zero meter; the unit follows the scale lock
+        const int off = audioProcesor.getStepPitch (myLine, myStep);
+        const auto text = (off > 0 ? "+" : "") + juce::String (off);
+        const float pos = 0.5f + 0.5f * (float) off / (float) maxStepPitch;
+        valuePopup->setContent (audioProcesor.isScaleOn() ? "pitch deg" : "pitch st", text, 0.5f, pos, false);
+        return;
+    }
+
     auto* p = stepVelParam();
     const int value = p != nullptr ? juce::roundToInt (p->convertFrom0to1 (p->getValue())) : 0;
     // "In Vel" on: the engine plays the incoming MIDI velocity, not this one
     const bool ignored = *audioProcesor.valueTreeState.getRawParameterValue (valueTreeNames[GLOABLINORFIXVEL]) != 0;
-    velPopup->setValue (value, ignored);
+    valuePopup->setContent (ignored ? "in vel" : "step vel", juce::String (value), 0.0f, (float) value / 127.0f, ignored);
 }
 
-void MultiStateButton::hideVelPopup()
+void MultiStateButton::hideValuePopup()
 {
-    velPopup.reset();   // ~Component removes it from the editor content
+    valuePopup.reset();   // ~Component removes it from the editor content
     repaint();
 }
 
 void MultiStateButton::showStepMenu()
 {
-    enum { ratchetBase = 100, clearLaneId = 1000 };   // condition items use id = condition + 1
+    enum { ratchetBase = 100, resetPitchId = 200, clearLaneId = 1000 };   // condition items use id = condition + 1
 
     const int current = audioProcesor.getStepCond (myLine, myStep);
     const int ratchet = audioProcesor.getStepRatchet (myLine, myStep);
@@ -740,6 +784,10 @@ void MultiStateButton::showStepMenu()
     for (int r = 1; r <= maxRatchet; r++)
         m.addItem (ratchetBase + r, r == 1 ? juce::String ("x1   single hit") : "x" + juce::String (r) + "   " + juce::String (r) + " hits per step",
                    true, r == ratchet);
+    const int pitch = audioProcesor.getStepPitch (myLine, myStep);
+    m.addItem (resetPitchId, pitch == 0 ? juce::String ("Pitch  0   (alt+drag to change)")
+                                        : "Reset pitch  (" + juce::String (pitch > 0 ? "+" : "") + juce::String (pitch) + ")",
+               pitch != 0);
     m.addSectionHeader ("Condition");
     item (m, CondNone, "Always");
     m.addSeparator();
@@ -775,7 +823,11 @@ void MultiStateButton::showStepMenu()
                      {
                          if (safe == nullptr || result == 0) return;
                          auto& p = safe->audioProcesor;
-                         if (result > ratchetBase && result <= ratchetBase + maxRatchet)
+                         if (result == resetPitchId)
+                         {
+                             p.undoableEdit ([&] { p.setStepPitchUndoable (safe->myLine, safe->myStep, 0); });
+                         }
+                         else if (result > ratchetBase && result <= ratchetBase + maxRatchet)
                          {
                              p.undoableEdit ([&] { p.setStepRatchetUndoable (safe->myLine, safe->myStep, result - ratchetBase); });
                          }

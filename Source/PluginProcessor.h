@@ -26,11 +26,11 @@ const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE
 };
 
 // Lane play direction. Time still runs forward (shuffle, delay and note
@@ -65,6 +65,33 @@ const juce::String stepCondKey = "cond";
 // Stored like the conditions (not a host parameter); preset key ratchet<lane><step>.
 constexpr int maxRatchet = 4;
 const juce::String stepRatchetKey = "ratchet";
+
+// Step pitch: an offset added to the lane's note — in semitones, or in scale
+// degrees while a scale is set. Stored like the ratchets; preset key pitch<lane><step>.
+constexpr int maxStepPitch = 24;
+const juce::String stepPitchKey = "pitch";
+
+// Scale lock (global): every lane's output note is snapped to Key + Scale.
+// Index 0 is "Off". Each entry lists the scale's pitch classes from the key.
+const juce::StringArray scaleKeyNames  = { "C","C#","D","D#","E","F","F#","G","G#","A","A#","B" };
+const juce::StringArray scaleTypeNames = { "Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
+                                           "Locrian", "Harm. Minor", "Mel. Minor", "Major Pent.", "Minor Pent.", "Blues" };
+const std::vector<std::vector<int>> scaleIntervals =
+{
+    {},                         // Off
+    { 0, 2, 4, 5, 7, 9, 11 },   // Major
+    { 0, 2, 3, 5, 7, 8, 10 },   // Minor
+    { 0, 2, 3, 5, 7, 9, 10 },   // Dorian
+    { 0, 1, 3, 5, 7, 8, 10 },   // Phrygian
+    { 0, 2, 4, 6, 7, 9, 11 },   // Lydian
+    { 0, 2, 4, 5, 7, 9, 10 },   // Mixolydian
+    { 0, 1, 3, 5, 6, 8, 10 },   // Locrian
+    { 0, 2, 3, 5, 7, 8, 11 },   // Harmonic minor
+    { 0, 2, 3, 5, 7, 9, 11 },   // Melodic minor
+    { 0, 2, 4, 7, 9 },          // Major pentatonic
+    { 0, 3, 5, 7, 10 },         // Minor pentatonic
+    { 0, 3, 5, 6, 7, 10 }       // Blues
+};
 
 extern juce::CriticalSection midiOutputMutex;
 
@@ -107,6 +134,8 @@ public:
     int gridVelArr[numOfLine][numOfStep];
     int stepCond[numOfLine][numOfStep] = {};
     int stepRatchet[numOfLine][numOfStep];   // 1..maxRatchet, set to 1 in the constructor
+    int stepPitch[numOfLine][numOfStep] = {};
+    int scaleKey = 0, scaleType = 0;
     int direction[numOfLine] = {};
     int numOfGrid[numOfLine];
     int octave[numOfLine];
@@ -377,6 +406,9 @@ public:
         for (auto& lane : stepRatchet)
             for (auto& r : lane)
                 r.store (1, std::memory_order_relaxed);
+        for (auto& lane : stepPitch)
+            for (auto& p : lane)
+                p.store (0, std::memory_order_relaxed);
     }
 
     int getStepRatchet (int line, int step) const
@@ -389,6 +421,24 @@ public:
     }
     void setStepRatchetUndoable (int line, int step, int hits);
     bool isFillOn() const { return *fillAtomic > 0.5f; }
+
+    int getStepPitch (int line, int step) const
+    {
+        return stepPitch[line][step].load (std::memory_order_relaxed);
+    }
+    void setStepPitch (int line, int step, int offset)
+    {
+        stepPitch[line][step].store (jlimit (-maxStepPitch, maxStepPitch, offset), std::memory_order_relaxed);
+    }
+    void setStepPitchUndoable (int line, int step, int offset);
+
+    // scale lock
+    int  getScaleKey() const  { return (int) *scaleKeyAtomic; }
+    int  getScaleType() const { return (int) *scaleTypeAtomic; }
+    bool isScaleOn() const    { return getScaleType() > 0; }
+    bool isInScale (int note) const;
+    // the lane's note after the step's pitch offset and the scale lock
+    int  pitchedNote (int note, int stepOffset) const;
     // GUI edit of a step condition, recorded in the undo history
     void setStepCondUndoable (int line, int step, int cond);
     void notifyStateChanged();
@@ -696,6 +746,8 @@ private:
     // Trig-condition engine state (audio thread only).
     std::atomic<int> stepCond[numOfLine][numOfStep];
     std::atomic<int> stepRatchet[numOfLine][numOfStep];
+    std::atomic<int> stepPitch[numOfLine][numOfStep];
+    std::atomic<float> *scaleKeyAtomic, *scaleTypeAtomic;
 
     // Ratchet repeats still to play in the current step, per lane (audio thread).
     int ratchetLeft[numOfLine] = {}, ratchetCountdown[numOfLine] = {}, ratchetInterval[numOfLine] = {};
@@ -707,7 +759,7 @@ private:
     bool lastCondResult[numOfLine] = {};
     void resetTrigCondState();
     bool evaluateTrigCond (int line, int step) const;
-    void writeStepDataTo (juce::ValueTree& state) const;   // conditions + ratchets
+    void writeStepDataTo (juce::ValueTree& state) const;   // conditions, ratchets, pitches
     void readStepDataFrom (const juce::ValueTree& state);
 
     // Snapshot for the GUI's note map, published once per block.
