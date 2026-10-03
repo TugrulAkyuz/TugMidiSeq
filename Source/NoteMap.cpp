@@ -50,6 +50,8 @@ NoteMap::NoteMap (TugMidiSeqAudioProcessor& p) : audioProcessor (p)
 
     midiExport.menuLookAndFeel = &comboLookAndFeel;
     addAndMakeVisible (midiExport);
+    slotSelector.menuLookAndFeel = &comboLookAndFeel;
+    addAndMakeVisible (slotSelector);
 
     for (auto* b : { &undoButton, &redoButton })
     {
@@ -119,6 +121,7 @@ void NoteMap::timerCallback()
     redoButton.setEnabled (audioProcessor.canRedo());
     // lit while held here or while the host automates the parameter
     fillButton.setToggleState (audioProcessor.isFillOn(), juce::dontSendNotification);
+    slotSelector.repaint();
 
     auto now = takeSnapshot();
     if (now != shown)
@@ -135,7 +138,9 @@ void NoteMap::resized()
     area.removeFromLeft (26);                                    // line up with the lane-number column
     latchButton.setBounds (area.removeFromLeft (52).reduced (2, 4));
     fillButton.setBounds (area.removeFromLeft (44).reduced (2, 4));
-    area.removeFromLeft (6);
+    area.removeFromLeft (4);
+    slotSelector.setBounds (area.removeFromLeft (104).reduced (2, 4));
+    area.removeFromLeft (4);
     keyBox.setBounds (area.removeFromLeft (46).reduced (2, 4));
     scaleBox.setBounds (area.removeFromLeft (96).reduced (2, 4));
     area.removeFromLeft (8);
@@ -464,4 +469,70 @@ void NoteMap::paint (juce::Graphics& g)
         if (note >= 0 && (note < lowNote || note > highNote))
             drawRangeArrow (g, note < lowNote, Theme::lane[i].withAlpha (0.6f));
     }
+}
+
+//==============================================================================
+int SlotSelector::slotAt (juce::Point<float> p) const
+{
+    return juce::jlimit (0, numSlots - 1, (int) (p.x / ((float) getWidth() / (float) numSlots)));
+}
+
+void SlotSelector::paint (juce::Graphics& g)
+{
+    const int requested = proc.getRequestedSlot();
+    bool waiting = false, playing[numSlots] = {};
+    for (int i = 0; i < numOfLine; i++)
+    {
+        waiting |= proc.isLaneWaitingForSlot (i);
+        playing[proc.getActiveSlot (i)] = true;
+    }
+    const bool blinkOn = (juce::Time::getMillisecondCounter() / 250) % 2 == 0;
+
+    const float w = (float) getWidth() / (float) numSlots;
+    for (int s = 0; s < numSlots; s++)
+    {
+        auto b = juce::Rectangle<float> ((float) s * w, 0.0f, w, (float) getHeight()).reduced (1.5f, 0.5f);
+        const bool lit = s == requested && (! waiting || blinkOn);
+        Theme::drawRaisedPanel (g, b, Theme::radMd, lit ? Theme::accent : Theme::surfaceAlt);
+        if (playing[s] && s != requested)   // lanes still playing it until their loop ends
+        {
+            g.setColour (Theme::accent);
+            g.drawRoundedRectangle (b.reduced (0.5f), Theme::radMd, 1.4f);
+        }
+        const auto text = lit ? Theme::screen : proc.isSlotEmpty (s) ? Theme::textDim : Theme::textPrimary;
+        Theme::drawCaption (g, slotNames[s], b.toNearestInt(), juce::Justification::centred, text, 11.0f);
+    }
+}
+
+void SlotSelector::mouseDown (const juce::MouseEvent& e)
+{
+    const int slot = slotAt (e.position);
+    if (e.mods.isPopupMenu())
+        showMenu (slot);
+    else
+        proc.requestSlot (slot);
+    repaint();
+}
+
+void SlotSelector::showMenu (int slot)
+{
+    enum { copyBase = 100, clearId = 1 };
+    juce::PopupMenu copyTo;
+    for (int s = 0; s < numSlots; s++)
+        if (s != slot)
+            copyTo.addItem (copyBase + s, slotNames[s] + (proc.isSlotEmpty (s) ? juce::String ("  (empty)") : juce::String ("  (replaces it)")));
+
+    juce::PopupMenu m;
+    m.setLookAndFeel (menuLookAndFeel);
+    m.addSectionHeader ("Pattern slot " + slotNames[slot]);
+    m.addSubMenu ("Copy " + slotNames[slot] + " to", copyTo, ! proc.isSlotEmpty (slot));
+    m.addItem (clearId, "Clear " + slotNames[slot], ! proc.isSlotEmpty (slot));
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
+                     [this, slot, safe = juce::Component::SafePointer<SlotSelector> (this)] (int id)
+                     {
+                         if (safe == nullptr || id == 0) return;
+                         if (id == clearId) proc.clearSlot (slot);
+                         else               proc.copySlot (slot, id - copyBase);
+                         repaint();
+                     });
 }

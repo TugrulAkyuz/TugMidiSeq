@@ -276,8 +276,27 @@ valueTreeState(*this, &undoManager)
         gridsStrumHumanAtomic[j]   = addInt (STRUMHUMAN,      0, 100, 0);
     }
 
+    {
+        const auto slotId = valueTreeNames[PATTERNSLOT];
+        valueTreeState.createAndAddParameter (std::make_unique<juce::AudioParameterChoice> (ParameterID { slotId, 1 }, slotId, slotNames, 0));
+        patternSlotAtomic = valueTreeState.getRawParameterValue (slotId);
+    }
+
     // C++17: std::atomic members start uninitialised
-    clearStepData();
+    for (int i = 0; i < numOfLine; i++)
+    {
+        activeSlot[i].store (0);
+        mirrorDirty[i].store (false);
+    }
+    resetSlots();
+    for (int i = 0; i < numOfLine; i++)   // every pad edit lands in its lane's active slot
+        for (int j = 0; j < numOfStep; j++)
+            for (bool vel : { false, true })
+            {
+                cellMirrors.push_back (std::make_unique<CellMirror> (*this, i, j, vel));
+                valueTreeState.addParameterListener (valueTreeNames[vel ? VELGRIDBUTTON : BLOCK] + juce::String (i) + juce::String (j),
+                                                     cellMirrors.back().get());
+            }
     for (int i = 0; i < numOfLine; i++)
     {
         laneInNote[i].store (-1);
@@ -323,11 +342,15 @@ valueTreeState(*this, &undoManager)
     
 
     midiProcessor = std::make_unique<MidiProcessor>();
+    mirrorTimer.startTimer (30);
 
 }
 
 TugMidiSeqAudioProcessor::~TugMidiSeqAudioProcessor()
 {
+    mirrorTimer.stopTimer();
+    for (auto& m : cellMirrors)
+        valueTreeState.removeParameterListener (valueTreeNames[m->velocity ? VELGRIDBUTTON : BLOCK] + juce::String (m->line) + juce::String (m->step), m.get());
 }
 
 //==============================================================================
@@ -583,6 +606,13 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     midiMessagesStack.addEvents(midiMessages, 0, buffer.getNumSamples(), 0);
     playHead->getCurrentPosition(positionInfo);
 
+    // pattern slots: while stopped a lane moves to the requested slot at once
+    const int wantedSlot = getRequestedSlot();
+    if (! positionInfo.isPlaying)
+        for (int i = 0; i < numOfLine; i++)
+            if (getActiveSlot (i) != wantedSlot)
+                switchLaneSlot (i, wantedSlot);
+
     // Latch switched off: drop every note that is only being held by the latch.
     const bool latch = *latchAtomic > 0.5f;
     if (prevLatch && ! latch)
@@ -717,6 +747,13 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 lastStep[i] = steps[i];
                 if (mutateResetRequest[i].exchange (false))
                     mutateMask[i] = 0;
+                // a slot change waits for the lane's loop to start again (ping-pong: after the way back)
+                if (stpSample[i] == 0 && steps[i] == 0 && getActiveSlot (i) != wantedSlot
+                    && ((int) *gridsDirectionAtomic[i] != DirPingPong || jmax (0, loopCount[i]) % 2 == 0))
+                {
+                    switchLaneSlot (i, wantedSlot);
+                    initPrepareValue();   // note lengths look ahead to the next step that's on
+                }
                 if (newSlot)
                     playStep[i] = directedStep (i, steps[i]);   // after the loop count: ping-pong reads it
 
@@ -751,12 +788,12 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                 if(stpSample[i] == 0)
                 {
                     const int st   = playStep[i];
-                    int cell = (int) *gridsArr[i][st];   // 0 off, 1 on, 2 event
+                    int cell = cellAt (i, st);   // 0 off, 1 on, 2 event
                     if ((mutateMask[i] >> st) & 1u)
                         cell = cell == 0 ? 1 : 0;              // mutated: an off step plays, a playing one rests
                     if (cell != 0)
                     {
-                        const int cond = stepCond[i][st].load (std::memory_order_relaxed);
+                        const int cond = getStepCond (i, st);
                         bool fire = evaluateTrigCond (i, st);
                         if (fire && cell == 2)
                             fire = juce::Random::getSystemRandom().nextInt(100) < *gridsEventAtomic[i];
@@ -821,6 +858,7 @@ void TugMidiSeqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     auto state = valueTreeState.copyState();
     state.setProperty ("currentProgram", program, nullptr);
     writeStepDataTo (state);
+    writeSlotsTo (state);
     std::unique_ptr<XmlElement> xml (state.createXml());
     copyXmlToBinary (*xml, destData);
    
@@ -835,6 +873,15 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
         if (xmlState->hasTagName (valueTreeState.state.getType()))
         {
             auto restored = ValueTree::fromXml (*xmlState);
+
+            // pattern slots: each lane's active slot first, so the step data and
+            // pad parameters restored below land in it (older projects: slot A)
+            resetSlots();
+            const auto slotsNode = restored.getChildWithName ("patternSlots");
+            const auto actives = juce::StringArray::fromTokens (slotsNode.getProperty ("active").toString(), ",", "");
+            for (int i = 0; i < numOfLine; i++)
+                activeSlot[i].store (i < actives.size() ? jlimit (0, numSlots - 1, actives[i].getIntValue()) : 0);
+
             readStepDataFrom (restored);
             valueTreeState.replaceState (restored);
 
@@ -852,6 +899,12 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
                         ranged->setValueNotifyingHost (ranged->convertTo0to1 ((float) child.getProperty ("value")));
                 }
             }
+
+            if (! readSlotsFrom (restored))   // a project from before the slots plays slot A
+                if (auto* slotParam = valueTreeState.getParameter (valueTreeNames[PATTERNSLOT]))
+                    slotParam->setValueNotifyingHost (0.0f);
+            for (auto& d : mirrorDirty)       // the pads show what the slots hold
+                d.store (true);
         }
 
     program = valueTreeState.state.getProperty ("currentProgram", program);
@@ -1077,7 +1130,7 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         }
         
         float velTmp = *gridsVelAtomic[i]/ 90.0f;
-        velTmp = jlimit(0.0f,1.0f,velTmp**gridVelArrAtomic[i][playStep[i]]/ 127.0f);
+        velTmp = jlimit(0.0f,1.0f,velTmp*(float) stepVelAt (i, playStep[i])/ 127.0f);
         if(*GlobalInOrFixedAtomic == 0)
            it.setVelocity(velTmp);
     
@@ -1140,7 +1193,7 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, int window, ju
     float velocities[maxStrumNotes];
     int count = 0;
 
-    float laneVel = jlimit (0.0f, 1.0f, (*gridsVelAtomic[line] / 90.0f) * (*gridVelArrAtomic[line][playStep[line]] / 127.0f));
+    float laneVel = jlimit (0.0f, 1.0f, (*gridsVelAtomic[line] / 90.0f) * ((float) stepVelAt (line, playStep[line]) / 127.0f));
     for (const auto& held : inMidiNoteList)
     {
         if (count == maxStrumNotes) break;
@@ -1875,7 +1928,7 @@ bool TugMidiSeqAudioProcessor::cellActiveAtSlot (int line, int slot) const
 {
     if ((int) *gridsDirectionAtomic[line] == DirRandom)
         return true;
-    return *gridsArr[line][directedStep (line, slot)] != 0;
+    return cellAt (line, directedStep (line, slot)) != 0;
 }
 
 //==============================================================================
@@ -1928,7 +1981,7 @@ bool TugMidiSeqAudioProcessor::evaluateTrigCond (int line, int step) const
 
     const int loop      = jmax (0, loopCount[line]);
     const int neighbour = (line + numOfLine - 1) % numOfLine;   // the lane below
-    const int cond      = stepCond[line][step].load (std::memory_order_relaxed);
+    const int cond      = getStepCond (line, step);
 
     if (cond >= Cond1of2 && cond <= Cond4of4)
     {
@@ -1987,6 +2040,204 @@ void TugMidiSeqAudioProcessor::readStepDataFrom (const juce::ValueTree& state)
     read ("stepConds",    [this] (int i, int j, int v) { setStepCond (i, j, v); });
     read ("stepRatchets", [this] (int i, int j, int v) { setStepRatchet (i, j, v); });
     read ("stepPitches",  [this] (int i, int j, int v) { setStepPitch (i, j, v); });
+}
+
+//==============================================================================
+// Pattern slots
+
+void TugMidiSeqAudioProcessor::resetSlots()
+{
+    for (int s = 0; s < numSlots; s++)
+        for (int i = 0; i < numOfLine; i++)
+            for (int j = 0; j < numOfStep; j++)
+            {
+                slotCell[s][i][j].store (0);
+                slotVel[s][i][j].store (100);
+                stepCond[s][i][j].store (CondNone);
+                stepRatchet[s][i][j].store (1);
+                stepPitch[s][i][j].store (0);
+            }
+}
+
+void TugMidiSeqAudioProcessor::switchLaneSlot (int line, int slot)
+{
+    activeSlot[line].store (slot, std::memory_order_relaxed);
+    mutateMask[line] = 0;   // mutations belong to the pattern that was playing
+}
+
+void TugMidiSeqAudioProcessor::cellParamChanged (int line, int step, bool velocity, float value)
+{
+    // mirrorActiveSlots copying a slot into the pads: the slot already holds it
+    if (mirroring && juce::MessageManager::existsAndIsCurrentThread())
+        return;
+    const int slot = getActiveSlot (line);
+    (velocity ? slotVel : slotCell)[slot][line][step].store ((int) std::lround (value), std::memory_order_relaxed);
+}
+
+void TugMidiSeqAudioProcessor::requestSlot (int slot)
+{
+    setParamValue (valueTreeNames[PATTERNSLOT], (float) jlimit (0, numSlots - 1, slot));
+}
+
+bool TugMidiSeqAudioProcessor::isSlotEmpty (int slot) const
+{
+    for (int i = 0; i < numOfLine; i++)
+        for (int j = 0; j < numOfStep; j++)
+            if (slotCell[slot][i][j].load (std::memory_order_relaxed) != 0)
+                return false;
+    return true;
+}
+
+// Copies each lane's active slot into the pad parameters once the lane
+// switched (or a slot it plays was rewritten). The values go into the APVTS
+// tree without the undo manager, so the copy isn't an undoable edit; after a
+// switch the history is cleared instead, because its entries name pads, and
+// the pads now stand for another slot.
+void TugMidiSeqAudioProcessor::mirrorActiveSlots()
+{
+    bool pending = false;
+    for (int i = 0; i < numOfLine; i++)
+        pending |= getActiveSlot (i) != mirroredSlot[i] || mirrorDirty[i].load();
+    if (! pending) return;
+
+    (void) valueTreeState.copyState();   // flush first, so the tree matches the pads
+    bool switched = false;
+    for (int i = 0; i < numOfLine; i++)
+    {
+        const int slot = getActiveSlot (i);
+        const bool dirty = mirrorDirty[i].exchange (false);
+        if (slot == mirroredSlot[i] && ! dirty) continue;
+        switched |= slot != mirroredSlot[i];
+        mirroredSlot[i] = slot;
+
+        const juce::ScopedValueSetter<bool> svs (mirroring, true);
+        for (int j = 0; j < numOfStep; j++)
+            for (bool vel : { false, true })
+            {
+                const auto id = valueTreeNames[vel ? VELGRIDBUTTON : BLOCK] + juce::String (i) + juce::String (j);
+                const double value = (vel ? slotVel : slotCell)[slot][i][j].load();
+                auto child = valueTreeState.state.getChildWithProperty ("id", id);
+                if (child.isValid())
+                    child.setProperty ("value", value, nullptr);
+                else
+                    setParamValue (id, (float) value);
+            }
+    }
+    if (switched)
+        undoManager.clearUndoHistory();
+    myGridChangeListener.sendChangeMessage();
+}
+
+// one slot's step data, five values per step: cell, velocity, condition, ratchet, pitch
+void TugMidiSeqAudioProcessor::snapshotSlot (int slot, std::vector<int>& out) const
+{
+    out.clear();
+    for (int i = 0; i < numOfLine; i++)
+        for (int j = 0; j < numOfStep; j++)
+            for (auto* a : { &slotCell, &slotVel, &stepCond, &stepRatchet, &stepPitch })
+                out.push_back ((*a)[slot][i][j].load());
+}
+
+void TugMidiSeqAudioProcessor::restoreSlot (int slot, const std::vector<int>& data)
+{
+    size_t k = 0;
+    for (int i = 0; i < numOfLine; i++)
+    {
+        for (int j = 0; j < numOfStep; j++)
+            for (auto* a : { &slotCell, &slotVel, &stepCond, &stepRatchet, &stepPitch })
+                (*a)[slot][i][j].store (data[k++]);
+        if (getActiveSlot (i) == slot)
+            mirrorDirty[i].store (true);
+    }
+    notifyStateChanged();
+}
+
+namespace
+{
+    // copy / clear of a whole slot, as one undo step
+    struct SlotDataAction : juce::UndoableAction
+    {
+        SlotDataAction (TugMidiSeqAudioProcessor& p, int s, std::vector<int> from, std::vector<int> to)
+            : proc (p), slot (s), before (std::move (from)), after (std::move (to)) {}
+        bool perform() override { proc.restoreSlotData (slot, after);  return true; }
+        bool undo() override    { proc.restoreSlotData (slot, before); return true; }
+        int getSizeInUnits() override { return 10; }
+        TugMidiSeqAudioProcessor& proc;
+        int slot;
+        std::vector<int> before, after;
+    };
+}
+
+void TugMidiSeqAudioProcessor::copySlot (int from, int to)
+{
+    if (from == to) return;
+    std::vector<int> before, after;
+    snapshotSlot (to, before);
+    snapshotSlot (from, after);
+    flushToUndo();
+    undoManager.beginNewTransaction();
+    undoManager.perform (new SlotDataAction (*this, to, std::move (before), std::move (after)));
+    undoManager.beginNewTransaction();
+}
+
+void TugMidiSeqAudioProcessor::clearSlot (int slot)
+{
+    std::vector<int> before, after;
+    snapshotSlot (slot, before);
+    after = before;
+    for (size_t k = 0; k < after.size(); k += 5)
+    {
+        after[k] = 0; after[k + 1] = 100; after[k + 2] = CondNone; after[k + 3] = 1; after[k + 4] = 0;
+    }
+    flushToUndo();
+    undoManager.beginNewTransaction();
+    undoManager.perform (new SlotDataAction (*this, slot, std::move (before), std::move (after)));
+    undoManager.beginNewTransaction();
+}
+
+// "patternSlots": the lanes' active slots, and per slot and lane one
+// comma-separated list for each kind of step data.
+void TugMidiSeqAudioProcessor::writeSlotsTo (juce::ValueTree& state) const
+{
+    auto node = state.getOrCreateChildWithName ("patternSlots", nullptr);
+    juce::StringArray actives;
+    for (int i = 0; i < numOfLine; i++)
+        actives.add (juce::String (getActiveSlot (i)));
+    node.setProperty ("active", actives.joinIntoString (","), nullptr);
+
+    const char* kinds[] = { "cells", "vels", "conds", "ratchets", "pitches" };
+    const std::atomic<int> (*arrays[])[numOfLine][numOfStep] = { slotCell, slotVel, stepCond, stepRatchet, stepPitch };
+    for (int s = 0; s < numSlots; s++)
+        for (int i = 0; i < numOfLine; i++)
+            for (int k = 0; k < 5; k++)
+            {
+                juce::StringArray values;
+                for (int j = 0; j < numOfStep; j++)
+                    values.add (juce::String (arrays[k][s][i][j].load()));
+                node.setProperty (juce::Identifier (juce::String (kinds[k]) + "_" + juce::String (s) + "_" + juce::String (i)),
+                                  values.joinIntoString (","), nullptr);
+            }
+}
+
+bool TugMidiSeqAudioProcessor::readSlotsFrom (const juce::ValueTree& state)
+{
+    const auto node = state.getChildWithName ("patternSlots");
+    if (! node.isValid()) return false;
+
+    const char* kinds[] = { "cells", "vels", "conds", "ratchets", "pitches" };
+    std::atomic<int> (*arrays[])[numOfLine][numOfStep] = { slotCell, slotVel, stepCond, stepRatchet, stepPitch };
+    const int lo[] = { 0, 0, 0, 1, -maxStepPitch }, hi[] = { 2, 127, NumTrigConds - 1, maxRatchet, maxStepPitch };
+    for (int s = 0; s < numSlots; s++)
+        for (int i = 0; i < numOfLine; i++)
+            for (int k = 0; k < 5; k++)
+            {
+                const auto key = juce::Identifier (juce::String (kinds[k]) + "_" + juce::String (s) + "_" + juce::String (i));
+                if (! node.hasProperty (key)) continue;
+                const auto values = juce::StringArray::fromTokens (node.getProperty (key).toString(), ",", "");
+                for (int j = 0; j < numOfStep && j < values.size(); j++)
+                    arrays[k][s][i][j].store (jlimit (lo[k], hi[k], values[j].getIntValue()));
+            }
+    return true;
 }
 
 //==============================================================================

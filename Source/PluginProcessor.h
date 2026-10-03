@@ -26,11 +26,11 @@ const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread","Mute","StrumShape","StrumTension","StrumVel","StrumHuman"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread","Mute","StrumShape","StrumTension","StrumVel","StrumHuman","patternSlot"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD,MUTE,STRUMSHAPE,STRUMTENSION,STRUMVEL,STRUMHUMAN
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD,MUTE,STRUMSHAPE,STRUMTENSION,STRUMVEL,STRUMHUMAN,PATTERNSLOT
 };
 
 // Lane play direction. Time still runs forward (shuffle, delay and note
@@ -46,6 +46,10 @@ const juce::StringArray directionNames = { "Forward", "Reverse", "Ping-Pong", "R
 enum LanePlayMode { PlayVoice = 0, PlayStrum, PlayStrumUpDown };
 const juce::StringArray playModeNames = { "Voice", "Strum", "Strum Up/Down" };
 constexpr int maxStrumNotes = 16;
+
+// Pattern slots: four step patterns per plugin, chosen with `patternSlot`.
+constexpr int numSlots = 4;
+const juce::StringArray slotNames = { "A", "B", "C", "D" };
 
 // Strum shape (per lane, edited in the STRM knob's popup). The strum keeps
 // the length STRM gives it, |spread| ms per gap; the shape only moves the
@@ -456,49 +460,70 @@ public:
     }
     bool isScreenNote (int note) const { return screenHeld[(size_t) note]; }
 
+    //==========================================================================
+    // Pattern slots. A slot holds a whole step pattern: cells, step velocities,
+    // conditions, ratchets and pitches. Each lane plays its own active slot and
+    // moves to the requested one (`patternSlot`, automatable) when it starts its
+    // loop again (a ping-pong lane after the way back), or at once while
+    // stopped. The block / velGridButton parameters are a mirror of each lane's
+    // active slot: edits to them land in it (CellMirror), and after a lane
+    // switched the message thread copies the new slot into them
+    // (mirrorActiveSlots). Everything that reads a step goes through the
+    // lane's active slot.
+    int  getActiveSlot (int line) const { return activeSlot[line].load (std::memory_order_relaxed); }
+    int  getRequestedSlot() const       { return jlimit (0, numSlots - 1, (int) *patternSlotAtomic); }
+    bool isLaneWaitingForSlot (int line) const { return getActiveSlot (line) != getRequestedSlot(); }
+    void requestSlot (int slot);          // message thread
+    bool isSlotEmpty (int slot) const;
+    void copySlot (int from, int to);     // message thread, one undo step
+    void clearSlot (int slot);            // message thread, one undo step
+    int  cellAt (int line, int step) const    { return slotCell[getActiveSlot (line)][line][step].load (std::memory_order_relaxed); }
+    int  stepVelAt (int line, int step) const { return slotVel[getActiveSlot (line)][line][step].load (std::memory_order_relaxed); }
+    void mirrorActiveSlots();             // message thread (timer)
+    void restoreSlotData (int slot, const std::vector<int>& data) { restoreSlot (slot, data); }   // for the undo action
+
     int getStepCond (int line, int step) const
     {
-        return stepCond[line][step].load (std::memory_order_relaxed);
+        return stepCond[getActiveSlot (line)][line][step].load (std::memory_order_relaxed);
     }
     // Safe from any thread. Notifies the host only when asked to, because that
     // must happen on the message thread (GUI edits) — preset loads don't need it.
     void setStepCond (int line, int step, int cond, bool notifyHost = false)
     {
-        stepCond[line][step].store (jlimit (0, NumTrigConds - 1, cond), std::memory_order_relaxed);
+        stepCond[getActiveSlot (line)][line][step].store (jlimit (0, NumTrigConds - 1, cond), std::memory_order_relaxed);
         if (notifyHost)
             updateHostDisplay (ChangeDetails{}.withNonParameterStateChanged (true));
     }
+    // the step data of every lane's active slot
     void clearStepData()
     {
-        for (auto& lane : stepCond)
-            for (auto& c : lane)
-                c.store (CondNone, std::memory_order_relaxed);
-        for (auto& lane : stepRatchet)
-            for (auto& r : lane)
-                r.store (1, std::memory_order_relaxed);
-        for (auto& lane : stepPitch)
-            for (auto& p : lane)
-                p.store (0, std::memory_order_relaxed);
+        for (int i = 0; i < numOfLine; i++)
+            for (int j = 0; j < numOfStep; j++)
+            {
+                setStepCond (i, j, CondNone);
+                setStepRatchet (i, j, 1);
+                setStepPitch (i, j, 0);
+            }
     }
 
     int getStepRatchet (int line, int step) const
     {
-        return stepRatchet[line][step].load (std::memory_order_relaxed);
+        return stepRatchet[getActiveSlot (line)][line][step].load (std::memory_order_relaxed);
     }
     void setStepRatchet (int line, int step, int hits)
     {
-        stepRatchet[line][step].store (jlimit (1, maxRatchet, hits), std::memory_order_relaxed);
+        stepRatchet[getActiveSlot (line)][line][step].store (jlimit (1, maxRatchet, hits), std::memory_order_relaxed);
     }
     void setStepRatchetUndoable (int line, int step, int hits);
     bool isFillOn() const { return *fillAtomic > 0.5f; }
 
     int getStepPitch (int line, int step) const
     {
-        return stepPitch[line][step].load (std::memory_order_relaxed);
+        return stepPitch[getActiveSlot (line)][line][step].load (std::memory_order_relaxed);
     }
     void setStepPitch (int line, int step, int offset)
     {
-        stepPitch[line][step].store (jlimit (-maxStepPitch, maxStepPitch, offset), std::memory_order_relaxed);
+        stepPitch[getActiveSlot (line)][line][step].store (jlimit (-maxStepPitch, maxStepPitch, offset), std::memory_order_relaxed);
     }
     void setStepPitchUndoable (int line, int step, int offset);
 
@@ -637,7 +662,7 @@ public:
     {
         const int n = jlimit (1, numOfStep, (int) *numOfGrid[line]);
         for (int st = 0; st < n; st++)
-            if ((int) *gridsArr[line][st] == 2) return true;
+            if (cellAt (line, st) == 2) return true;
         return false;
     }
     
@@ -874,10 +899,43 @@ private:
 
     std::atomic<float> *fillAtomic;
 
-    // Trig-condition engine state (audio thread only).
-    std::atomic<int> stepCond[numOfLine][numOfStep];
-    std::atomic<int> stepRatchet[numOfLine][numOfStep];
-    std::atomic<int> stepPitch[numOfLine][numOfStep];
+    // Per-slot step data (see Pattern slots above).
+    std::atomic<int> stepCond[numSlots][numOfLine][numOfStep];
+    std::atomic<int> stepRatchet[numSlots][numOfLine][numOfStep];
+    std::atomic<int> stepPitch[numSlots][numOfLine][numOfStep];
+    std::atomic<int> slotCell[numSlots][numOfLine][numOfStep];   // 0 off, 1 on, 2 event
+    std::atomic<int> slotVel[numSlots][numOfLine][numOfStep];    // 0..127
+    std::atomic<int> activeSlot[numOfLine];
+    std::atomic<bool> mirrorDirty[numOfLine];
+    std::atomic<float> *patternSlotAtomic = nullptr;
+    int  mirroredSlot[numOfLine] = {};   // message thread: the slot the pad parameters hold
+    bool mirroring = false;              // message thread: mirrorActiveSlots is writing them
+    void switchLaneSlot (int line, int slot);   // audio thread
+    void cellParamChanged (int line, int step, bool velocity, float value);
+    void writeSlotsTo (juce::ValueTree& state) const;
+    bool readSlotsFrom (const juce::ValueTree& state);
+    void snapshotSlot (int slot, std::vector<int>& out) const;
+    void restoreSlot (int slot, const std::vector<int>& data);
+    void resetSlots();
+
+    // writes each pad parameter's change into the lane's active slot
+    struct CellMirror : juce::AudioProcessorValueTreeState::Listener
+    {
+        CellMirror (TugMidiSeqAudioProcessor& p, int l, int s, bool v) : proc (p), line (l), step (s), velocity (v) {}
+        void parameterChanged (const juce::String&, float value) override { proc.cellParamChanged (line, step, velocity, value); }
+        TugMidiSeqAudioProcessor& proc;
+        int line, step;
+        bool velocity;
+    };
+    std::vector<std::unique_ptr<CellMirror>> cellMirrors;
+
+    struct MirrorTimer : juce::Timer
+    {
+        explicit MirrorTimer (TugMidiSeqAudioProcessor& p) : proc (p) {}
+        void timerCallback() override { proc.mirrorActiveSlots(); }
+        TugMidiSeqAudioProcessor& proc;
+    };
+    MirrorTimer mirrorTimer { *this };
     std::atomic<float> *scaleKeyAtomic, *scaleTypeAtomic;
 
     // Ratchet repeats still to play in the current step, per lane (audio thread).

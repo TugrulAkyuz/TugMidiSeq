@@ -268,6 +268,12 @@ void Grids::paint (juce::Graphics& g)
     drawDirectionGlyph (g, directionArea.toFloat().withSizeKeepingCentre (11.0f, 9.0f)
                                                  .withX ((float) directionArea.getRight() - 12.0f));
 
+    // waiting for its loop to end before moving to another pattern slot: that slot's letter, blinking
+    if (audioProcessor.isLaneWaitingForSlot (myLine) && (juce::Time::getMillisecondCounter() / 250) % 2 == 0)
+        Theme::drawCaption (g, slotNames[audioProcessor.getRequestedSlot()],
+                            directionArea.withTrimmedLeft (4).withWidth (10), juce::Justification::centred,
+                            Theme::accentBright, 10.0f);
+
     // the lane's note was picked with the mouse (all of them, for an ALL lane):
     // the lane number sits in a brass ring, as on the on-screen keyboard
     if (laneSource == NoteFromClick)

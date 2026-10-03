@@ -39,6 +39,24 @@ private:
     std::shared_ptr<juce::FileChooser> chooser;
 };
 
+// Pattern slots A-D. A click asks for that slot: each lane moves to it when
+// its loop starts again, and the button blinks until every lane has. A slot
+// some lanes still play is outlined; an empty slot's letter is dim.
+// Right-click: copy the slot to another one, or clear it.
+class SlotSelector : public juce::Component
+{
+public:
+    explicit SlotSelector (TugMidiSeqAudioProcessor& p) : proc (p) {}
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    juce::LookAndFeel* menuLookAndFeel = nullptr;
+
+private:
+    int slotAt (juce::Point<float>) const;
+    void showMenu (int slot);
+    TugMidiSeqAudioProcessor& proc;
+};
+
 // Each held input note is lit in the colour of the lane it feeds, with the lane
 // number on the key; notes held only by Latch are drawn hollow, and notes no
 // lane picked up (more keys than lanes) stay grey. A dot on top of a key marks
@@ -94,6 +112,7 @@ private:
     void setFill (bool on);
     juce::TextButton undoButton, redoButton;   // right end of the strip
     MidiExportButton midiExport { audioProcessor };
+    SlotSelector slotSelector { audioProcessor };
 
     // scale lock
     MyLookAndFeel comboLookAndFeel;
