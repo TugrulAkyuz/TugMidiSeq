@@ -436,7 +436,10 @@ public:
     {
         setLookAndFeel (nullptr);
     }
+    // the min / max captions under the knob; off for knobs too narrow for them
+    void setShowRangeLabels (bool show) { showRangeLabels = show; repaint(); }
 private:
+    bool showRangeLabels = true;
     void paint (juce::Graphics& g) override
     {
         auto b = getLocalBounds();
@@ -451,6 +454,9 @@ private:
         g.setFont (Theme::valueFont (11.0f));
         g.setColour (isEnabled() ? Theme::textValue : Theme::textDim);
         g.drawText (juce::String ((int) getValue()), b, juce::Justification::centred, false);
+
+        if (! showRangeLabels)
+            return;
 
         // min / max ticks, silkscreen-faint
         g.setFont (Theme::labelFont (8.0f));

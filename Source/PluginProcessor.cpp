@@ -245,7 +245,7 @@ valueTreeState(*this, &undoManager)
 
         tmp_s.clear();
         tmp_s << valueTreeNames[SPREAD] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s, 0, 100, 20));
+        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s, -100, 100, 20));
         gridsSpreadAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         pubMutateMask[j].store (0);
         mutateResetRequest[j].store (false);
@@ -601,6 +601,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             resetTrigCondState();   // conditions count loops from the next play
             for (auto& r : ratchetLeft) r = 0;   // no leftover repeats on the next play
             for (auto& c : strumCount) c = 0;    // ... or strums
+            for (auto& f : strumFlipped) f = false;   // Up/Down starts the way its sign says
             for (auto& m : mutateMask) m = 0;    // every play starts from the written pattern
         }
         if(myIsPlaying == true &&  positionInfo.isPlaying == false )/**ppq ye bakma code*/
@@ -1112,13 +1113,14 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, juce::MidiBuff
     }
     if (count == 0) return;
 
-    bool downward = mode == PlayStrumDown;
+    const int spread = mode == PlayChord ? 0 : getSpread (line);
+    bool downward = spread < 0;
     if (mode == PlayStrumUpDown)
     {
-        downward = strumDownNext[line];
-        strumDownNext[line] = ! strumDownNext[line];
+        downward = downward != strumFlipped[line];
+        strumFlipped[line] = ! strumFlipped[line];
     }
-    const int spreadSamples = mode == PlayChord ? 0 : (int) (getSpread (line) * mySampleRate / 1000.0);
+    const int spreadSamples = (int) (std::abs (spread) * mySampleRate / 1000.0);
     const int channel = (int) *gridsMidiRouteAtomic[line];
 
     strumCount[line] = 0;

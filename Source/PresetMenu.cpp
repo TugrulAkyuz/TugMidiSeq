@@ -375,7 +375,7 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
         if (preset.hasProperty(valueTreeNames[PLAYMODE] + juce::String (i)))
             p.playMode[i] = jlimit(0, playModeNames.size() - 1, (int) preset.getProperty(valueTreeNames[PLAYMODE] + juce::String (i), var()));
         if (preset.hasProperty(valueTreeNames[SPREAD] + juce::String (i)))
-            p.spread[i] = jlimit(0, 100, (int) preset.getProperty(valueTreeNames[SPREAD] + juce::String (i), var()));
+            p.spread[i] = jlimit(-100, 100, (int) preset.getProperty(valueTreeNames[SPREAD] + juce::String (i), var()));
 
     }
     tmp_s.clear();

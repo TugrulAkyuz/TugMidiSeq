@@ -730,7 +730,7 @@ private:
     void timerCallback() override
     {
         repaint();
-        spreadKnob.setEnabled (audioProcessor.getPlayMode (myLine) >= PlayStrumUp);
+        spreadKnob.setEnabled (audioProcessor.getPlayMode (myLine) >= PlayStrum);
 
         int st = audioProcessor.getSteps(myLine);
         // pad widths mirror while the lane travels backward (getStepDisplayRatio)
@@ -744,8 +744,13 @@ private:
         // the box shows the lane's note, or ALL (+ strum direction) for a
         // lane that plays every held note, styled by where the note comes from
         const int play = audioProcessor.getPlayMode (myLine);
+        // ALL lanes: 1000 + 0 chord, 1 strum up, 2 strum down, 3 up/down
+        const int spread = audioProcessor.getSpread (myLine);
+        const int allKind = play == PlayStrumUpDown ? 3
+                          : play == PlayStrum && spread > 0 ? 1
+                          : play == PlayStrum && spread < 0 ? 2 : 0;
         const int midi = play == PlayVoice ? audioProcessor.getMidi (myLine)
-                                           : (audioProcessor.getHeldNoteCount() > 0 ? 1000 + play : -1);
+                                           : (audioProcessor.getHeldNoteCount() > 0 ? 1000 + allKind : -1);
         const int source = midi < 0 ? NoteFromMidi : noteSource (play == PlayVoice ? midi : -1);
         const int code = midi < 0 ? -1 : midi * 4 + source;   // repaint when either changes
         if(myMidiNote != code)
@@ -787,8 +792,8 @@ private:
         return first < 0 ? NoteFromMidi : first;
     }
     
-    // m: a note number, -1 for nothing held, or 1000 + LanePlayMode for a
-    // chord / strum lane with notes held. source styles it like the note map:
+    // m: a note number, -1 for nothing held, or 1000 + 0..3 (chord, strum up,
+    // strum down, up/down) for a lane playing every held note. source styles it like the note map:
     // MIDI and clicked = filled (a clicked note rings the lane number
     // instead, see paint()), latched = hollow.
     void setMidiName(int m, int source)
@@ -796,10 +801,10 @@ private:
         juce::String text;
         if (m >= 1000)
         {
-            const juce::String arrows[] = { "", "", juce::CharPointer_UTF8 ("\xe2\x86\x91"),     // ↑
+            const juce::String arrows[] = { "", juce::CharPointer_UTF8 ("\xe2\x86\x91"),       // ↑
                                             juce::CharPointer_UTF8 ("\xe2\x86\x93"),            // ↓
                                             juce::CharPointer_UTF8 ("\xe2\x86\x95") };          // ↕
-            text = "ALL" + arrows[jlimit (0, 4, m - 1000)];
+            text = "ALL" + arrows[jlimit (0, 3, m - 1000)];
         }
         else if (m >= 0)
         {

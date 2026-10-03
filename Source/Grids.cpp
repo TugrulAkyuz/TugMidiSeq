@@ -162,7 +162,9 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     spreadKnob.setColour (juce::Slider::rotarySliderFillColourId, colourarray[myLine]);
     spreadAttachment = std::make_unique<AudioProcessorValueTreeState::SliderAttachment> (
         audioProcessor.valueTreeState, valueTreeNames[SPREAD] + juce::String (line), spreadKnob);
-    spreadKnob.setEnabled (audioProcessor.getPlayMode (myLine) >= PlayStrumUp);   // the timer keeps it in step
+    spreadKnob.setLookAndFeel (&myLookAndFeel2);   // centred arc: - strums down, + up
+    spreadKnob.setShowRangeLabels (false);         // "-100" / "100" don't fit under a 34 px knob
+    spreadKnob.setEnabled (audioProcessor.getPlayMode (myLine) >= PlayStrum);   // the timer keeps it in step
     
     tmp_s.clear();
     tmp_s << valueTreeNames[EVENT] << line;
@@ -288,9 +290,10 @@ void Grids::paint (juce::Graphics& g)
         for (int k = 0; k < 3; k++)
         {
             float shift = 0.0f;
-            if (play == PlayStrumUp)   shift = (float) (2 - k) * 1.5f;   // low note (bottom) first
-            if (play == PlayStrumDown) shift = (float) k * 1.5f;
-            if (play == PlayStrumUpDown) shift = k == 1 ? 1.5f : 0.0f;
+            const int spread = audioProcessor.getSpread (myLine);
+            if (play == PlayStrum && spread > 0) shift = (float) (2 - k) * 1.5f;   // low note (bottom) first
+            if (play == PlayStrum && spread < 0) shift = (float) k * 1.5f;
+            if (play == PlayStrumUpDown)         shift = k == 1 ? 1.5f : 0.0f;
             g.fillRect (x + shift, y + (float) k * 4.0f, 4.0f, 2.0f);
         }
     }
@@ -411,7 +414,8 @@ void Grids::showLaneMenu()
     for (int p = 0; p < playModeNames.size(); p++)
         m.addItem (playBase + p, p == PlayVoice ? juce::String ("Voice  (its own note of the chord)")
                                  : p == PlayChord ? juce::String ("Chord  (all held notes at once)")
-                                                  : playModeNames[p],
+                                 : p == PlayStrum ? juce::String ("Strum  (STRM knob: + up, - down)")
+                                                  : juce::String ("Strum Up/Down  (alternates, starts by the knob's sign)"),
                    true, p == play);
     m.addSectionHeader ("Direction");
     for (int d = 0; d < directionNames.size(); d++)

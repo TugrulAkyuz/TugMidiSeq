@@ -39,10 +39,13 @@ enum LaneDirection { DirForward = 0, DirReverse, DirPingPong, DirRandom };
 const juce::StringArray directionNames = { "Forward", "Reverse", "Ping-Pong", "Random" };
 
 // What a lane plays on its steps: its own voice of the chord (the original
-// behaviour), or the whole held chord, at once or strummed with `Spread<lane>`
-// milliseconds between notes. Strum Up/Down alternates on every hit.
-enum LanePlayMode { PlayVoice = 0, PlayChord, PlayStrumUp, PlayStrumDown, PlayStrumUpDown };
-const juce::StringArray playModeNames = { "Voice", "Chord", "Strum Up", "Strum Down", "Strum Up/Down" };
+// behaviour), or the whole held chord, at once or strummed. `Spread<lane>`
+// (-100..+100) is both the strum's direction and its width: + strums up (low
+// to high), - strums down, the size is the milliseconds between notes, and 0
+// plays the chord at once. Strum Up/Down alternates on every hit, starting
+// the way the sign says.
+enum LanePlayMode { PlayVoice = 0, PlayChord, PlayStrum, PlayStrumUpDown };
+const juce::StringArray playModeNames = { "Voice", "Chord", "Strum", "Strum Up/Down" };
 constexpr int maxStrumNotes = 16;
 
 // Elektron-style trig conditions, one per step. A step only fires when its
@@ -804,7 +807,7 @@ private:
     struct StrumNote { int countdown; int duration; juce::MidiMessage note; };
     StrumNote strumQueue[numOfLine][maxStrumNotes];
     int  strumCount[numOfLine] = {};
-    bool strumDownNext[numOfLine] = {};
+    bool strumFlipped[numOfLine] = {};   // Strum Up/Down: next hit goes against the sign
     void playChord (int line, int duration, juce::MidiBuffer& midiMessages, int sample);
     void tickStrum (int line, juce::MidiBuffer& midiMessages, int sample);
     uint32_t mutateMask[numOfLine] = {};                // audio thread
