@@ -294,7 +294,7 @@ void Grids::paint (juce::Graphics& g)
             const int spread = audioProcessor.getSpread (myLine);
             if (play == PlayStrum && spread > 0) shift = (float) (2 - k) * 1.5f;   // low note (bottom) first
             if (play == PlayStrum && spread < 0) shift = (float) k * 1.5f;
-            if (play == PlayStrumUpDown)         shift = k == 1 ? 1.5f : 0.0f;
+            if (play == PlayStrumUpDown && spread != 0) shift = k == 1 ? 1.5f : 0.0f;
             g.fillRect (x + shift, y + (float) k * 4.0f, 4.0f, 2.0f);
         }
     }
@@ -414,8 +414,7 @@ void Grids::showLaneMenu()
     m.addSectionHeader ("Plays");
     for (int p = 0; p < playModeNames.size(); p++)
         m.addItem (playBase + p, p == PlayVoice ? juce::String ("Voice  (its own note of the chord)")
-                                 : p == PlayChord ? juce::String ("Chord  (all held notes at once)")
-                                 : p == PlayStrum ? juce::String ("Strum  (STRM knob: + up, - down)")
+                                 : p == PlayStrum ? juce::String ("Chord / Strum  (STRM knob: 0 chord, + up, - down)")
                                                   : juce::String ("Strum Up/Down  (alternates, starts by the knob's sign)"),
                    true, p == play);
     m.addItem (strumShapeId, "Strum shape...  (or right-click STRM)", play == PlayStrum || play == PlayStrumUpDown);

@@ -743,7 +743,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     if (getPlayMode (i) == PlayVoice)
                         emitLaneNote (i, ratchetNote[i], ratchetDuration[i], midiMessages, s);
                     else
-                        playChord (i, ratchetDuration[i], midiMessages, s);   // the whole chord / strum again
+                        playChord (i, ratchetDuration[i], ratchetInterval[i], midiMessages, s);   // the whole chord / strum again
                     if (--ratchetLeft[i] > 0)
                         ratchetCountdown[i] = ratchetInterval[i];
                 }
@@ -1023,18 +1023,20 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
     {
         if (! myIsPlaying || inMidiNoteList.empty()) return true;
         int duration = jmax (0, stepmidStopSampleIntervalForShuffle[i][steps[i]] - 1);
+        int window = samplesToNextHit (i);
         const int hits = getStepRatchet (i, playStep[i]);
         ratchetLeft[i] = 0;
         if (hits > 1)   // as below, but each repeat replays the chord
         {
             const int interval = jmax (1, stepResetIntervalForShuffle[i][steps[i]] / hits);
             duration = jmax (1, jmin (duration, interval * 3 / 4));
+            window = interval;
             ratchetLeft[i]      = hits - 1;
             ratchetInterval[i]  = interval;
             ratchetCountdown[i] = interval;
             ratchetDuration[i]  = duration;
         }
-        playChord (i, duration, midiMessages, s);
+        playChord (i, duration, window, midiMessages, s);
         return true;
     }
 
@@ -1062,7 +1064,7 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         it.setNoteNumber (pitchedNote (it.getNoteNumber() + (int) *octave[i] * 12,
                                        getStepPitch (i, playStep[i])));
         
-        auto midiNote = [&](const RealMidiNoteList& l){ return l.sentMidi.getNoteNumber() == it.getNoteNumber(); };
+        auto midiNote = [&](const RealMidiNoteList& l){ return l.sentMidi.getNoteNumber() == it.getNoteNumber() && l.lineNo == midRouteIndex; };
         auto it2 = std::find_if(inRealMidiNoteList.begin(), inRealMidiNoteList.end(),midiNote);
         if(it2 != inRealMidiNoteList.end())
         {
@@ -1108,12 +1110,30 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
     return true;
 }
 
+// Samples from the start of the current slot to the next slot whose step is
+// on, i.e. the most time this hit has before the lane plays again.
+int TugMidiSeqAudioProcessor::samplesToNextHit (int line) const
+{
+    const int n = jlimit (1, numOfStep, (int) *numOfGrid[line]);
+    const int slot = jlimit (0, n - 1, steps[line]);
+    int gap = stepResetIntervalForShuffle[line][slot];
+    for (int j = 1; j < n; j++)
+    {
+        const int next = (slot + j) % n;
+        if (cellActiveAtSlot (line, next)) break;
+        gap += stepResetIntervalForShuffle[line][next];
+    }
+    return jmax (1, gap);
+}
+
 // Chord / strum: every held note (low to high, max maxStrumNotes), each through
 // the lane's octave, the step's pitch and the scale lock. A strum puts Spread ms
-// between notes and shortens the later ones so they all end together, like
-// strings that were hit one after another. A new hit cuts a strum still
-// being played.
-void TugMidiSeqAudioProcessor::playChord (int line, int duration, juce::MidiBuffer& midiMessages, int sample)
+// between notes and lets them all end together, like strings that were hit one
+// after another. `window` is the time until the lane's next hit: a strum too
+// long for it is squeezed so every note is played and the last one still rings
+// a quarter of the note length, and the chord may ring past the note length
+// (never past the window) to give it that.
+void TugMidiSeqAudioProcessor::playChord (int line, int duration, int window, juce::MidiBuffer& midiMessages, int sample)
 {
     const int mode = getPlayMode (line);
     int notes[maxStrumNotes];
@@ -1134,7 +1154,7 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, juce::MidiBuff
     }
     if (count == 0) return;
 
-    const int spread = mode == PlayChord ? 0 : getSpread (line);
+    const int spread = getSpread (line);
     bool downward = spread < 0;
     if (mode == PlayStrumUpDown)
     {
@@ -1144,9 +1164,14 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, juce::MidiBuff
     const int spreadSamples = (int) (std::abs (spread) * mySampleRate / 1000.0);
     const int channel = (int) *gridsMidiRouteAtomic[line];
 
-    // the strum's length stays |spread| per gap; its shape places the notes inside it
-    const bool shaped   = mode != PlayChord && spreadSamples > 0;
-    const int  total    = spreadSamples * (count - 1);
+    // the strum's length is |spread| per gap, squeezed to fit the window; its
+    // shape places the notes inside it
+    const bool shaped   = spreadSamples > 0 && count > 1;
+    window              = jmax (1, window - 1);   // a note-off lands a sample after its length, like the steps' notes
+    const int  ring     = jlimit (1, window, duration / 4);
+    const int  total    = jmin (spreadSamples * (count - 1), jmax (0, window - ring));
+    const int  end      = jmin (window, jmax (duration, total + ring));   // all notes stop here
+    const float gap     = count > 1 ? (float) total / (float) (count - 1) : 0.0f;
     const int  shape    = getStrumShape (line);
     const float tension = getStrumTension (line), velTilt = getStrumVelTilt (line);
     const float human   = shaped ? getStrumHumanize (line) : 0.0f;
@@ -1162,7 +1187,7 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, juce::MidiBuff
 
         int delay = (int) std::lround (position * (float) total);
         if (k > 0 && human > 0.0f)   // up to half a gap early or late, never before the previous note
-            delay = jmax (previous, delay + (int) ((rng.nextFloat() - 0.5f) * human * (float) spreadSamples));
+            delay = jlimit (previous, total, delay + (int) ((rng.nextFloat() - 0.5f) * human * gap));
         previous = delay;
 
         float velocity = velocities[idx] * velFactor;
@@ -1170,7 +1195,7 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, juce::MidiBuff
             velocity *= 1.0f + (rng.nextFloat() - 0.5f) * 0.4f * human;   // up to +-20 %
         auto note = juce::MidiMessage::noteOn (channel, notes[idx], jlimit (0.02f, 1.0f, velocity));
 
-        const int length = jmax (1, duration - delay);
+        const int length = jmax (1, end - delay);
         if (delay == 0)
             emitLaneNote (line, note, length, midiMessages, sample);
         else
@@ -1189,12 +1214,13 @@ void TugMidiSeqAudioProcessor::tickStrum (int line, juce::MidiBuffer& midiMessag
     }
 }
 
-// Sends one note for lane `line` (cutting an identical note that's still
-// sounding) and books its note-off.
+// Sends one note for lane `line` (cutting the same note still sounding on the
+// same channel; other lanes' channels are left alone) and books its note-off.
 void TugMidiSeqAudioProcessor::emitLaneNote (int line, juce::MidiMessage note, int durationSamples,
                                              juce::MidiBuffer& midiMessages, int sample)
 {
-    auto same = [&] (const RealMidiNoteList& l) { return l.sentMidi.getNoteNumber() == note.getNoteNumber(); };
+    auto same = [&] (const RealMidiNoteList& l) { return l.sentMidi.getNoteNumber() == note.getNoteNumber()
+                                                         && l.lineNo == note.getChannel(); };
     auto sounding = std::find_if (inRealMidiNoteList.begin(), inRealMidiNoteList.end(), same);
     if (sounding != inRealMidiNoteList.end())
     {

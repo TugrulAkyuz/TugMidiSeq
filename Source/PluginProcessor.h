@@ -39,13 +39,12 @@ enum LaneDirection { DirForward = 0, DirReverse, DirPingPong, DirRandom };
 const juce::StringArray directionNames = { "Forward", "Reverse", "Ping-Pong", "Random" };
 
 // What a lane plays on its steps: its own voice of the chord (the original
-// behaviour), or the whole held chord, at once or strummed. `Spread<lane>`
-// (-100..+100) is both the strum's direction and its width: + strums up (low
-// to high), - strums down, the size is the milliseconds between notes, and 0
-// plays the chord at once. Strum Up/Down alternates on every hit, starting
-// the way the sign says.
-enum LanePlayMode { PlayVoice = 0, PlayChord, PlayStrum, PlayStrumUpDown };
-const juce::StringArray playModeNames = { "Voice", "Chord", "Strum", "Strum Up/Down" };
+// behaviour), or the whole held chord. `Spread<lane>` (-100..+100) is both the
+// strum's direction and its width: + strums up (low to high), - strums down,
+// the size is the milliseconds between notes, and 0 plays the chord at once.
+// Strum Up/Down alternates on every hit, starting the way the sign says.
+enum LanePlayMode { PlayVoice = 0, PlayStrum, PlayStrumUpDown };
+const juce::StringArray playModeNames = { "Voice", "Strum", "Strum Up/Down" };
 constexpr int maxStrumNotes = 16;
 
 // Strum shape (per lane, edited in the STRM knob's popup). The strum keeps
@@ -839,7 +838,8 @@ private:
     StrumNote strumQueue[numOfLine][maxStrumNotes];
     int  strumCount[numOfLine] = {};
     bool strumFlipped[numOfLine] = {};   // Strum Up/Down: next hit goes against the sign
-    void playChord (int line, int duration, juce::MidiBuffer& midiMessages, int sample);
+    void playChord (int line, int duration, int window, juce::MidiBuffer& midiMessages, int sample);
+    int  samplesToNextHit (int line) const;
     void tickStrum (int line, juce::MidiBuffer& midiMessages, int sample);
     uint32_t mutateMask[numOfLine] = {};                // audio thread
     std::atomic<uint32_t> pubMutateMask[numOfLine];     // for the pads
