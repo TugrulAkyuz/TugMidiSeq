@@ -26,11 +26,11 @@ const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread","Mute"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread","Mute","StrumShape","StrumTension","StrumVel","StrumHuman"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD,MUTE
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD,MUTE,STRUMSHAPE,STRUMTENSION,STRUMVEL,STRUMHUMAN
 };
 
 // Lane play direction. Time still runs forward (shuffle, delay and note
@@ -47,6 +47,30 @@ const juce::StringArray directionNames = { "Forward", "Reverse", "Ping-Pong", "R
 enum LanePlayMode { PlayVoice = 0, PlayChord, PlayStrum, PlayStrumUpDown };
 const juce::StringArray playModeNames = { "Voice", "Chord", "Strum", "Strum Up/Down" };
 constexpr int maxStrumNotes = 16;
+
+// Strum shape (per lane, edited in the STRM knob's popup). The strum keeps
+// the length STRM gives it, |spread| ms per gap; the shape only moves the
+// notes inside it. Curve: StrumTension + makes the gaps shrink (fast start),
+// - makes them grow. StrumVel tilts velocity across the strum (+ later notes
+// louder), StrumHuman adds random timing and velocity to each strum.
+enum StrumShapeKind { StrumLinear = 0, StrumCurve };
+const juce::StringArray strumShapeNames = { "Linear", "Curve" };
+
+// Where note k of an n-note strum lands, 0..1 of the strum's length, and its
+// velocity factor. Shared by the engine and the popup's preview.
+inline void strumNotePlacement (int k, int n, int shape, float tension, float velTilt,
+                                float& position, float& velocityFactor)
+{
+    const float t = n > 1 ? (float) k / (float) (n - 1) : 0.0f;
+    position = t;
+    if (shape == StrumCurve && tension != 0.0f)
+    {
+        const float exponent = 1.0f + 2.0f * std::abs (tension);   // at +-100 the last gap is still ~1/40 of the first
+        position = tension > 0.0f ? 1.0f - std::pow (1.0f - t, exponent)   // gaps shrink
+                                  : std::pow (t, exponent);                 // gaps grow
+    }
+    velocityFactor = juce::jlimit (0.05f, 2.0f, 1.0f + 0.6f * velTilt * t);
+}
 
 // Elektron-style trig conditions, one per step. A step only fires when its
 // condition passes (and, for an Event cell, its probability roll too).
@@ -150,6 +174,7 @@ public:
     int mutate[numOfLine] = {};
     int playMode[numOfLine] = {};
     int spread[numOfLine] = { 20, 20, 20, 20, 20 };
+    int strumShape[numOfLine] = {}, strumTension[numOfLine] = {}, strumVel[numOfLine] = {}, strumHuman[numOfLine] = {};
     int numOfGrid[numOfLine];
     int octave[numOfLine];
     int gridsSpeed[numOfLine];
@@ -362,6 +387,10 @@ public:
     bool isLaneMuted (int line) const        { return *gridsMuteAtomic[line] > 0.5f; }
     void setLaneMute (int line, bool muted); // one undo step
     int  getSpread (int line) const          { return (int) *gridsSpreadAtomic[line]; }
+    int   getStrumShape (int line) const     { return (int) *gridsStrumShapeAtomic[line]; }
+    float getStrumTension (int line) const   { return *gridsStrumTensionAtomic[line] / 100.0f; }   // -1..1
+    float getStrumVelTilt (int line) const   { return *gridsStrumVelAtomic[line] / 100.0f; }       // -1..1
+    float getStrumHumanize (int line) const  { return *gridsStrumHumanAtomic[line] / 100.0f; }     // 0..1
     void setLanePlayMode (int line, int mode);   // one undo step
     void setLaneMutate (int line, int percent);   // one undo step
     void requestMutationReset (int line)     { mutateResetRequest[line].store (true); }
@@ -801,6 +830,8 @@ private:
     std::atomic<float> *gridsPlayModeAtomic[numOfLine];
     std::atomic<float> *gridsSpreadAtomic[numOfLine];
     std::atomic<float> *gridsMuteAtomic[numOfLine];
+    std::atomic<float> *gridsStrumShapeAtomic[numOfLine], *gridsStrumTensionAtomic[numOfLine];
+    std::atomic<float> *gridsStrumVelAtomic[numOfLine], *gridsStrumHumanAtomic[numOfLine];
 
     // Strum: notes of the current strum still waiting for their turn (audio
     // thread, fixed size, no allocation).

@@ -438,8 +438,20 @@ public:
     }
     // the min / max captions under the knob; off for knobs too narrow for them
     void setShowRangeLabels (bool show) { showRangeLabels = show; repaint(); }
+
+    // When set, a right-click calls this instead of starting a drag.
+    std::function<void()> onRightClick;
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        rightClicked = onRightClick != nullptr && e.mods.isRightButtonDown();
+        if (rightClicked) { onRightClick(); return; }
+        juce::Slider::mouseDown (e);
+    }
+    void mouseDrag (const juce::MouseEvent& e) override { if (! rightClicked) juce::Slider::mouseDrag (e); }
+    void mouseUp (const juce::MouseEvent& e) override   { if (! rightClicked) juce::Slider::mouseUp (e); }
 private:
     bool showRangeLabels = true;
+    bool rightClicked = false;
     void paint (juce::Graphics& g) override
     {
         auto b = getLocalBounds();

@@ -164,6 +164,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
         audioProcessor.valueTreeState, valueTreeNames[SPREAD] + juce::String (line), spreadKnob);
     spreadKnob.setLookAndFeel (&myLookAndFeel2);   // centred arc: - strums down, + up
     spreadKnob.setShowRangeLabels (false);         // "-100" / "100" don't fit under a 34 px knob
+    spreadKnob.onRightClick = [this] { showStrumShape(); };
     spreadKnob.setEnabled (audioProcessor.getPlayMode (myLine) >= PlayStrum);   // the timer keeps it in step
     
     tmp_s.clear();
@@ -384,7 +385,7 @@ void Grids::mouseDown (const juce::MouseEvent& e)
 void Grids::showLaneMenu()
 {
     enum { dirBase = 10, euclidId = 20, copyId = 30, pasteId, shiftLeftId = 40, shiftRightId, clearId, shiftAllLeftId, shiftAllRightId,
-           mutateBase = 100, mutateResetId = 300, playBase = 400, muteId = 500, soloId };
+           mutateBase = 100, mutateResetId = 300, playBase = 400, muteId = 500, soloId, strumShapeId = 600 };
     static const int mutateAmounts[] = { 0, 5, 10, 25, 50, 100 };
 
     const int dir = audioProcessor.getDirection (myLine);
@@ -417,6 +418,7 @@ void Grids::showLaneMenu()
                                  : p == PlayStrum ? juce::String ("Strum  (STRM knob: + up, - down)")
                                                   : juce::String ("Strum Up/Down  (alternates, starts by the knob's sign)"),
                    true, p == play);
+    m.addItem (strumShapeId, "Strum shape...  (or right-click STRM)", play == PlayStrum || play == PlayStrumUpDown);
     m.addSectionHeader ("Direction");
     for (int d = 0; d < directionNames.size(); d++)
         m.addItem (dirBase + d, directionNames[d], true, d == dir);
@@ -459,7 +461,8 @@ void Grids::showLaneMenu()
                          if (safe == nullptr || r == 0) return;
                          auto& p = safe->audioProcessor;
                          const int line = safe->myLine;
-                         if (r == muteId)      p.setLaneMute (line, ! p.isLaneMuted (line));
+                         if (r == strumShapeId) safe->showStrumShape();
+                         else if (r == muteId) p.setLaneMute (line, ! p.isLaneMuted (line));
                          else if (r == soloId) p.setGridSolo (line);
                          else if (r >= dirBase && r < dirBase + directionNames.size()) p.setLaneDirection (line, r - dirBase);
                          else if (r >= mutateBase && r <= mutateBase + 100)      p.setLaneMutate (line, r - mutateBase);
@@ -477,6 +480,135 @@ void Grids::showLaneMenu()
                                                                      safe->myLineLabel.getScreenBounds(), nullptr);
                          safe->repaint();
                      });
+}
+
+void Grids::showStrumShape()
+{
+    juce::CallOutBox::launchAsynchronously (std::make_unique<StrumShapePanel> (audioProcessor, myLine),
+                                            spreadKnob.getScreenBounds(), nullptr);
+}
+
+//== Strum shape call-out ======================================================
+
+StrumShapePanel::StrumShapePanel (TugMidiSeqAudioProcessor& p, int l) : proc (p), line (l)
+{
+    centredLook.setdrawRotaryCenterd (true);
+    const juce::String n (line);
+    auto setup = [&] (CustomRoratySlider& k, bool centred, int base, std::unique_ptr<AudioProcessorValueTreeState::SliderAttachment>& att)
+    {
+        k.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+        k.setColour (juce::Slider::rotarySliderFillColourId, colourarray[line]);
+        if (centred) k.setLookAndFeel (&centredLook);
+        addAndMakeVisible (k);
+        att = std::make_unique<AudioProcessorValueTreeState::SliderAttachment> (proc.valueTreeState, valueTreeNames[base] + n, k);
+    };
+    setup (tension,  true,  STRUMTENSION, tensionAtt);
+    setup (velocity, true,  STRUMVEL,     velocityAtt);
+    setup (humanize, false, STRUMHUMAN,   humanizeAtt);
+
+    for (auto* b : { &linearButton, &curveButton })
+    {
+        b->setClickingTogglesState (false);
+        b->setColour (juce::TextButton::buttonColourId, Theme::surfaceAlt);
+        b->setColour (juce::TextButton::buttonOnColourId, Theme::accent);
+        b->setColour (juce::TextButton::textColourOffId, Theme::textSecondary);
+        b->setColour (juce::TextButton::textColourOnId, Theme::screen);
+        addAndMakeVisible (*b);
+    }
+    linearButton.onClick = [this] { setShape (StrumLinear); };
+    curveButton.onClick  = [this] { setShape (StrumCurve); };
+
+    setSize (270, 196);
+    timerCallback();
+    startTimerHz (30);
+}
+
+StrumShapePanel::~StrumShapePanel()
+{
+    stopTimer();
+    tensionAtt.reset(); velocityAtt.reset(); humanizeAtt.reset();
+    for (auto* k : { &tension, &velocity })
+        k->setLookAndFeel (nullptr);
+}
+
+void StrumShapePanel::setShape (int shape)
+{
+    proc.undoableEdit ([&] { proc.setParamValue (valueTreeNames[STRUMSHAPE] + juce::String (line), (float) shape); });
+}
+
+// keep the buttons, the tension knob and the preview in step with the parameters
+void StrumShapePanel::timerCallback()
+{
+    const int shape = proc.getStrumShape (line);
+    linearButton.setToggleState (shape == StrumLinear, juce::dontSendNotification);
+    curveButton.setToggleState (shape == StrumCurve, juce::dontSendNotification);
+    tension.setEnabled (shape == StrumCurve);
+    repaint (preview.toNearestInt().expanded (2));
+}
+
+void StrumShapePanel::resized()
+{
+    auto b = getLocalBounds().reduced (10, 8);
+    b.removeFromTop (14);                                   // caption
+    preview = b.removeFromTop (70).toFloat();
+    b.removeFromTop (6);
+    auto buttons = b.removeFromTop (20);
+    linearButton.setBounds (buttons.removeFromLeft (buttons.getWidth() / 2).reduced (2, 0));
+    curveButton.setBounds (buttons.reduced (2, 0));
+    b.removeFromTop (4);
+    b.removeFromBottom (12);                                // knob captions
+    const int w = b.getWidth() / 3;
+    tension.setBounds (b.removeFromLeft (w));
+    velocity.setBounds (b.removeFromLeft (w));
+    humanize.setBounds (b);
+}
+
+void StrumShapePanel::paint (juce::Graphics& g)
+{
+    g.fillAll (Theme::section);
+    auto b = getLocalBounds().reduced (10, 8);
+
+    const int spread = proc.getSpread (line);
+    const juce::String dir = spread > 0 ? "up" : spread < 0 ? "down" : "at once";
+    Theme::drawCaption (g, "Strum shape  -  lane " + juce::String (line + 1) + "  (" + dir + ")",
+                        b.removeFromTop (14), juce::Justification::centredLeft, Theme::textSecondary, 10.0f);
+
+    // six strings, low at the bottom; a dot where each note of the strum lands
+    Theme::drawRecessedWell (g, preview, Theme::radSm);
+    auto area = preview.reduced (10.0f, 8.0f);
+    constexpr int strings = 6;
+    const int shape = proc.getStrumShape (line);
+    const float tens = proc.getStrumTension (line), tilt = proc.getStrumVelTilt (line), human = proc.getStrumHumanize (line);
+    const auto lane = colourarray[line];
+    for (int s = 0; s < strings; s++)
+    {
+        const float y = area.getBottom() - area.getHeight() * (float) s / (float) (strings - 1);
+        g.setColour (Theme::hairline);
+        g.drawHorizontalLine ((int) y, area.getX(), area.getRight());
+    }
+    for (int k = 0; k < strings; k++)
+    {
+        float pos, velF;
+        strumNotePlacement (k, strings, shape, tens, tilt, pos, velF);
+        const int stringIndex = spread < 0 ? strings - 1 - k : k;   // a down strum starts on the high string
+        const float y = area.getBottom() - area.getHeight() * (float) stringIndex / (float) (strings - 1);
+        const float x = spread == 0 ? area.getX() : area.getX() + pos * area.getWidth();
+        if (human > 0.0f && k > 0 && spread != 0)
+        {
+            const float jitter = 0.5f * human * area.getWidth() / (float) (strings - 1);
+            g.setColour (lane.withAlpha (0.25f));
+            g.fillRoundedRectangle (x - jitter, y - 2.0f, jitter * 2.0f, 4.0f, 2.0f);
+        }
+        const float r = 2.5f + 2.5f * jlimit (0.0f, 1.6f, velF);
+        g.setColour (lane);
+        g.fillEllipse (x - r, y - r, r * 2.0f, r * 2.0f);
+    }
+
+    auto captions = getLocalBounds().reduced (10, 8).removeFromBottom (12);
+    const int w = captions.getWidth() / 3;
+    Theme::drawCaption (g, "Tension",  captions.removeFromLeft (w), juce::Justification::centred, Theme::textDim, 9.0f);
+    Theme::drawCaption (g, "Velocity", captions.removeFromLeft (w), juce::Justification::centred, Theme::textDim, 9.0f);
+    Theme::drawCaption (g, "Humanize", captions, juce::Justification::centred, Theme::textDim, 9.0f);
 }
 
 //== Euclidean fill call-out ===================================================

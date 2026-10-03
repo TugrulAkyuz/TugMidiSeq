@@ -236,6 +236,34 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EuclidPanel)
 };
 
+// Call-out from the STRM knob (right-click) or the lane menu: how a strum is
+// spread. A guitar-like preview (six strings, a dot where each note lands,
+// its size the velocity, a faint bar the humanize range), Linear / Curve,
+// and Tension / Velocity / Humanize knobs bound to the lane's parameters.
+class StrumShapePanel : public juce::Component, private juce::Timer
+{
+public:
+    StrumShapePanel (TugMidiSeqAudioProcessor& p, int line);
+    ~StrumShapePanel() override;
+    void paint (juce::Graphics&) override;
+    void resized() override;
+
+private:
+    void timerCallback() override;
+    void setShape (int shape);
+
+    TugMidiSeqAudioProcessor& proc;
+    int line;
+    MyLookAndFeel centredLook;
+    juce::TextButton linearButton { "Linear" }, curveButton { "Curve" };
+    CustomRoratySlider tension, velocity, humanize;
+    std::unique_ptr<AudioProcessorValueTreeState::SliderAttachment> tensionAtt, velocityAtt, humanizeAtt;
+    juce::Rectangle<float> preview;
+    int shownSpread = 0, shownShape = -1;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StrumShapePanel)
+};
+
 class MultiStateButton : public juce::Button ,  private AudioProcessorValueTreeState::Listener,
                          private juce::AsyncUpdater
 {
@@ -687,6 +715,7 @@ public:
     int getLine() const { return myLine; }
 private:
     void showLaneMenu();
+    void showStrumShape();
     void drawDirectionGlyph (juce::Graphics& g, juce::Rectangle<float> area) const;
     juce::Rectangle<int> directionArea;   // under the lane number
     // Stamp any pad under screenPos in THIS lane with brush state s.

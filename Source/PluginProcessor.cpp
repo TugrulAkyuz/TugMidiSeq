@@ -259,6 +259,23 @@ valueTreeState(*this, &undoManager)
         gridsMuteAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
     }
 
+    for (int j = 0; j < numOfLine; j++)
+    {
+        const juce::String n (j);
+        auto addInt = [&] (int base, int lo, int hi, int def)
+        {
+            const auto id = valueTreeNames[base] + n;
+            valueTreeState.createAndAddParameter (std::make_unique<DiscreteAudioParameterInt> (ParameterID { id, 1 }, id, lo, hi, def));
+            return valueTreeState.getRawParameterValue (id);
+        };
+        const auto shapeId = valueTreeNames[STRUMSHAPE] + n;
+        valueTreeState.createAndAddParameter (std::make_unique<juce::AudioParameterChoice> (ParameterID { shapeId, 1 }, shapeId, strumShapeNames, StrumLinear));
+        gridsStrumShapeAtomic[j]   = valueTreeState.getRawParameterValue (shapeId);
+        gridsStrumTensionAtomic[j] = addInt (STRUMTENSION, -100, 100, 0);
+        gridsStrumVelAtomic[j]     = addInt (STRUMVEL,     -100, 100, 0);
+        gridsStrumHumanAtomic[j]   = addInt (STRUMHUMAN,      0, 100, 0);
+    }
+
     // C++17: std::atomic members start uninitialised
     clearStepData();
     for (int i = 0; i < numOfLine; i++)
@@ -447,6 +464,10 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
 
             setParamValue(valueTreeNames[PLAYMODE] + juce::String (i), prog.playMode[i]);
             setParamValue(valueTreeNames[SPREAD] + juce::String (i), prog.spread[i]);
+            setParamValue(valueTreeNames[STRUMSHAPE] + juce::String (i), prog.strumShape[i]);
+            setParamValue(valueTreeNames[STRUMTENSION] + juce::String (i), prog.strumTension[i]);
+            setParamValue(valueTreeNames[STRUMVEL] + juce::String (i), prog.strumVel[i]);
+            setParamValue(valueTreeNames[STRUMHUMAN] + juce::String (i), prog.strumHuman[i]);
 
         }
     setParamValue(valueTreeNames[GLOBALRESTBAR],  prog.globalResyncBar);
@@ -1123,12 +1144,32 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, juce::MidiBuff
     const int spreadSamples = (int) (std::abs (spread) * mySampleRate / 1000.0);
     const int channel = (int) *gridsMidiRouteAtomic[line];
 
+    // the strum's length stays |spread| per gap; its shape places the notes inside it
+    const bool shaped   = mode != PlayChord && spreadSamples > 0;
+    const int  total    = spreadSamples * (count - 1);
+    const int  shape    = getStrumShape (line);
+    const float tension = getStrumTension (line), velTilt = getStrumVelTilt (line);
+    const float human   = shaped ? getStrumHumanize (line) : 0.0f;
+    auto& rng = juce::Random::getSystemRandom();
+
     strumCount[line] = 0;
+    int previous = 0;
     for (int k = 0; k < count; k++)
     {
         const int idx = downward ? count - 1 - k : k;
-        auto note = juce::MidiMessage::noteOn (channel, notes[idx], velocities[idx]);
-        const int delay = k * spreadSamples;
+        float position = 0.0f, velFactor = 1.0f;
+        strumNotePlacement (k, count, shaped ? shape : StrumLinear, tension, shaped ? velTilt : 0.0f, position, velFactor);
+
+        int delay = (int) std::lround (position * (float) total);
+        if (k > 0 && human > 0.0f)   // up to half a gap early or late, never before the previous note
+            delay = jmax (previous, delay + (int) ((rng.nextFloat() - 0.5f) * human * (float) spreadSamples));
+        previous = delay;
+
+        float velocity = velocities[idx] * velFactor;
+        if (human > 0.0f)
+            velocity *= 1.0f + (rng.nextFloat() - 0.5f) * 0.4f * human;   // up to +-20 %
+        auto note = juce::MidiMessage::noteOn (channel, notes[idx], jlimit (0.02f, 1.0f, velocity));
+
         const int length = jmax (1, duration - delay);
         if (delay == 0)
             emitLaneNote (line, note, length, midiMessages, sample);
@@ -1412,7 +1453,8 @@ namespace
     LaneClipboard laneClipboard;
 
     // per-lane settings a copy carries (not the MIDI channel: that's routing)
-    const int copiedSettings[] = { GRIDNUM, SPEEED, DUR, OCTAVE, VEL, EVENT, GRIDSHUFFLE, GRIDDELAY, DIRECTION, MUTATE, PLAYMODE, SPREAD };
+    const int copiedSettings[] = { GRIDNUM, SPEEED, DUR, OCTAVE, VEL, EVENT, GRIDSHUFFLE, GRIDDELAY, DIRECTION, MUTATE, PLAYMODE, SPREAD,
+                                   STRUMSHAPE, STRUMTENSION, STRUMVEL, STRUMHUMAN };
 
     juce::String cellID (int base, int line, int step)
     {

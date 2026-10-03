@@ -66,7 +66,7 @@ void TugMidiSeqAudioProcessor::resetAllParam()
         tmp_s << valueTreeNames[MUTATE] << j;
         valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
 
-        for (int id : { PLAYMODE, SPREAD })
+        for (int id : { PLAYMODE, SPREAD, STRUMSHAPE, STRUMTENSION, STRUMVEL, STRUMHUMAN })
         {
             auto* prm = valueTreeState.getParameter (valueTreeNames[id] + juce::String (j));
             prm->setValueNotifyingHost (prm->getDefaultValue());
@@ -200,6 +200,10 @@ var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
 
         newObj.getDynamicObject()->setProperty(valueTreeNames[PLAYMODE] + juce::String (i), prg.playMode[i]);
         newObj.getDynamicObject()->setProperty(valueTreeNames[SPREAD] + juce::String (i), prg.spread[i]);
+        newObj.getDynamicObject()->setProperty(valueTreeNames[STRUMSHAPE] + juce::String (i), prg.strumShape[i]);
+        newObj.getDynamicObject()->setProperty(valueTreeNames[STRUMTENSION] + juce::String (i), prg.strumTension[i]);
+        newObj.getDynamicObject()->setProperty(valueTreeNames[STRUMVEL] + juce::String (i), prg.strumVel[i]);
+        newObj.getDynamicObject()->setProperty(valueTreeNames[STRUMHUMAN] + juce::String (i), prg.strumHuman[i]);
     }
     tmp_s.clear();
     tmp_s << valueTreeNames[GLOBALRESTBAR];
@@ -376,6 +380,16 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
             p.playMode[i] = jlimit(0, playModeNames.size() - 1, (int) preset.getProperty(valueTreeNames[PLAYMODE] + juce::String (i), var()));
         if (preset.hasProperty(valueTreeNames[SPREAD] + juce::String (i)))
             p.spread[i] = jlimit(-100, 100, (int) preset.getProperty(valueTreeNames[SPREAD] + juce::String (i), var()));
+        auto readInt = [&] (int base, int lo, int hi, int& dest)
+        {
+            const auto key = valueTreeNames[base] + juce::String (i);
+            if (preset.hasProperty (key))
+                dest = jlimit (lo, hi, (int) preset.getProperty (key, var()));
+        };
+        readInt (STRUMSHAPE, 0, strumShapeNames.size() - 1, p.strumShape[i]);
+        readInt (STRUMTENSION, -100, 100, p.strumTension[i]);
+        readInt (STRUMVEL, -100, 100, p.strumVel[i]);
+        readInt (STRUMHUMAN, 0, 100, p.strumHuman[i]);
 
     }
     tmp_s.clear();
@@ -557,6 +571,10 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
         paramProg.mutate[i] = (int) *valueTreeState.getRawParameterValue(tmp_s);
         paramProg.playMode[i] = (int) *valueTreeState.getRawParameterValue(valueTreeNames[PLAYMODE] + juce::String (i));
         paramProg.spread[i]   = (int) *valueTreeState.getRawParameterValue(valueTreeNames[SPREAD] + juce::String (i));
+        paramProg.strumShape[i]   = (int) *valueTreeState.getRawParameterValue(valueTreeNames[STRUMSHAPE] + juce::String (i));
+        paramProg.strumTension[i] = (int) *valueTreeState.getRawParameterValue(valueTreeNames[STRUMTENSION] + juce::String (i));
+        paramProg.strumVel[i]     = (int) *valueTreeState.getRawParameterValue(valueTreeNames[STRUMVEL] + juce::String (i));
+        paramProg.strumHuman[i]   = (int) *valueTreeState.getRawParameterValue(valueTreeNames[STRUMHUMAN] + juce::String (i));
         
         
     }
