@@ -631,6 +631,15 @@ public:
         return *gridsArr[line][step];
         
     }
+
+    // Whether any step the lane plays is an Event cell, i.e. the Event knob does something
+    bool laneHasEventStep (int line) const
+    {
+        const int n = jlimit (1, numOfStep, (int) *numOfGrid[line]);
+        for (int st = 0; st < n; st++)
+            if ((int) *gridsArr[line][st] == 2) return true;
+        return false;
+    }
     
     float getDelayRatio(int index)
     {

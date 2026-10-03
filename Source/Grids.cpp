@@ -170,6 +170,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     tmp_s.clear();
     tmp_s << valueTreeNames[EVENT] << line;
     gridEventSliderAttachment =  std::make_unique  <AudioProcessorValueTreeState::SliderAttachment>(audioProcessor.valueTreeState, tmp_s, gridEventSlider);
+    gridEventSlider.setEnabled (audioProcessor.laneHasEventStep (myLine));   // the timer keeps it in step
     
     tmp_s.clear();
     tmp_s << valueTreeNames[GRIDSHUFFLE] << line;

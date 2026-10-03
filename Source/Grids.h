@@ -760,6 +760,7 @@ private:
     {
         repaint();
         spreadKnob.setEnabled (audioProcessor.getPlayMode (myLine) >= PlayStrum);
+        gridEventSlider.setEnabled (audioProcessor.laneHasEventStep (myLine));   // only Event cells use its chance
 
         int st = audioProcessor.getSteps(myLine);
         // pad widths mirror while the lane travels backward (getStepDisplayRatio)
