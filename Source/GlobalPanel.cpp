@@ -435,16 +435,16 @@ void GlobalPanel::resized()
 
 
     midiPort.setButtonText(audioProcessor.getMidiPortName());
-    channelOnButton.setBounds( area.removeFromRight(40).reduced(0, 13));
-    gridAllDelaySlider.setBounds(area.removeFromRight(50).reduced(3, 5));
-    gridGridAllShuffleSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
-    gridAllEventSlider.setBounds(area.removeFromRight(50).reduced(3, 5));
-    gridAllVelSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
-    gridAllDurationCombo.setBounds(area.removeFromRight(66).reduced(2,13));   // matches the lane combos
+    channelOnButton.setBounds( area.removeFromRight(LaneLayout::chan).reduced(0, 13));   // columns as in the lanes
+    gridAllDelaySlider.setBounds(area.removeFromRight(LaneLayout::delay).reduced(3, 5));
+    gridGridAllShuffleSlider.setBounds(area.removeFromRight(LaneLayout::shuffle).reduced(3, 5));
+    gridAllEventSlider.setBounds(area.removeFromRight(LaneLayout::event).reduced(3, 5));
+    gridAllVelSlider.setBounds( area.removeFromRight(LaneLayout::vel).reduced(3, 5));
+    gridAllDurationCombo.setBounds(area.removeFromRight(LaneLayout::duration).reduced(2,13));   // matches the lane combos
 
 
-    gridAllSpeedCombo.setBounds(area.removeFromRight(66).reduced(2,13));
-    gridAllNumberSlider.setBounds( area.removeFromRight(50).reduced(3, 5));
+    gridAllSpeedCombo.setBounds(area.removeFromRight(LaneLayout::speed).reduced(2,13));
+    gridAllNumberSlider.setBounds( area.removeFromRight(LaneLayout::steps).reduced(3, 5));
     
     
     auto ra = area.removeFromRight(80);

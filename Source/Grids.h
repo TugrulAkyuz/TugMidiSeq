@@ -48,9 +48,9 @@ namespace ShortcutText
 // the same numbers, so they stay over their columns.
 namespace LaneLayout
 {
-    constexpr int number = 25, midiIn = 40, spread = 34, octave = 16;   // left of the grid
+    constexpr int number = 32, midiIn = 40, spread = 34, octave = 16;   // left of the grid
     constexpr int steps = 50, speed = 66, duration = 66,                 // right of the grid
-                  vel = 50, event = 50, shuffle = 50, delay = 50, chan = 40;
+                  vel = 50, event = 46, shuffle = 46, delay = 46, chan = 40;
 }
 class Grids;
 
@@ -710,14 +710,26 @@ public:
                    .translated (-(float) subGrids->getX(), -(float) subGrids->getY());
     }
 
-    // clicks on the lane number open the lane menu
+    // clicks on the lane number open the lane menu; hovering it lights the column
     void mouseDown (const juce::MouseEvent& e) override;
+    void mouseMove (const juce::MouseEvent&) override { updateLaneTabHover(); }
+    void mouseExit (const juce::MouseEvent&) override { updateLaneTabHover(); }
     int getLine() const { return myLine; }
 private:
     void showLaneMenu();
     void showStrumShape();
     void drawDirectionGlyph (juce::Graphics& g, juce::Rectangle<float> area) const;
     juce::Rectangle<int> directionArea;   // under the lane number
+    juce::Rectangle<int> laneTabArea;     // number + direction: the lane menu's click area
+    bool laneTabHover = false;
+    void updateLaneTabHover()
+    {
+        const bool over = isMouseOver (true) && laneTabArea.contains (getMouseXYRelative());
+        if (over == laneTabHover) return;
+        laneTabHover = over;
+        setMouseCursor (over ? juce::MouseCursor::PointingHandCursor : juce::MouseCursor::NormalCursor);
+        repaint (laneTabArea);
+    }
     // Stamp any pad under screenPos in THIS lane with brush state s.
     void paintLocal (juce::Point<int> screenPos, MultiStateButton::State s);
     void resetPainted() { for (auto& p : paintedStep) p = false; }

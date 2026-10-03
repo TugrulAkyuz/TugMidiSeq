@@ -46,6 +46,7 @@ private:
     NoteMap noteMap;
     GlobalPanel globalPanel;
     juce::OwnedArray< juce::Label > topInLabel;
+    juce::Rectangle<int> laneMenuHint;   // over the lane numbers: they open a menu
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EditorContent)
 };

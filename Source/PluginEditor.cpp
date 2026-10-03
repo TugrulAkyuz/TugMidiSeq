@@ -60,6 +60,14 @@ void EditorContent::paint (juce::Graphics& g)
     Theme::drawScrew (g, sc,               getHeight() - sc,  sc * 0.55f);
     Theme::drawScrew (g, getWidth() - sc,  getHeight() - sc,  sc * 0.55f);
 
+    // menu glyph over the lane numbers, which open each lane's menu
+    {
+        auto r = laneMenuHint.toFloat().withSizeKeepingCentre (11.0f, 8.0f).translated (2.0f, 1.0f);
+        g.setColour (Theme::textSecondary);
+        for (int k = 0; k < 3; k++)
+            g.fillRoundedRectangle (r.getX(), r.getY() + (float) k * 3.5f, r.getWidth(), 1.4f, 0.7f);
+    }
+
     // version stamp, silkscreen-faint
     String ver;
     ver << "v" << ProjectInfo::versionString;
@@ -119,7 +127,7 @@ void EditorContent::resized()
     topInLabel[11]->setBounds (label_area.removeFromRight (200));   // satellite
     for (int i : { 0, 1, 12 })
         topInLabel[i]->setBorderSize ({});
-    label_area.removeFromLeft (LaneLayout::number);
+    laneMenuHint = label_area.removeFromLeft (LaneLayout::number).withTrimmedLeft (4);
     topInLabel[0]->setBounds (label_area.removeFromLeft (LaneLayout::midiIn));
     topInLabel[12]->setBounds (label_area.removeFromLeft (LaneLayout::spread));
     // "OCT" is wider than its 16 px slider: let it run into the grid's caption area

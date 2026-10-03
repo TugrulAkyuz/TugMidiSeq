@@ -264,6 +264,13 @@ void Grids::paint (juce::Graphics& g)
     g.setColour (colourarray[myLine].withAlpha (0.85f));
     g.fillRect (0.0f, 2.0f, 3.0f, bounds.getHeight() - 4.0f);
 
+    // the number column opens the lane menu: lit while the mouse is on it
+    if (laneTabHover)
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.07f));
+        g.fillRoundedRectangle (laneTabArea.toFloat().withTrimmedLeft (4.0f).reduced (1.0f, 3.0f), Theme::radMd);
+    }
+
     // play direction, under the lane number
     drawDirectionGlyph (g, directionArea.toFloat().withSizeKeepingCentre (11.0f, 9.0f)
                                                  .withX ((float) directionArea.getRight() - 12.0f));
@@ -719,6 +726,7 @@ void Grids::resized()
 
     // lane number on top, its play-direction glyph underneath (both open the lane menu)
     auto laneTab = area.removeFromLeft(LaneLayout::number);
+    laneTabArea = laneTab;
     directionArea = laneTab.removeFromBottom (13).withTrimmedRight (2);
     myLineLabel.setBounds (laneTab.withTrimmedTop (4));
     midiInNote.setBounds(area.removeFromLeft(LaneLayout::midiIn).reduced(0,10));
