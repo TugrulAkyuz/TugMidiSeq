@@ -275,12 +275,6 @@ void Grids::paint (juce::Graphics& g)
     drawDirectionGlyph (g, directionArea.toFloat().withSizeKeepingCentre (11.0f, 9.0f)
                                                  .withX ((float) directionArea.getRight() - 12.0f));
 
-    // waiting for its loop to end before moving to another pattern slot: that slot's letter, blinking
-    if (audioProcessor.isLaneWaitingForSlot (myLine) && (juce::Time::getMillisecondCounter() / 250) % 2 == 0)
-        Theme::drawCaption (g, slotNames[audioProcessor.getRequestedSlot()],
-                            directionArea.withTrimmedLeft (4).withWidth (10), juce::Justification::centred,
-                            Theme::accentBright, 10.0f);
-
     // the lane's note was picked with the mouse (all of them, for an ALL lane):
     // the lane number sits in a brass ring, as on the on-screen keyboard
     if (laneSource == NoteFromClick)
@@ -858,18 +852,39 @@ void  SubGrids::paint (juce::Graphics& g)
         drawPlayhead (g, playing, numSteps);
 }
 
+// The lane's playhead, in its colour: a faint rail the length of the
+// pattern, filled up to the head as the pass goes on, and a glowing head with
+// a short fading tail behind it (so the tail shows the direction). While the
+// lane waits for its loop end to move to another pattern slot, the rest of the
+// rail blinks in brass and that slot's letter waits at its end.
 void SubGrids::drawPlayhead (juce::Graphics& g, int step, int numSteps)
 {
     const auto pad      = ownerGrid.padBounds (step);
     const bool backward = audioProcessor.isPlayheadBackward (myLine);
     const float frac    = audioProcessor.getPlayheadFraction (myLine);
     const float y       = (float) getHeight() - 6.0f;
-    const float sign    = backward ? -1.0f : 1.0f;
     const float headX   = backward ? pad.getRight() - frac * pad.getWidth()
                                    : pad.getX()     + frac * pad.getWidth();
+    const auto colour   = colourarray[myLine];
+    const float railL   = ownerGrid.padBounds (0).getX();
+    const float railR   = ownerGrid.padBounds (numSteps - 1).getRight();
 
-    // travelling bar: from where this pass started up to the head
-    float startX = backward ? ownerGrid.padBounds (numSteps - 1).getRight() : ownerGrid.padBounds (0).getX();
+    const bool waiting = audioProcessor.isLaneWaitingForSlot (myLine);
+    const bool blinkOn = (juce::Time::getMillisecondCounter() / 250) % 2 == 0;
+    auto drawSlotLetter = [&] (float atX)
+    {
+        const auto letter = juce::Rectangle<float> (9.0f, 10.0f).withCentre ({ atX, y });
+        Theme::drawCaption (g, slotNames[audioProcessor.getRequestedSlot()], letter.toNearestInt(),
+                            juce::Justification::centred, Theme::accentBright, 10.0f);
+    };
+    auto drawHead = [&]
+    {
+        g.setColour (colour.withAlpha (0.3f));
+        g.fillEllipse (juce::Rectangle<float> (12.0f, 12.0f).withCentre ({ headX, y }));
+        g.setColour (colour.interpolatedWith (juce::Colours::white, 0.7f));
+        g.fillEllipse (juce::Rectangle<float> (6.0f, 6.0f).withCentre ({ headX, y }));
+    };
+
     if (audioProcessor.getDirection (myLine) == DirRandom)
     {
         // no pass to show: the steps jump. The last two played pads keep a
@@ -878,19 +893,45 @@ void SubGrids::drawPlayhead (juce::Graphics& g, int step, int numSteps)
             if (trail[k] >= 0 && trail[k] < numSteps && trail[k] != step)
             {
                 auto t = ownerGrid.padBounds (trail[k]);
-                g.setColour (Theme::accent.withAlpha (k == 0 ? 0.22f : 0.45f));
+                g.setColour (colour.withAlpha (k == 0 ? 0.22f : 0.45f));
                 g.fillRect (t.getX(), y - 1.0f, t.getWidth(), 2.0f);
             }
-        startX = pad.getX();
+        g.setColour (colour.withAlpha (0.5f));
+        g.fillRect (juce::Rectangle<float> (pad.getX(), y - 1.0f, headX - pad.getX(), 2.0f));
+        if (waiting && blinkOn)
+            drawSlotLetter (railR + 5.5f);
+        drawHead();
+        return;
     }
 
-    auto bar = juce::Rectangle<float> (juce::jmin (startX, headX), y - 1.0f, std::abs (headX - startX), 2.0f);
-    g.setColour (Theme::accent);
-    g.fillRect (bar);
-    DropShadow (Theme::accentBright.withAlpha (0.9f), 3, {}).drawForRectangle (g, bar.toNearestInt());
+    // rail, and the part of it this pass has covered
+    g.setColour (colour.withAlpha (0.2f));
+    g.fillRect (juce::Rectangle<float> (railL, y - 1.0f, railR - railL, 2.0f));
+    const float startX = backward ? railR : railL;
+    g.setColour (colour.withAlpha (0.5f));
+    g.fillRect (juce::Rectangle<float> (juce::jmin (startX, headX), y - 1.0f, std::abs (headX - startX), 2.0f));
 
-    g.setColour (Theme::accentBright);
-    g.drawArrow (juce::Line<float> (headX, y, headX + sign * 10.0f, y), 4.0f, 4.0f, 5.0f);
+    if (waiting)
+    {
+        // the way still to go before the switch: to the end of this pass, or for
+        // ping-pong on its way out, there and all the way back (the whole rail)
+        const bool pingPongOut = audioProcessor.getDirection (myLine) == DirPingPong && ! backward;
+        const float endX = backward || pingPongOut ? railL : railR;
+        const float fromX = pingPongOut ? railR : headX;
+        g.setColour (Theme::accentBright.withAlpha (blinkOn ? 0.75f : 0.3f));
+        g.fillRect (juce::Rectangle<float> (juce::jmin (endX, fromX), y - 1.0f, std::abs (endX - fromX), 2.0f));
+        drawSlotLetter (endX == railL ? railL - 5.5f : railR + 5.5f);
+    }
+
+    // tail: about one and a half steps long, fading out behind the head, kept on the rail
+    const float tailLen = 1.6f * (railR - railL) / (float) juce::jmax (1, numSteps);
+    const float tailX   = juce::jlimit (railL, railR, backward ? headX + tailLen : headX - tailLen);
+    if (std::abs (headX - tailX) > 0.5f)
+    {
+        g.setGradientFill (juce::ColourGradient (colour.withAlpha (0.0f), tailX, y, colour.withAlpha (0.9f), headX, y, false));
+        g.fillRoundedRectangle (juce::Rectangle<float> (juce::jmin (tailX, headX), y - 1.5f, std::abs (headX - tailX), 3.0f), 1.5f);
+    }
+    drawHead();
 }
 
 void  SubGrids::resized ()
