@@ -441,6 +441,8 @@ public:
 
     // When set, a right-click calls this instead of starting a drag.
     std::function<void()> onRightClick;
+    // When set, the read-out in the cap (otherwise the value as an integer).
+    std::function<juce::String (double)> valueText;
     void mouseDown (const juce::MouseEvent& e) override
     {
         rightClicked = onRightClick != nullptr && e.mods.isRightButtonDown();
@@ -457,7 +459,7 @@ private:
         auto b = getLocalBounds();
         getLookAndFeel().drawRotarySlider (g,
                                            b.getX(), b.getY(), b.getWidth(), b.getHeight(),
-                                           juce::jmap (getValue(), getRange().getStart(), getRange().getEnd(), 0.0, 1.0),
+                                           valueToProportionOfLength (getValue()),   // follows a skewed range
                                            juce::MathConstants<float>::pi * 1.5f,
                                            juce::MathConstants<float>::pi * 3.0f,
                                            *this);
@@ -465,7 +467,8 @@ private:
         // value read-out inside the knob cap
         g.setFont (Theme::valueFont (11.0f));
         g.setColour (isEnabled() ? Theme::textValue : Theme::textDim);
-        g.drawText (juce::String ((int) getValue()), b, juce::Justification::centred, false);
+        g.drawText (valueText != nullptr ? valueText (getValue()) : juce::String (juce::roundToInt (getValue())),
+                    b, juce::Justification::centred, false);
 
         if (! showRangeLabels)
             return;

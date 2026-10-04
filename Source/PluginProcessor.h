@@ -26,11 +26,11 @@ const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread","Mute","StrumShape","StrumTension","StrumVel","StrumHuman","patternSlot"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread","Mute","StrumShape","StrumTension","StrumVel","StrumHuman","patternSlot","StrumSync","StrumDiv"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD,MUTE,STRUMSHAPE,STRUMTENSION,STRUMVEL,STRUMHUMAN,PATTERNSLOT
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD,MUTE,STRUMSHAPE,STRUMTENSION,STRUMVEL,STRUMHUMAN,PATTERNSLOT,STRUMSYNC,STRUMDIV
 };
 
 // Lane play direction. Time still runs forward (shuffle, delay and note
@@ -40,13 +40,22 @@ const juce::StringArray directionNames = { "Forward", "Reverse", "Ping-Pong", "R
 constexpr char directionKeys[] = { 'F', 'R', 'P', 'X' };   // keyboard shortcuts, see EditorContent::keyPressed
 
 // What a lane plays on its steps: its own voice of the chord (the original
-// behaviour), or the whole held chord. `Spread<lane>` (-100..+100) is both the
+// behaviour), or the whole held chord. `Spread<lane>` (-250..+250) is both the
 // strum's direction and its width: + strums up (low to high), - strums down,
 // the size is the milliseconds between notes, and 0 plays the chord at once.
 // Strum Up/Down alternates on every hit, starting the way the sign says.
 enum LanePlayMode { PlayVoice = 0, PlayStrum, PlayStrumUpDown };
 const juce::StringArray playModeNames = { "Voice", "Strum", "Strum Up/Down" };
 constexpr int maxStrumNotes = 16;
+constexpr int maxStrumMs = 250;
+
+// Sync strums (`StrumSync<lane>` on): the gap between the notes is a note value,
+// `StrumDiv<lane>`, mirrored around the middle like Spread: 0 plays the chord
+// at once, left of it strums down.
+const juce::StringArray strumDivNames = { "-1/8", "-1/16", "-1/16T", "-1/32", "-1/32T", "-1/64", "-1/64T", "-1/128", "0",
+                                          "1/128", "1/64T", "1/64", "1/32T", "1/32", "1/16T", "1/16", "1/8" };
+constexpr int strumDivCentre = 8;
+constexpr double strumDivBeats[] = { 1.0 / 32, 1.0 / 24, 1.0 / 16, 1.0 / 12, 1.0 / 8, 1.0 / 6, 1.0 / 4, 1.0 / 2 };   // 1/128 .. 1/8
 
 // Pattern slots: four step patterns per plugin, chosen with `patternSlot`.
 constexpr int numSlots = 4;
@@ -112,8 +121,19 @@ const juce::String stepPitchKey = "pitch";
 // Scale lock (global): every lane's output note is snapped to Key + Scale.
 // Index 0 is "Off". Each entry lists the scale's pitch classes from the key.
 const juce::StringArray scaleKeyNames  = { "C","C#","D","D#","E","F","F#","G","G#","A","A#","B" };
-const juce::StringArray scaleTypeNames = { "Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
-                                           "Locrian", "Harm. Minor", "Mel. Minor", "Major Pent.", "Minor Pent.", "Blues" };
+// New scales are appended (their index is what projects and presets store),
+// one menu group at a time; scaleGroups names the groups for the menu.
+const juce::StringArray scaleTypeNames = [] { juce::StringArray names { "Off", "Major", "Minor", "Dorian", "Phrygian", "Lydian", "Mixolydian",
+                                           "Locrian", "Harm. Minor", "Mel. Minor", "Major Pent.", "Minor Pent.", "Blues",
+                                           "Harm. Major", "Lydian Dom.", "Altered", "Bebop Dom.", "Bebop Major",
+                                           "Whole Tone", "Dim. H-W", "Dim. W-H", "Augmented",
+                                           "Messiaen 3", "Messiaen 4", "Messiaen 5", "Messiaen 6", "Messiaen 7",
+                                           "Hungarian Min.", "Double Harm.", "Neapol. Minor", "Neapol. Major", "Enigmatic",
+                                           "Persian", "Phrygian Dom.", "Romanian Min.", "Prometheus", "Spanish 8-Tone",
+                                           "Hirajoshi", "In Sen", "Iwato", "Kumoi", "Yo", "Pelog", "Egyptian",
+                                           "Hicaz", "Hicazkar", "Nikriz" };
+    names.add (juce::String (juce::CharPointer_UTF8 ("K\xc3\xbcrdi")));   // added on its own: the list above would read it as Latin-1
+    return names; }();
 const std::vector<std::vector<int>> scaleIntervals =
 {
     {},                         // Off
@@ -128,7 +148,58 @@ const std::vector<std::vector<int>> scaleIntervals =
     { 0, 2, 3, 5, 7, 9, 11 },   // Melodic minor
     { 0, 2, 4, 7, 9 },          // Major pentatonic
     { 0, 3, 5, 7, 10 },         // Minor pentatonic
-    { 0, 3, 5, 6, 7, 10 }       // Blues
+    { 0, 3, 5, 6, 7, 10 },      // Blues
+    // jazz
+    { 0, 2, 4, 5, 7, 8, 11 },   // Harmonic major
+    { 0, 2, 4, 6, 7, 9, 10 },   // Lydian dominant
+    { 0, 1, 3, 4, 6, 8, 10 },   // Altered (super Locrian)
+    { 0, 2, 4, 5, 7, 9, 10, 11 },   // Bebop dominant
+    { 0, 2, 4, 5, 7, 8, 9, 11 },    // Bebop major
+    // symmetric (Whole Tone and Dim. H-W are Messiaen's modes 1 and 2)
+    { 0, 2, 4, 6, 8, 10 },          // Whole tone
+    { 0, 1, 3, 4, 6, 7, 9, 10 },    // Diminished, half-whole
+    { 0, 2, 3, 5, 6, 8, 9, 11 },    // Diminished, whole-half
+    { 0, 3, 4, 7, 8, 11 },          // Augmented
+    // Messiaen's modes of limited transposition
+    { 0, 2, 3, 4, 6, 7, 8, 10, 11 },        // 3: 2 1 1 2 1 1 2 1 1
+    { 0, 1, 2, 5, 6, 7, 8, 11 },            // 4: 1 1 3 1 1 1 3 1
+    { 0, 1, 5, 6, 7, 11 },                  // 5: 1 4 1 1 4 1
+    { 0, 2, 4, 5, 6, 8, 10, 11 },           // 6: 2 2 1 1 2 2 1 1
+    { 0, 1, 2, 3, 5, 6, 7, 8, 9, 11 },      // 7: 1 1 1 2 1 1 1 1 2 1
+    // world
+    { 0, 2, 3, 6, 7, 8, 11 },   // Hungarian minor
+    { 0, 1, 4, 5, 7, 8, 11 },   // Double harmonic (Byzantine)
+    { 0, 1, 3, 5, 7, 8, 11 },   // Neapolitan minor
+    { 0, 1, 3, 5, 7, 9, 11 },   // Neapolitan major
+    { 0, 1, 4, 6, 8, 10, 11 },  // Enigmatic
+    { 0, 1, 4, 5, 6, 8, 11 },   // Persian
+    { 0, 1, 4, 5, 7, 8, 10 },   // Phrygian dominant (Spanish, Freygish)
+    { 0, 2, 3, 6, 7, 9, 10 },   // Romanian minor (Ukrainian Dorian)
+    { 0, 2, 4, 6, 9, 10 },      // Prometheus
+    { 0, 1, 3, 4, 5, 6, 8, 10 },    // Spanish 8-tone
+    // Japan and Asia
+    { 0, 2, 3, 7, 8 },          // Hirajoshi
+    { 0, 1, 5, 7, 10 },         // In Sen
+    { 0, 1, 5, 6, 10 },         // Iwato
+    { 0, 2, 3, 7, 9 },          // Kumoi
+    { 0, 2, 5, 7, 9 },          // Yo
+    { 0, 1, 3, 7, 8 },          // Pelog
+    { 0, 2, 5, 7, 10 },         // Egyptian (suspended pentatonic)
+    // Turkish makams, in 12-TET (the real ones use commas this can't play)
+    { 0, 1, 4, 5, 7, 8, 10 },   // Hicaz
+    { 0, 1, 4, 5, 7, 8, 11 },   // Hicazkar
+    { 0, 2, 3, 6, 7, 9, 10 },   // Nikriz
+    { 0, 1, 3, 5, 7, 8, 10 },   // Kurdi
+};
+
+// Headings of the scale menu: each group runs from `first` to the next group.
+struct ScaleGroup { const char* name; int first; bool newColumn; };
+const ScaleGroup scaleGroups[] =
+{
+    { "Modes", 1, false }, { "Minor", 8, false }, { "Pentatonic & Blues", 10, false },
+    { "Jazz", 13, true }, { "Symmetric", 18, false }, { "Messiaen", 22, false },
+    { "World", 27, true },
+    { "Japan & Asia", 37, true }, { "Makam (12-TET)", 44, false },
 };
 
 extern juce::CriticalSection midiOutputMutex;
@@ -179,6 +250,8 @@ public:
     int playMode[numOfLine] = {};
     int spread[numOfLine] = { 20, 20, 20, 20, 20 };
     int strumShape[numOfLine] = {}, strumTension[numOfLine] = {}, strumVel[numOfLine] = {}, strumHuman[numOfLine] = {};
+    int strumSync[numOfLine] = {};
+    int strumDiv[numOfLine] = { 11, 11, 11, 11, 11 };   // 1/64
     int numOfGrid[numOfLine];
     int octave[numOfLine];
     int gridsSpeed[numOfLine];
@@ -395,6 +468,16 @@ public:
     float getStrumTension (int line) const   { return *gridsStrumTensionAtomic[line] / 100.0f; }   // -1..1
     float getStrumVelTilt (int line) const   { return *gridsStrumVelAtomic[line] / 100.0f; }       // -1..1
     float getStrumHumanize (int line) const  { return *gridsStrumHumanAtomic[line] / 100.0f; }     // 0..1
+    bool  isStrumSync (int line) const       { return *gridsStrumSyncAtomic[line] > 0.5f; }
+    int   getStrumDiv (int line) const       { return (int) *gridsStrumDivAtomic[line]; }
+    // +1 strums up, -1 down, 0 plays the chord at once (Spread or StrumDiv, by mode)
+    int   getStrumDirection (int line) const
+    {
+        const int v = isStrumSync (line) ? getStrumDiv (line) - strumDivCentre : getSpread (line);
+        return v > 0 ? 1 : v < 0 ? -1 : 0;
+    }
+    // the last strum had to be squeezed to end before the lane's next hit
+    bool  isStrumSqueezed (int line) const   { return strumSqueezed[line].load (std::memory_order_relaxed); }
     void setLanePlayMode (int line, int mode);   // one undo step
     void setLaneMutate (int line, int percent);   // one undo step
     void requestMutationReset (int line)     { mutateResetRequest[line].store (true); }
@@ -868,6 +951,9 @@ private:
     std::atomic<float> *gridsMuteAtomic[numOfLine];
     std::atomic<float> *gridsStrumShapeAtomic[numOfLine], *gridsStrumTensionAtomic[numOfLine];
     std::atomic<float> *gridsStrumVelAtomic[numOfLine], *gridsStrumHumanAtomic[numOfLine];
+    std::atomic<float> *gridsStrumSyncAtomic[numOfLine], *gridsStrumDivAtomic[numOfLine];
+    std::atomic<bool> strumSqueezed[numOfLine];
+    double strumGapSamples (int line) const;   // signed: + up, - down
 
     // Strum: notes of the current strum still waiting for their turn (audio
     // thread, fixed size, no allocation).

@@ -160,8 +160,7 @@ Grids::Grids(TugMidiSeqAudioProcessor& p,int line)  : audioProcessor (p) , stepA
     addAndMakeVisible (spreadKnob);
     spreadKnob.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     spreadKnob.setColour (juce::Slider::rotarySliderFillColourId, colourarray[myLine]);
-    spreadAttachment = std::make_unique<AudioProcessorValueTreeState::SliderAttachment> (
-        audioProcessor.valueTreeState, valueTreeNames[SPREAD] + juce::String (line), spreadKnob);
+    attachSpreadKnob (audioProcessor.isStrumSync (line));
     spreadKnob.setLookAndFeel (&myLookAndFeel2);   // centred arc: - strums down, + up
     spreadKnob.setShowRangeLabels (false);         // "-100" / "100" don't fit under a 34 px knob
     spreadKnob.onRightClick = [this] { showStrumShape(); };
@@ -299,7 +298,7 @@ void Grids::paint (juce::Graphics& g)
         for (int k = 0; k < 3; k++)
         {
             float shift = 0.0f;
-            const int spread = audioProcessor.getSpread (myLine);
+            const int spread = audioProcessor.getStrumDirection (myLine);
             if (play == PlayStrum && spread > 0) shift = (float) (2 - k) * 1.5f;   // low note (bottom) first
             if (play == PlayStrum && spread < 0) shift = (float) k * 1.5f;
             if (play == PlayStrumUpDown && spread != 0) shift = k == 1 ? 1.5f : 0.0f;
@@ -519,7 +518,7 @@ StrumShapePanel::StrumShapePanel (TugMidiSeqAudioProcessor& p, int l) : proc (p)
     setup (velocity, true,  STRUMVEL,     velocityAtt);
     setup (humanize, false, STRUMHUMAN,   humanizeAtt);
 
-    for (auto* b : { &linearButton, &curveButton })
+    for (auto* b : { &linearButton, &curveButton, &timeButton, &syncButton })
     {
         b->setClickingTogglesState (false);
         b->setColour (juce::TextButton::buttonColourId, Theme::surfaceAlt);
@@ -530,8 +529,10 @@ StrumShapePanel::StrumShapePanel (TugMidiSeqAudioProcessor& p, int l) : proc (p)
     }
     linearButton.onClick = [this] { setShape (StrumLinear); };
     curveButton.onClick  = [this] { setShape (StrumCurve); };
+    timeButton.onClick   = [this] { setSync (false); };
+    syncButton.onClick   = [this] { setSync (true); };
 
-    setSize (270, 196);
+    setSize (270, 222);
     timerCallback();
     startTimerHz (30);
 }
@@ -542,6 +543,11 @@ StrumShapePanel::~StrumShapePanel()
     tensionAtt.reset(); velocityAtt.reset(); humanizeAtt.reset();
     for (auto* k : { &tension, &velocity })
         k->setLookAndFeel (nullptr);
+}
+
+void StrumShapePanel::setSync (bool sync)
+{
+    proc.undoableEdit ([&] { proc.setParamValue (valueTreeNames[STRUMSYNC] + juce::String (line), sync ? 1.0f : 0.0f); });
 }
 
 void StrumShapePanel::setShape (int shape)
@@ -556,7 +562,9 @@ void StrumShapePanel::timerCallback()
     linearButton.setToggleState (shape == StrumLinear, juce::dontSendNotification);
     curveButton.setToggleState (shape == StrumCurve, juce::dontSendNotification);
     tension.setEnabled (shape == StrumCurve);
-    repaint (preview.toNearestInt().expanded (2));
+    timeButton.setToggleState (! proc.isStrumSync (line), juce::dontSendNotification);
+    syncButton.setToggleState (proc.isStrumSync (line), juce::dontSendNotification);
+    repaint();   // the preview and the caption (direction, squeezed)
 }
 
 void StrumShapePanel::resized()
@@ -564,6 +572,10 @@ void StrumShapePanel::resized()
     auto b = getLocalBounds().reduced (10, 8);
     b.removeFromTop (14);                                   // caption
     preview = b.removeFromTop (70).toFloat();
+    b.removeFromTop (6);
+    auto timing = b.removeFromTop (20);
+    timeButton.setBounds (timing.removeFromLeft (timing.getWidth() / 2).reduced (2, 0));
+    syncButton.setBounds (timing.reduced (2, 0));
     b.removeFromTop (6);
     auto buttons = b.removeFromTop (20);
     linearButton.setBounds (buttons.removeFromLeft (buttons.getWidth() / 2).reduced (2, 0));
@@ -581,10 +593,13 @@ void StrumShapePanel::paint (juce::Graphics& g)
     g.fillAll (Theme::section);
     auto b = getLocalBounds().reduced (10, 8);
 
-    const int spread = proc.getSpread (line);
+    const int spread = proc.getStrumDirection (line);
     const juce::String dir = spread > 0 ? "up" : spread < 0 ? "down" : "at once";
+    auto caption = b.removeFromTop (14);
+    if (proc.isStrumSqueezed (line))   // the knob asks for more than fits before the next hit
+        Theme::drawCaption (g, "squeezed", caption.removeFromRight (64), juce::Justification::centredRight, Theme::accentBright, 9.0f);
     Theme::drawCaption (g, "Strum shape  -  lane " + juce::String (line + 1) + "  (" + dir + ")",
-                        b.removeFromTop (14), juce::Justification::centredLeft, Theme::textSecondary, 10.0f);
+                        caption, juce::Justification::centredLeft, Theme::textSecondary, 10.0f);
 
     // six strings, low at the bottom; a dot where each note of the strum lands
     Theme::drawRecessedWell (g, preview, Theme::radSm);

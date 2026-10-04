@@ -245,7 +245,10 @@ valueTreeState(*this, &undoManager)
 
         tmp_s.clear();
         tmp_s << valueTreeNames[SPREAD] << j;
-        valueTreeState.createAndAddParameter(std::make_unique<DiscreteAudioParameterInt>(ParameterID{tmp_s,1}, tmp_s, -100, 100, 20));
+        // ms between the strummed notes; skewed both ways so small strums stay easy to set
+        valueTreeState.createAndAddParameter (std::make_unique<juce::AudioParameterFloat> (
+            ParameterID { tmp_s, 1 }, tmp_s, juce::NormalisableRange<float> ((float) -maxStrumMs, (float) maxStrumMs, 1.0f, 0.5f, true), 20.0f,
+            juce::AudioParameterFloatAttributes().withStringFromValueFunction ([] (float v, int) { return juce::String (juce::roundToInt (v)) + " ms"; })));
         gridsSpreadAtomic[j] = valueTreeState.getRawParameterValue(tmp_s);
         pubMutateMask[j].store (0);
         mutateResetRequest[j].store (false);
@@ -280,6 +283,17 @@ valueTreeState(*this, &undoManager)
         const auto slotId = valueTreeNames[PATTERNSLOT];
         valueTreeState.createAndAddParameter (std::make_unique<juce::AudioParameterChoice> (ParameterID { slotId, 1 }, slotId, slotNames, 0));
         patternSlotAtomic = valueTreeState.getRawParameterValue (slotId);
+    }
+
+    for (int j = 0; j < numOfLine; j++)
+    {
+        const auto syncId = valueTreeNames[STRUMSYNC] + juce::String (j);
+        valueTreeState.createAndAddParameter (std::make_unique<juce::AudioParameterBool> (ParameterID { syncId, 1 }, syncId, false));
+        gridsStrumSyncAtomic[j] = valueTreeState.getRawParameterValue (syncId);
+        const auto divId = valueTreeNames[STRUMDIV] + juce::String (j);
+        valueTreeState.createAndAddParameter (std::make_unique<juce::AudioParameterChoice> (ParameterID { divId, 1 }, divId, strumDivNames, 11));
+        gridsStrumDivAtomic[j] = valueTreeState.getRawParameterValue (divId);
+        strumSqueezed[j].store (false);
     }
 
     // C++17: std::atomic members start uninitialised
@@ -491,6 +505,8 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
             setParamValue(valueTreeNames[STRUMTENSION] + juce::String (i), prog.strumTension[i]);
             setParamValue(valueTreeNames[STRUMVEL] + juce::String (i), prog.strumVel[i]);
             setParamValue(valueTreeNames[STRUMHUMAN] + juce::String (i), prog.strumHuman[i]);
+            setParamValue(valueTreeNames[STRUMSYNC] + juce::String (i), (float) prog.strumSync[i]);
+            setParamValue(valueTreeNames[STRUMDIV] + juce::String (i), (float) prog.strumDiv[i]);
 
         }
     setParamValue(valueTreeNames[GLOBALRESTBAR],  prog.globalResyncBar);
@@ -653,6 +669,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             for (auto& r : ratchetLeft) r = 0;   // no leftover repeats on the next play
             for (auto& c : strumCount) c = 0;    // ... or strums
             for (auto& f : strumFlipped) f = false;   // Up/Down starts the way its sign says
+            for (auto& q : strumSqueezed) q.store (false);
             for (auto& m : mutateMask) m = 0;    // every play starts from the written pattern
         }
         if(myIsPlaying == true &&  positionInfo.isPlaying == false )/**ppq ye bakma code*/
@@ -1163,6 +1180,19 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
     return true;
 }
 
+// The gap between strummed notes in samples, signed (+ up, - down): Spread ms,
+// or in Sync a note value at the host's tempo.
+double TugMidiSeqAudioProcessor::strumGapSamples (int line) const
+{
+    if (! isStrumSync (line))
+        return getSpread (line) * mySampleRate / 1000.0;
+    const int idx = jlimit (-strumDivCentre, strumDivCentre, getStrumDiv (line) - strumDivCentre);
+    if (idx == 0) return 0.0;
+    const double bpm = positionInfo.bpm > 0.0 ? positionInfo.bpm : 120.0;
+    const double samples = strumDivBeats[std::abs (idx) - 1] * 60.0 / bpm * mySampleRate;
+    return idx > 0 ? samples : -samples;
+}
+
 // Samples from the start of the current slot to the next slot whose step is
 // on, i.e. the most time this hit has before the lane plays again.
 int TugMidiSeqAudioProcessor::samplesToNextHit (int line) const
@@ -1207,14 +1237,14 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, int window, ju
     }
     if (count == 0) return;
 
-    const int spread = getSpread (line);
-    bool downward = spread < 0;
+    const double signedGap = strumGapSamples (line);
+    bool downward = signedGap < 0.0;
     if (mode == PlayStrumUpDown)
     {
         downward = downward != strumFlipped[line];
         strumFlipped[line] = ! strumFlipped[line];
     }
-    const int spreadSamples = (int) (std::abs (spread) * mySampleRate / 1000.0);
+    const int spreadSamples = (int) std::lround (std::abs (signedGap));
     const int channel = (int) *gridsMidiRouteAtomic[line];
 
     // the strum's length is |spread| per gap, squeezed to fit the window; its
@@ -1224,6 +1254,7 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, int window, ju
     const int  ring     = jlimit (1, window, duration / 4);
     const int  total    = jmin (spreadSamples * (count - 1), jmax (0, window - ring));
     const int  end      = jmin (window, jmax (duration, total + ring));   // all notes stop here
+    strumSqueezed[line].store (count > 1 && total < spreadSamples * (count - 1), std::memory_order_relaxed);
     const float gap     = count > 1 ? (float) total / (float) (count - 1) : 0.0f;
     const int  shape    = getStrumShape (line);
     const float tension = getStrumTension (line), velTilt = getStrumVelTilt (line);
@@ -1533,7 +1564,7 @@ namespace
 
     // per-lane settings a copy carries (not the MIDI channel: that's routing)
     const int copiedSettings[] = { GRIDNUM, SPEEED, DUR, OCTAVE, VEL, EVENT, GRIDSHUFFLE, GRIDDELAY, DIRECTION, MUTATE, PLAYMODE, SPREAD,
-                                   STRUMSHAPE, STRUMTENSION, STRUMVEL, STRUMHUMAN };
+                                   STRUMSHAPE, STRUMTENSION, STRUMVEL, STRUMHUMAN, STRUMSYNC, STRUMDIV };
 
     juce::String cellID (int base, int line, int step)
     {

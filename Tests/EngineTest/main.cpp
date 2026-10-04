@@ -320,6 +320,62 @@ static void testStepTools()
 }
 
 //==============================================================================
+static void testScales()
+{
+    std::cout << "Scales\n";
+    bool tableOk = scaleTypeNames.size() == (int) scaleIntervals.size();
+    for (size_t i = 1; i < scaleIntervals.size(); i++)
+    {
+        const auto& sc = scaleIntervals[i];
+        tableOk &= ! sc.empty() && sc[0] == 0 && std::is_sorted (sc.begin(), sc.end()) && sc.back() < 12
+                   && std::adjacent_find (sc.begin(), sc.end()) == sc.end();
+    }
+    CHECK (tableOk, "every scale: a name, sorted pitch classes from 0, no repeats (" + String (scaleTypeNames.size()) + " entries)");
+    CHECK (scaleTypeNames[1] == "Major" && scaleTypeNames[9] == "Mel. Minor" && scaleTypeNames[12] == "Blues",
+           "the scales of 2.6 keep their numbers (projects and presets store them)");
+    bool groupsOk = true;
+    for (size_t g = 0; g < std::size (scaleGroups); g++)
+        groupsOk &= scaleGroups[g].first > 0 && scaleGroups[g].first < scaleTypeNames.size()
+                    && (g == 0 || scaleGroups[g].first > scaleGroups[g - 1].first);
+    CHECK (groupsOk && scaleGroups[0].first == 1, "menu groups cover the list in order");
+
+    auto scale = [] (const String& name)
+    {
+        Rig r;
+        r.param ("scaleKey", 0);
+        r.param ("scaleType", (float) scaleTypeNames.indexOf (name));
+        return r;
+    };
+    {
+        auto r = scale ("Hirajoshi");   // C D Eb G Ab
+        CHECK (r.p->pitchedNote (61, 0) == 60 && r.p->pitchedNote (64, 0) == 63 && r.p->pitchedNote (66, 0) == 67,
+               "Hirajoshi: C# -> C, E -> Eb, F# -> G");
+        CHECK (r.p->pitchedNote (60, 1) == 62 && r.p->pitchedNote (60, 5) == 72 && r.p->pitchedNote (60, -1) == 56,
+               "Hirajoshi: five degrees to the octave, down past C to Ab");
+    }
+    {
+        auto r = scale ("Messiaen 7");   // ten notes
+        CHECK (r.p->pitchedNote (60, 10) == 72 && r.p->pitchedNote (60, 4) == 65 && r.p->pitchedNote (64, 0) == 63,
+               "Messiaen 7: ten degrees to the octave, the 4th degree is F, E snaps down to Eb");
+    }
+    {
+        auto r = scale (String (juce::CharPointer_UTF8 ("K\xc3\xbcrdi")));
+        r.param ("scaleKey", 2);   // D Kurdi = D Eb F G A Bb C
+        CHECK (r.p->pitchedNote (62, 1) == 63 && r.p->pitchedNote (62, 2) == 65, "Kurdi on D: Eb then F");
+    }
+    {
+        Rig a;
+        a.param ("scaleType", (float) scaleTypeNames.indexOf ("Hicazkar"));
+        MemoryBlock state; a.p->getStateInformation (state);
+        Rig b; b.p->setStateInformation (state.getData(), (int) state.getSize());
+        CHECK (scaleTypeNames[b.p->getScaleType()] == "Hicazkar", "a new scale survives a project round trip");
+        TugMidiSeqProgram prog ("t");
+        auto preset = b.p->varToPreset (b.p->presetToVar (prog));
+        preset.scaleType = scaleTypeNames.indexOf ("Pelog");
+        CHECK (b.p->varToPreset (b.p->presetToVar (preset)).scaleType == preset.scaleType, "and a preset round trip");
+    }
+}
+
 static void testLanes()
 {
     std::cout << "Direction / mutate / mute / solo\n";
@@ -506,6 +562,71 @@ static void testStrum()
 }
 
 //==============================================================================
+static void testStrumTiming()
+{
+    std::cout << "Strum timing (Time / Sync)\n";
+    auto strumOnsets = [] (double bpm, bool sync, float value, std::vector<int>* notes = nullptr)
+    {
+        Rig r;
+        r.ph.bpm = bpm;
+        r.step (0, 0);
+        r.param ("PlayMode0", PlayStrum);
+        r.param ("StrumSync0", sync ? 1.0f : 0.0f);
+        r.param (sync ? "StrumDiv0" : "Spread0", value);
+        r.hold ({ 60, 64, 67 });
+        r.stop();
+        const int64 barLen = (int64) std::llround (48000.0 * 240.0 / bpm);
+        r.ph.pos = ((r.ph.pos + barLen - 1) / barLen) * barLen;   // start on a bar line at this tempo
+        r.play (barLen / 2);
+        if (notes != nullptr) *notes = r.notes (0, 0, barLen / 2);
+        return r.onsets (0, 0, barLen / 2);
+    };
+    const int div32 = strumDivNames.indexOf ("1/32");
+    auto t = strumOnsets (120, true, (float) div32);
+    CHECK (t == std::vector<int> ({ 0, 3000, 6000 }), "Sync 1/32 at 120 BPM: an eighth of a beat between notes " + str (t));
+    t = strumOnsets (60, true, (float) div32);
+    CHECK (t == std::vector<int> ({ 0, 6000, 12000 }), "at 60 BPM the same strum is twice as wide " + str (t));
+    std::vector<int> notes;
+    strumOnsets (120, true, (float) strumDivNames.indexOf ("-1/32"), &notes);
+    CHECK (notes == std::vector<int> ({ 67, 64, 60 }), "Sync -1/32 strums down");
+    t = strumOnsets (120, true, (float) strumDivCentre);
+    CHECK (t == std::vector<int> ({ 0, 0, 0 }), "Sync 0 is a block chord");
+    t = strumOnsets (120, false, 200);
+    CHECK (t == std::vector<int> ({ 0, 9600, 19200 }), "Time goes up to 250 ms: 200 ms " + str (t));
+    {
+        Rig r;
+        CHECK (r.p->getStrumDirection (0) == 1, "default: Time, +20 ms, up");
+        r.param ("StrumSync0", 1); r.param ("StrumDiv0", (float) strumDivNames.indexOf ("-1/16T"));
+        CHECK (r.p->getStrumDirection (0) == -1, "Sync below the middle strums down");
+    }
+    {   // squeezed: back-to-back 1/16 steps leave no room for a 100 ms strum; a sparse lane does
+        Rig dense, sparse;
+        for (int st = 0; st < 16; st++) dense.step (0, st);
+        sparse.step (0, 0);
+        for (auto* r : { &dense, &sparse })
+        {
+            r->param ("PlayMode0", PlayStrum); r->param ("Spread0", 100);
+            r->hold ({ 60, 64, 67, 71, 74 });
+            r->stop(); r->play (Rig::bar / 4);
+        }
+        CHECK (dense.p->isStrumSqueezed (0) && ! sparse.p->isStrumSqueezed (0), "the squeezed flag shows when the knob can't be had");
+        dense.stop();
+        CHECK (! dense.p->isStrumSqueezed (0), "and clears on stop");
+    }
+    {
+        Rig r;
+        TugMidiSeqProgram prog ("t");
+        auto base = r.p->varToPreset (r.p->presetToVar (prog));
+        base.strumSync[2] = 1; base.strumDiv[2] = strumDivNames.indexOf ("1/16T"); base.spread[1] = -230;
+        auto back = r.p->varToPreset (r.p->presetToVar (base));
+        CHECK (back.strumSync[2] == 1 && back.strumDiv[2] == base.strumDiv[2] && back.spread[1] == -230, "preset round trip: Sync, the note value, a wide spread");
+        auto old = r.p->presetToVar (base);
+        if (auto* o = old.getDynamicObject()) { o->removeProperty ("StrumSync2"); o->removeProperty ("StrumDiv2"); }
+        auto loaded = r.p->varToPreset (old);
+        CHECK (loaded.strumSync[2] == 0 && loaded.strumDiv[2] == strumDivNames.indexOf ("1/64"), "an older preset: Time, and 1/64 ready for Sync");
+    }
+}
+
 static void testEditsAndUndo()
 {
     std::cout << "Lane edits / undo\n";
@@ -860,8 +981,10 @@ int main (int argc, char** argv)
     testLatchAndKeyboard();
     testConditions();
     testStepTools();
+    testScales();
     testLanes();
     testStrum();
+    testStrumTiming();
     testEditsAndUndo();
     testPatternSlots();
     testStateAndExport();

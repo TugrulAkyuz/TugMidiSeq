@@ -260,6 +260,8 @@ private:
     int line;
     MyLookAndFeel centredLook;
     juce::TextButton linearButton { "Linear" }, curveButton { "Curve" };
+    juce::TextButton timeButton { "Time" }, syncButton { "Sync" };   // the STRM knob in ms, or a note value
+    void setSync (bool sync);
     CustomRoratySlider tension, velocity, humanize;
     std::unique_ptr<AudioProcessorValueTreeState::SliderAttachment> tensionAtt, velocityAtt, humanizeAtt;
     juce::Rectangle<float> preview;
@@ -763,6 +765,22 @@ private:
     juce::Slider octaveSlider;
     CustomRoratySlider spreadKnob;   // strum spread; live only in strum modes
     std::unique_ptr<AudioProcessorValueTreeState::SliderAttachment> spreadAttachment;
+    bool spreadKnobSync = false;
+    // the STRM knob drives Spread (ms) or, in Sync, StrumDiv (a note value)
+    void attachSpreadKnob (bool sync)
+    {
+        spreadKnobSync = sync;
+        spreadAttachment.reset();
+        spreadAttachment = std::make_unique<AudioProcessorValueTreeState::SliderAttachment> (
+            audioProcessor.valueTreeState, valueTreeNames[sync ? STRUMDIV : SPREAD] + juce::String (myLine), spreadKnob);
+        spreadKnob.valueText = sync ? std::function<juce::String (double)> ([] (double v)
+                                      {   // the arc already shows the direction, so no sign
+                                          return strumDivNames[juce::jlimit (0, strumDivNames.size() - 1, juce::roundToInt (v))]
+                                                     .trimCharactersAtStart ("-");
+                                      })
+                                    : nullptr;
+        spreadKnob.repaint();
+    }
     juce::Label myLineLabel;
     std::unique_ptr  <SubGrids> subGrids;
     std::unique_ptr  <SubGrids> subGrids2;
@@ -776,6 +794,11 @@ private:
     {
         repaint();
         spreadKnob.setEnabled (audioProcessor.getPlayMode (myLine) >= PlayStrum);
+        if (audioProcessor.isStrumSync (myLine) != spreadKnobSync)
+            attachSpreadKnob (! spreadKnobSync);
+        // a strum squeezed to fit before the next hit: the arc fades, the knob isn't all there
+        spreadKnob.setColour (juce::Slider::rotarySliderFillColourId,
+                              audioProcessor.isStrumSqueezed (myLine) ? colourarray[myLine].withAlpha (0.35f) : colourarray[myLine]);
         gridEventSlider.setEnabled (audioProcessor.laneHasEventStep (myLine));   // only Event cells use its chance
 
         int st = audioProcessor.getSteps(myLine);
@@ -791,7 +814,7 @@ private:
         // lane that plays every held note, styled by where the note comes from
         const int play = audioProcessor.getPlayMode (myLine);
         // ALL lanes: 1000 + 0 chord, 1 strum up, 2 strum down, 3 up/down
-        const int spread = audioProcessor.getSpread (myLine);
+        const int spread = audioProcessor.getStrumDirection (myLine);
         const int allKind = play == PlayStrumUpDown ? 3
                           : play == PlayStrum && spread > 0 ? 1
                           : play == PlayStrum && spread < 0 ? 2 : 0;
