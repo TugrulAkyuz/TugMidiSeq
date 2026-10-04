@@ -1692,7 +1692,11 @@ void TugMidiSeqAudioProcessor::setLaneDirection (int line, int dir)
 void TugMidiSeqAudioProcessor::cycleLaneDirection (int line, int delta, bool allLanes)
 {
     const int n = directionNames.size();
-    const int dir = ((getDirection (line) + delta) % n + n) % n;
+    setDirectionOfLanes (line, ((getDirection (line) + delta) % n + n) % n, allLanes);
+}
+
+void TugMidiSeqAudioProcessor::setDirectionOfLanes (int line, int dir, bool allLanes)
+{
     undoableEdit ([&]
     {
         for (int i = 0; i < numOfLine; i++)

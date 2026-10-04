@@ -426,9 +426,15 @@ void Grids::showLaneMenu()
                                                   : juce::String ("Strum Up/Down  (alternates, starts by the knob's sign)"),
                    true, p == play);
     m.addItem (strumShapeId, "Strum shape...  (or right-click STRM)", play == PlayStrum || play == PlayStrumUpDown);
-    m.addSectionHeader ("Direction  (" + ShortcutText::upDown + " cycles it, " + ShortcutText::shiftUpDown + " all lanes)");
+    m.addSectionHeader ("Direction  (" + ShortcutText::upDown + " cycles, " + ShortcutText::shift + " + key: all lanes)");
     for (int d = 0; d < directionNames.size(); d++)
-        m.addItem (dirBase + d, directionNames[d], true, d == dir);
+    {
+        juce::PopupMenu::Item item (directionNames[d]);
+        item.itemID = dirBase + d;
+        item.isTicked = d == dir;
+        item.shortcutKeyDescription = juce::String::charToString (directionKeys[d]);
+        m.addItem (item);
+    }
     const int mutate = audioProcessor.getMutate (myLine);
     m.addSectionHeader ("Mutate  -  each loop, steps flip with this chance");
     bool listed = false;

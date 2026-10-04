@@ -133,6 +133,23 @@ bool EditorContent::keyPressed (const juce::KeyPress& key)
         audioProcessor.cycleLaneDirection (lane->getLine(), code == juce::KeyPress::downKey ? 1 : -1, mods.isShiftDown());
         return true;
     }
+
+    // F / R / P / X: Forward, Reverse, Ping-Pong, Random (shift: every lane)
+    if (! mods.isCommandDown() && ! mods.isAltDown() && ! mods.isCtrlDown())
+    {
+        const auto letter = juce::CharacterFunctions::toLowerCase ((juce::juce_wchar) code);
+        int dir = -1;
+        for (int d = 0; d < directionNames.size(); d++)
+            if (letter == juce::CharacterFunctions::toLowerCase ((juce::juce_wchar) directionKeys[d]))
+                dir = d;
+        if (dir >= 0)
+        {
+            auto* lane = laneUnderMouse();
+            if (lane == nullptr) return false;
+            audioProcessor.setDirectionOfLanes (lane->getLine(), dir, mods.isShiftDown());
+            return true;
+        }
+    }
     return false;
 }
 

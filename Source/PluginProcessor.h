@@ -37,6 +37,7 @@ enum valueTreeNamesEnum
 // durations stay on the time slots); only which grid step a slot plays changes.
 enum LaneDirection { DirForward = 0, DirReverse, DirPingPong, DirRandom };
 const juce::StringArray directionNames = { "Forward", "Reverse", "Ping-Pong", "Random" };
+constexpr char directionKeys[] = { 'F', 'R', 'P', 'X' };   // keyboard shortcuts, see EditorContent::keyPressed
 
 // What a lane plays on its steps: its own voice of the chord (the original
 // behaviour), or the whole held chord. `Spread<lane>` (-100..+100) is both the
@@ -575,6 +576,7 @@ public:
     void clearLane (int line);
     void setLaneDirection (int line, int dir);
     void cycleLaneDirection (int line, int delta, bool allLanes);   // Forward -> Reverse -> Ping-Pong -> Random, wrapping
+    void setDirectionOfLanes (int line, int dir, bool allLanes);    // one lane, or every lane, as one undo step
     int getLoopMeasure()
     {
         if (myIsPlaying == false) return + 1;
