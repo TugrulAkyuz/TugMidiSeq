@@ -1688,6 +1688,19 @@ void TugMidiSeqAudioProcessor::setLaneDirection (int line, int dir)
     undoableEdit ([&] { setParamValue (valueTreeNames[DIRECTION] + juce::String (line), (float) dir); });
 }
 
+// The lane's next (or previous) direction; with allLanes every lane takes it, as one undo step.
+void TugMidiSeqAudioProcessor::cycleLaneDirection (int line, int delta, bool allLanes)
+{
+    const int n = directionNames.size();
+    const int dir = ((getDirection (line) + delta) % n + n) % n;
+    undoableEdit ([&]
+    {
+        for (int i = 0; i < numOfLine; i++)
+            if (allLanes || i == line)
+                setParamValue (valueTreeNames[DIRECTION] + juce::String (i), (float) dir);
+    });
+}
+
 void TugMidiSeqAudioProcessor::setLaneMutate (int line, int percent)
 {
     undoableEdit ([&] { setParamValue (valueTreeNames[MUTATE] + juce::String (line), (float) percent); });

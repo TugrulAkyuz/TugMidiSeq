@@ -574,6 +574,7 @@ public:
     void euclidLane (int line, int hits, int rotation);   // without its own undo step: see EuclidPanel
     void clearLane (int line);
     void setLaneDirection (int line, int dir);
+    void cycleLaneDirection (int line, int delta, bool allLanes);   // Forward -> Reverse -> Ping-Pong -> Random, wrapping
     int getLoopMeasure()
     {
         if (myIsPlaying == false) return + 1;

@@ -112,6 +112,16 @@ bool EditorContent::keyPressed (const juce::KeyPress& key)
         else                    audioProcessor.shiftLane (lane->getLine(), delta);
         return true;
     }
+
+    // up / down: the lane's play direction (shift: every lane)
+    if ((code == juce::KeyPress::upKey || code == juce::KeyPress::downKey)
+        && ! mods.isCommandDown() && ! mods.isAltDown() && ! mods.isCtrlDown())
+    {
+        auto* lane = laneUnderMouse();
+        if (lane == nullptr) return false;
+        audioProcessor.cycleLaneDirection (lane->getLine(), code == juce::KeyPress::downKey ? 1 : -1, mods.isShiftDown());
+        return true;
+    }
     return false;
 }
 

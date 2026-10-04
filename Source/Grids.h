@@ -38,8 +38,11 @@ namespace ShortcutText
     const juce::String right      = juce::CharPointer_UTF8 ("\xe2\x86\x92");                  // →
     const juce::String shiftLeft  = juce::CharPointer_UTF8 ("\xe2\x87\xa7\xe2\x86\x90");      // ⇧←
     const juce::String shiftRight = juce::CharPointer_UTF8 ("\xe2\x87\xa7\xe2\x86\x92");      // ⇧→
+    const juce::String upDown      = juce::CharPointer_UTF8 ("\xe2\x86\x91 \xe2\x86\x93");                 // ↑ ↓
+    const juce::String shiftUpDown = juce::CharPointer_UTF8 ("\xe2\x87\xa7\xe2\x86\x91 \xe2\x87\xa7\xe2\x86\x93"); // ⇧↑ ⇧↓
    #else
     const juce::String left = "Left", right = "Right", shiftLeft = "Shift+Left", shiftRight = "Shift+Right";
+    const juce::String upDown = "Up / Down", shiftUpDown = "Shift+Up / Down";
    #endif
 }
 
