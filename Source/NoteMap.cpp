@@ -38,7 +38,18 @@ NoteMap::NoteMap (TugMidiSeqAudioProcessor& p) : audioProcessor (p)
     comboLookAndFeel.setColour (PopupMenu::highlightedTextColourId, Theme::screen);
     comboLookAndFeel.setColour (PopupMenu::headerTextColourId, Theme::accentBright);
     keyBox.addItemList (scaleKeyNames, 1);
-    scaleBox.addItemList (scaleTypeNames, 1);
+    // scales in groups, a few groups per column (item ids stay index + 1)
+    scaleBox.addItem (scaleTypeNames[0], 1);
+    const int groups = (int) std::size (scaleGroups);
+    for (int g = 0; g < groups; g++)
+    {
+        if (scaleGroups[g].newColumn)
+            scaleBox.getRootMenu()->addColumnBreak();
+        scaleBox.addSectionHeading (scaleGroups[g].name);
+        const int end = g + 1 < groups ? scaleGroups[g + 1].first : scaleTypeNames.size();
+        for (int i = scaleGroups[g].first; i < end; i++)
+            scaleBox.addItem (scaleTypeNames[i], i + 1);
+    }
     for (auto* box : { &keyBox, &scaleBox })
     {
         box->setLookAndFeel (&comboLookAndFeel);
@@ -142,7 +153,7 @@ void NoteMap::resized()
     slotSelector.setBounds (area.removeFromLeft (104).reduced (2, 4));
     area.removeFromLeft (4);
     keyBox.setBounds (area.removeFromLeft (46).reduced (2, 4));
-    scaleBox.setBounds (area.removeFromLeft (96).reduced (2, 4));
+    scaleBox.setBounds (area.removeFromLeft (122).reduced (2, 4));   // room for "Hungarian Min."
     area.removeFromLeft (8);
 
     area.removeFromRight (6);

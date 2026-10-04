@@ -320,6 +320,62 @@ static void testStepTools()
 }
 
 //==============================================================================
+static void testScales()
+{
+    std::cout << "Scales\n";
+    bool tableOk = scaleTypeNames.size() == (int) scaleIntervals.size();
+    for (size_t i = 1; i < scaleIntervals.size(); i++)
+    {
+        const auto& sc = scaleIntervals[i];
+        tableOk &= ! sc.empty() && sc[0] == 0 && std::is_sorted (sc.begin(), sc.end()) && sc.back() < 12
+                   && std::adjacent_find (sc.begin(), sc.end()) == sc.end();
+    }
+    CHECK (tableOk, "every scale: a name, sorted pitch classes from 0, no repeats (" + String (scaleTypeNames.size()) + " entries)");
+    CHECK (scaleTypeNames[1] == "Major" && scaleTypeNames[9] == "Mel. Minor" && scaleTypeNames[12] == "Blues",
+           "the scales of 2.6 keep their numbers (projects and presets store them)");
+    bool groupsOk = true;
+    for (size_t g = 0; g < std::size (scaleGroups); g++)
+        groupsOk &= scaleGroups[g].first > 0 && scaleGroups[g].first < scaleTypeNames.size()
+                    && (g == 0 || scaleGroups[g].first > scaleGroups[g - 1].first);
+    CHECK (groupsOk && scaleGroups[0].first == 1, "menu groups cover the list in order");
+
+    auto scale = [] (const String& name)
+    {
+        Rig r;
+        r.param ("scaleKey", 0);
+        r.param ("scaleType", (float) scaleTypeNames.indexOf (name));
+        return r;
+    };
+    {
+        auto r = scale ("Hirajoshi");   // C D Eb G Ab
+        CHECK (r.p->pitchedNote (61, 0) == 60 && r.p->pitchedNote (64, 0) == 63 && r.p->pitchedNote (66, 0) == 67,
+               "Hirajoshi: C# -> C, E -> Eb, F# -> G");
+        CHECK (r.p->pitchedNote (60, 1) == 62 && r.p->pitchedNote (60, 5) == 72 && r.p->pitchedNote (60, -1) == 56,
+               "Hirajoshi: five degrees to the octave, down past C to Ab");
+    }
+    {
+        auto r = scale ("Messiaen 7");   // ten notes
+        CHECK (r.p->pitchedNote (60, 10) == 72 && r.p->pitchedNote (60, 4) == 65 && r.p->pitchedNote (64, 0) == 63,
+               "Messiaen 7: ten degrees to the octave, the 4th degree is F, E snaps down to Eb");
+    }
+    {
+        auto r = scale (String (juce::CharPointer_UTF8 ("K\xc3\xbcrdi")));
+        r.param ("scaleKey", 2);   // D Kurdi = D Eb F G A Bb C
+        CHECK (r.p->pitchedNote (62, 1) == 63 && r.p->pitchedNote (62, 2) == 65, "Kurdi on D: Eb then F");
+    }
+    {
+        Rig a;
+        a.param ("scaleType", (float) scaleTypeNames.indexOf ("Hicazkar"));
+        MemoryBlock state; a.p->getStateInformation (state);
+        Rig b; b.p->setStateInformation (state.getData(), (int) state.getSize());
+        CHECK (scaleTypeNames[b.p->getScaleType()] == "Hicazkar", "a new scale survives a project round trip");
+        TugMidiSeqProgram prog ("t");
+        auto preset = b.p->varToPreset (b.p->presetToVar (prog));
+        preset.scaleType = scaleTypeNames.indexOf ("Pelog");
+        CHECK (b.p->varToPreset (b.p->presetToVar (preset)).scaleType == preset.scaleType, "and a preset round trip");
+    }
+}
+
 static void testLanes()
 {
     std::cout << "Direction / mutate / mute / solo\n";
@@ -860,6 +916,7 @@ int main (int argc, char** argv)
     testLatchAndKeyboard();
     testConditions();
     testStepTools();
+    testScales();
     testLanes();
     testStrum();
     testEditsAndUndo();
