@@ -15,7 +15,7 @@ The project is generated from `TugMidiSeq.jucer` by Projucer (JUCE's project too
 - **Windows:** open `Builds/VisualStudio2022/TugMidiSeq.sln`.
 - **JUCE modules** are expected at `../../JUCE/modules` on macOS and `C:\JUCE\modules` on Windows (`useGlobalPath`). Adding/removing a source file means adding it to `<GROUP name="Source">` in the `.jucer`, not just to `Source/`.
 
-There are no automated tests. The `.jucer` history references pluginVal — validate the built plugin with `pluginval` if checking host-compatibility.
+**Tests:** `Tests/EngineTest` is a CMake console app that builds `Source/` and drives `processBlock` with a fake host, checking the MIDI output (see its README). Run it after engine changes and before a release; add a check for every new feature or fixed bug. It also renders the editor to PNG (`--snapshot`, `--media`). Validate the built plugin with `pluginval` for host compatibility: `pluginval --validate Builds/MacOSX/build/Release/TugMidiSeq.vst3 --strictness-level 5` (do not pass `--skip-gui-tests false`: any value skips the GUI tests).
 
 ## Architecture
 
