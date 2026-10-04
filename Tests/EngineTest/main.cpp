@@ -562,6 +562,71 @@ static void testStrum()
 }
 
 //==============================================================================
+static void testStrumTiming()
+{
+    std::cout << "Strum timing (Time / Sync)\n";
+    auto strumOnsets = [] (double bpm, bool sync, float value, std::vector<int>* notes = nullptr)
+    {
+        Rig r;
+        r.ph.bpm = bpm;
+        r.step (0, 0);
+        r.param ("PlayMode0", PlayStrum);
+        r.param ("StrumSync0", sync ? 1.0f : 0.0f);
+        r.param (sync ? "StrumDiv0" : "Spread0", value);
+        r.hold ({ 60, 64, 67 });
+        r.stop();
+        const int64 barLen = (int64) std::llround (48000.0 * 240.0 / bpm);
+        r.ph.pos = ((r.ph.pos + barLen - 1) / barLen) * barLen;   // start on a bar line at this tempo
+        r.play (barLen / 2);
+        if (notes != nullptr) *notes = r.notes (0, 0, barLen / 2);
+        return r.onsets (0, 0, barLen / 2);
+    };
+    const int div32 = strumDivNames.indexOf ("1/32");
+    auto t = strumOnsets (120, true, (float) div32);
+    CHECK (t == std::vector<int> ({ 0, 3000, 6000 }), "Sync 1/32 at 120 BPM: an eighth of a beat between notes " + str (t));
+    t = strumOnsets (60, true, (float) div32);
+    CHECK (t == std::vector<int> ({ 0, 6000, 12000 }), "at 60 BPM the same strum is twice as wide " + str (t));
+    std::vector<int> notes;
+    strumOnsets (120, true, (float) strumDivNames.indexOf ("-1/32"), &notes);
+    CHECK (notes == std::vector<int> ({ 67, 64, 60 }), "Sync -1/32 strums down");
+    t = strumOnsets (120, true, (float) strumDivCentre);
+    CHECK (t == std::vector<int> ({ 0, 0, 0 }), "Sync 0 is a block chord");
+    t = strumOnsets (120, false, 200);
+    CHECK (t == std::vector<int> ({ 0, 9600, 19200 }), "Time goes up to 250 ms: 200 ms " + str (t));
+    {
+        Rig r;
+        CHECK (r.p->getStrumDirection (0) == 1, "default: Time, +20 ms, up");
+        r.param ("StrumSync0", 1); r.param ("StrumDiv0", (float) strumDivNames.indexOf ("-1/16T"));
+        CHECK (r.p->getStrumDirection (0) == -1, "Sync below the middle strums down");
+    }
+    {   // squeezed: back-to-back 1/16 steps leave no room for a 100 ms strum; a sparse lane does
+        Rig dense, sparse;
+        for (int st = 0; st < 16; st++) dense.step (0, st);
+        sparse.step (0, 0);
+        for (auto* r : { &dense, &sparse })
+        {
+            r->param ("PlayMode0", PlayStrum); r->param ("Spread0", 100);
+            r->hold ({ 60, 64, 67, 71, 74 });
+            r->stop(); r->play (Rig::bar / 4);
+        }
+        CHECK (dense.p->isStrumSqueezed (0) && ! sparse.p->isStrumSqueezed (0), "the squeezed flag shows when the knob can't be had");
+        dense.stop();
+        CHECK (! dense.p->isStrumSqueezed (0), "and clears on stop");
+    }
+    {
+        Rig r;
+        TugMidiSeqProgram prog ("t");
+        auto base = r.p->varToPreset (r.p->presetToVar (prog));
+        base.strumSync[2] = 1; base.strumDiv[2] = strumDivNames.indexOf ("1/16T"); base.spread[1] = -230;
+        auto back = r.p->varToPreset (r.p->presetToVar (base));
+        CHECK (back.strumSync[2] == 1 && back.strumDiv[2] == base.strumDiv[2] && back.spread[1] == -230, "preset round trip: Sync, the note value, a wide spread");
+        auto old = r.p->presetToVar (base);
+        if (auto* o = old.getDynamicObject()) { o->removeProperty ("StrumSync2"); o->removeProperty ("StrumDiv2"); }
+        auto loaded = r.p->varToPreset (old);
+        CHECK (loaded.strumSync[2] == 0 && loaded.strumDiv[2] == strumDivNames.indexOf ("1/64"), "an older preset: Time, and 1/64 ready for Sync");
+    }
+}
+
 static void testEditsAndUndo()
 {
     std::cout << "Lane edits / undo\n";
@@ -919,6 +984,7 @@ int main (int argc, char** argv)
     testScales();
     testLanes();
     testStrum();
+    testStrumTiming();
     testEditsAndUndo();
     testPatternSlots();
     testStateAndExport();

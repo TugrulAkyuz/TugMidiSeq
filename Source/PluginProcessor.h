@@ -26,11 +26,11 @@ const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread","Mute","StrumShape","StrumTension","StrumVel","StrumHuman","patternSlot"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread","Mute","StrumShape","StrumTension","StrumVel","StrumHuman","patternSlot","StrumSync","StrumDiv"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD,MUTE,STRUMSHAPE,STRUMTENSION,STRUMVEL,STRUMHUMAN,PATTERNSLOT
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD,MUTE,STRUMSHAPE,STRUMTENSION,STRUMVEL,STRUMHUMAN,PATTERNSLOT,STRUMSYNC,STRUMDIV
 };
 
 // Lane play direction. Time still runs forward (shuffle, delay and note
@@ -40,13 +40,22 @@ const juce::StringArray directionNames = { "Forward", "Reverse", "Ping-Pong", "R
 constexpr char directionKeys[] = { 'F', 'R', 'P', 'X' };   // keyboard shortcuts, see EditorContent::keyPressed
 
 // What a lane plays on its steps: its own voice of the chord (the original
-// behaviour), or the whole held chord. `Spread<lane>` (-100..+100) is both the
+// behaviour), or the whole held chord. `Spread<lane>` (-250..+250) is both the
 // strum's direction and its width: + strums up (low to high), - strums down,
 // the size is the milliseconds between notes, and 0 plays the chord at once.
 // Strum Up/Down alternates on every hit, starting the way the sign says.
 enum LanePlayMode { PlayVoice = 0, PlayStrum, PlayStrumUpDown };
 const juce::StringArray playModeNames = { "Voice", "Strum", "Strum Up/Down" };
 constexpr int maxStrumNotes = 16;
+constexpr int maxStrumMs = 250;
+
+// Sync strums (`StrumSync<lane>` on): the gap between the notes is a note value,
+// `StrumDiv<lane>`, mirrored around the middle like Spread: 0 plays the chord
+// at once, left of it strums down.
+const juce::StringArray strumDivNames = { "-1/8", "-1/16", "-1/16T", "-1/32", "-1/32T", "-1/64", "-1/64T", "-1/128", "0",
+                                          "1/128", "1/64T", "1/64", "1/32T", "1/32", "1/16T", "1/16", "1/8" };
+constexpr int strumDivCentre = 8;
+constexpr double strumDivBeats[] = { 1.0 / 32, 1.0 / 24, 1.0 / 16, 1.0 / 12, 1.0 / 8, 1.0 / 6, 1.0 / 4, 1.0 / 2 };   // 1/128 .. 1/8
 
 // Pattern slots: four step patterns per plugin, chosen with `patternSlot`.
 constexpr int numSlots = 4;
@@ -241,6 +250,8 @@ public:
     int playMode[numOfLine] = {};
     int spread[numOfLine] = { 20, 20, 20, 20, 20 };
     int strumShape[numOfLine] = {}, strumTension[numOfLine] = {}, strumVel[numOfLine] = {}, strumHuman[numOfLine] = {};
+    int strumSync[numOfLine] = {};
+    int strumDiv[numOfLine] = { 11, 11, 11, 11, 11 };   // 1/64
     int numOfGrid[numOfLine];
     int octave[numOfLine];
     int gridsSpeed[numOfLine];
@@ -457,6 +468,16 @@ public:
     float getStrumTension (int line) const   { return *gridsStrumTensionAtomic[line] / 100.0f; }   // -1..1
     float getStrumVelTilt (int line) const   { return *gridsStrumVelAtomic[line] / 100.0f; }       // -1..1
     float getStrumHumanize (int line) const  { return *gridsStrumHumanAtomic[line] / 100.0f; }     // 0..1
+    bool  isStrumSync (int line) const       { return *gridsStrumSyncAtomic[line] > 0.5f; }
+    int   getStrumDiv (int line) const       { return (int) *gridsStrumDivAtomic[line]; }
+    // +1 strums up, -1 down, 0 plays the chord at once (Spread or StrumDiv, by mode)
+    int   getStrumDirection (int line) const
+    {
+        const int v = isStrumSync (line) ? getStrumDiv (line) - strumDivCentre : getSpread (line);
+        return v > 0 ? 1 : v < 0 ? -1 : 0;
+    }
+    // the last strum had to be squeezed to end before the lane's next hit
+    bool  isStrumSqueezed (int line) const   { return strumSqueezed[line].load (std::memory_order_relaxed); }
     void setLanePlayMode (int line, int mode);   // one undo step
     void setLaneMutate (int line, int percent);   // one undo step
     void requestMutationReset (int line)     { mutateResetRequest[line].store (true); }
@@ -930,6 +951,9 @@ private:
     std::atomic<float> *gridsMuteAtomic[numOfLine];
     std::atomic<float> *gridsStrumShapeAtomic[numOfLine], *gridsStrumTensionAtomic[numOfLine];
     std::atomic<float> *gridsStrumVelAtomic[numOfLine], *gridsStrumHumanAtomic[numOfLine];
+    std::atomic<float> *gridsStrumSyncAtomic[numOfLine], *gridsStrumDivAtomic[numOfLine];
+    std::atomic<bool> strumSqueezed[numOfLine];
+    double strumGapSamples (int line) const;   // signed: + up, - down
 
     // Strum: notes of the current strum still waiting for their turn (audio
     // thread, fixed size, no allocation).
