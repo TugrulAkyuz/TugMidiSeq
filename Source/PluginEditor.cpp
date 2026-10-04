@@ -38,9 +38,20 @@ EditorContent::EditorContent (TugMidiSeqAudioProcessor& p)
     for (auto i = 0; i < 5; i++)
         globalPanel.setGridComp (grids[i], i);
 
-    // takes the keyboard focus when anything inside is clicked (nothing below
-    // wants it), so keyPressed sees the shortcuts; unhandled keys go on to the host
+    // takes the keyboard focus when anything inside is clicked, so keyPressed
+    // sees the shortcuts; unhandled keys go on to the host. Combo boxes want the
+    // focus by default and would eat the arrow keys (to step their selection),
+    // so they're told not to: they still work with the mouse and wheel, and an
+    // open popup menu still takes the arrows.
     setWantsKeyboardFocus (true);
+    std::function<void (juce::Component&)> keepArrowsForShortcuts = [&] (juce::Component& c)
+    {
+        if (auto* box = dynamic_cast<juce::ComboBox*> (&c))
+            box->setWantsKeyboardFocus (false);
+        for (auto* child : c.getChildren())
+            keepArrowsForShortcuts (*child);
+    };
+    keepArrowsForShortcuts (*this);
 
     setSize (kEditorDesignW, kEditorDesignH);
 }
