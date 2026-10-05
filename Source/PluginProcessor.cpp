@@ -387,20 +387,32 @@ double TugMidiSeqAudioProcessor::getTailLengthSeconds() const
 
 int TugMidiSeqAudioProcessor::getNumPrograms()
 {
-  
-    return  myProgram.size();   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-    // so this should be at least 1, even if you're not really implementing programs.
+    return juce::jmax (1, numPresets());   // some hosts don't cope with 0 programs
 }
 
 int TugMidiSeqAudioProcessor::getCurrentProgram()
 {
-    return program;
+    return program > 0 ? program - 1 : 0;
 }
 
 void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
 {
-    if (index == 0) return;
-    if(index > myProgram.size()) return;
+    loadPreset (index + 1);
+}
+
+const juce::String TugMidiSeqAudioProcessor::getProgramName (int index)
+{
+    return numPresets() == 0 ? juce::String ("Init") : presetName (index + 1);
+}
+
+juce::String TugMidiSeqAudioProcessor::presetName (int number) const
+{
+    return number >= 1 && number <= numPresets() ? myProgram[(size_t) number - 1].myProgramname : juce::String();
+}
+
+void TugMidiSeqAudioProcessor::loadPreset (int index)
+{
+    if (index < 1 || index > numPresets()) return;
      program = index;
     currentPresetKey = myProgram.at (index - 1).sourceFile.getFullPathName() + "#" + juce::String (myProgram.at (index - 1).sourceEntry);
 //    if (hasEditor() == true)
@@ -499,16 +511,12 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
     setParamValue(valueTreeNames[SCALETYPE],      prog.scaleType);
 
     myGridChangeListener.sendChangeMessage();
+
+    // tell the host, which shows the preset's name (a host that chose it already knows)
+    if (juce::MessageManager::existsAndIsCurrentThread())
+        updateHostDisplay (ChangeDetails().withProgramChanged (true));
 }
 
-const juce::String TugMidiSeqAudioProcessor::getProgramName (int index)
-{
-    String s;
-    if (index == 0)  return   "Init";
-    
-    s = myProgram.at(index -1 ).myProgramname;
-    return   s;
-}
 
 void TugMidiSeqAudioProcessor::changeProgramName (int index, const juce::String& newName)
 {

@@ -415,10 +415,18 @@ public:
     double getTailLengthSeconds() const override;
     
     //==============================================================================
+    // The host's programs are 0-based (program i is preset i + 1) and never
+    // fewer than one: an empty library shows a single "Init".
     int getNumPrograms() override;
     int getCurrentProgram() override;
     void setCurrentProgram (int index) override;
     const juce::String getProgramName (int index) override;
+
+    // Presets by number, 1-based, 0 for none: what the GUI and the project use.
+    int  numPresets() const    { return (int) myProgram.size(); }
+    int  currentPreset() const { return program; }
+    void loadPreset (int number);
+    juce::String presetName (int number) const;
     void changeProgramName (int index, const juce::String& newName) override;
     
     //==============================================================================

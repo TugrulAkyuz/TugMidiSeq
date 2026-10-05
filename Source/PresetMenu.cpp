@@ -635,6 +635,11 @@ void TugMidiSeqAudioProcessor::rescanPresets()
     for (size_t i = 0; i < myProgram.size(); i++)
         if (keyOf (myProgram[i]) == currentPresetKey)
             program = (int) i + 1;
+
+    // the host's program list changed; only with a preset chosen, since AU would
+    // otherwise show program 0 as the current one
+    if (program > 0)
+        updateHostDisplay (ChangeDetails().withProgramChanged (true));
 }
 
 void TugMidiSeqAudioProcessor::setPresetFolder (const juce::File& dir)

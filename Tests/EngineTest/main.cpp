@@ -988,13 +988,13 @@ static void writePresets (const File& f, TugMidiSeqAudioProcessor& p, StringArra
 static StringArray programNames (TugMidiSeqAudioProcessor& p)
 {
     StringArray s;
-    for (int i = 1; i <= p.getNumPrograms(); i++) s.add (p.getProgramName (i));
+    for (int i = 1; i <= p.numPresets(); i++) s.add (p.presetName (i));
     return s;
 }
 
 static int programIndex (TugMidiSeqAudioProcessor& p, const String& name)
 {
-    for (int i = 1; i <= p.getNumPrograms(); i++) if (p.getProgramName (i) == name) return i;
+    for (int i = 1; i <= p.numPresets(); i++) if (p.presetName (i) == name) return i;
     return 0;
 }
 
@@ -1014,7 +1014,7 @@ static void testPresetLibrary()
         CHECK (programNames (*r.p) == StringArray ({ "Old One", "Old Two" }) && r.p->presetCategory (1) == "Legacy",
                "listed once, under Legacy, the bundle itself not");
         Rig again;
-        CHECK (again.p->getNumPrograms() == 2, "a second instance doesn't split it again " + programNames (*again.p).joinIntoString (","));
+        CHECK (again.p->numPresets() == 2, "a second instance doesn't split it again " + programNames (*again.p).joinIntoString (","));
     }
     {   // the tree: sub-folders first (sorted, all the way down), then the folder's own files
         Rig r;
@@ -1032,33 +1032,33 @@ static void testPresetLibrary()
         CHECK (r.p->presetCategory (programIndex (*r.p, "B")) == "Bass/Dark" && r.p->presetCategory (programIndex (*r.p, "C")) == "Bass"
                && r.p->presetCategory (programIndex (*r.p, "A")).isEmpty(), "categories are the folders, as deep as they go");
 
-        r.p->setCurrentProgram (programIndex (*r.p, "D"));
+        r.p->loadPreset (programIndex (*r.p, "D"));
         writePresets (lib.getChildFile ("Bass/AAA.json"), *r.p, { "AAA" });
         r.p->rescanPresets();
-        CHECK (r.p->getProgramName (r.p->getCurrentProgram()) == "D", "the selection follows its file when others are added");
+        CHECK (r.p->presetName (r.p->currentPreset()) == "D", "the selection follows its file when others are added");
 
         r.step (0, 5);
         const auto saved = r.p->savePresetAs ("Lead 1", " Leads / Hot ");
         CHECK (saved == lib.getChildFile ("Leads/Hot/Lead 1.json") && saved.existsAsFile(), "Save writes <folder>/<name>.json");
-        CHECK (r.p->getProgramName (r.p->getCurrentProgram()) == "Lead 1" && r.p->presetCategory (r.p->getCurrentProgram()) == "Leads/Hot",
+        CHECK (r.p->presetName (r.p->currentPreset()) == "Lead 1" && r.p->presetCategory (r.p->currentPreset()) == "Leads/Hot",
                "and selects it");
         r.step (0, 5, 0);
-        r.p->setCurrentProgram (programIndex (*r.p, "Lead 1"));
+        r.p->loadPreset (programIndex (*r.p, "Lead 1"));
         CHECK (r.cellParam (0, 5) == 1, "loading it brings the pattern back");
 
-        r.p->setCurrentProgram (programIndex (*r.p, "Lead 1"));
+        r.p->loadPreset (programIndex (*r.p, "Lead 1"));
         CHECK (r.p->deleteCurrentPreset() && ! saved.existsAsFile() && programIndex (*r.p, "Lead 1") == 0, "Delete removes its file");
-        r.p->setCurrentProgram (programIndex (*r.p, "O2"));
+        r.p->loadPreset (programIndex (*r.p, "O2"));
         r.p->deleteCurrentPreset();
         // what's left is a one-preset file, listed by its file name like every other
         CHECK (lib.getChildFile ("old.json").existsAsFile() && programIndex (*r.p, "old") > 0 && programIndex (*r.p, "O2") == 0,
                "in an old two-preset file only that preset goes " + programNames (*r.p).joinIntoString (","));
 
-        r.p->setCurrentProgram (programIndex (*r.p, "D"));
+        r.p->loadPreset (programIndex (*r.p, "D"));
         MemoryBlock state; r.p->getStateInformation (state);
         writePresets (lib.getChildFile ("0 first.json"), *r.p, { "0 first" });   // shifts every number
         Rig b; b.p->setStateInformation (state.getData(), (int) state.getSize());
-        CHECK (b.p->getProgramName (b.p->getCurrentProgram()) == "D", "a project remembers its preset by file, not number");
+        CHECK (b.p->presetName (b.p->currentPreset()) == "D", "a project remembers its preset by file, not number");
 
         const auto other = lib.getParentDirectory().getChildFile ("Elsewhere");
         writePresets (other.getChildFile ("E.json"), *r.p, { "E" });
@@ -1066,6 +1066,20 @@ static void testPresetLibrary()
         CHECK (programNames (*r.p) == StringArray ({ "E" }), "another folder shows only its own presets (no old bundle)");
         r.p->setPresetFolder (TugMidiSeqAudioProcessor::defaultPresetFolder());
         CHECK (programIndex (*r.p, "D") > 0, "and the default folder comes back");
+
+        // the host's programs count from 0
+        const int d = programIndex (*r.p, "D");
+        r.p->setCurrentProgram (d - 1);
+        CHECK (r.p->getCurrentProgram() == d - 1 && r.p->getProgramName (d - 1) == "D" && r.p->getNumPrograms() == r.p->numPresets(),
+               "host program " + String (d - 1) + " is preset " + String (d));
+        r.p->setCurrentProgram (0);
+        CHECK (r.p->currentPreset() == 1 && r.p->getCurrentProgram() == 0, "host program 0 is the first preset");
+        r.p->setPresetFolder (other.getChildFile ("empty"));
+        other.getChildFile ("empty").createDirectory();
+        r.p->setPresetFolder (other.getChildFile ("empty"));
+        CHECK (r.p->getNumPrograms() == 1 && r.p->getProgramName (0) == "Init" && r.p->getCurrentProgram() == 0,
+               "an empty library shows the host one Init program");
+        r.p->setCurrentProgram (0);   // must not crash or load anything
     }
 }
 

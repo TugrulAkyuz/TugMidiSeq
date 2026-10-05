@@ -358,7 +358,7 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
         if(presetCombo.getNumItems() == 0) return;
         auto x = presetCombo.getSelectedId();
         if(x == 0) return;
-        audioProcessor.undoableEdit ([this, x] { audioProcessor.setCurrentProgram (x); });
+        audioProcessor.undoableEdit ([this, x] { audioProcessor.loadPreset (x); });
         // the menu marks the folders the chosen preset is in: rebuild it once the combo is done
         juce::Component::SafePointer<GlobalPanel> safe (this);
         juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->refreshPresetList(); });
@@ -465,7 +465,7 @@ void GlobalPanel::refreshPresetList()
     presetCombo.clear (juce::dontSendNotification);
     struct Node { std::map<juce::String, Node> children; juce::StringArray order; std::vector<int> items; };
     Node root;
-    const int n = audioProcessor.getNumPrograms();
+    const int n = audioProcessor.numPresets();
     for (int i = 1; i <= n; i++)
     {
         auto* node = &root;
@@ -480,7 +480,7 @@ void GlobalPanel::refreshPresetList()
         node->items.push_back (i);
     }
 
-    const int selected = audioProcessor.getCurrentProgram();
+    const int selected = audioProcessor.currentPreset();
     std::function<bool (const Node&, juce::PopupMenu&)> build = [&] (const Node& node, juce::PopupMenu& menu)
     {
         bool holdsSelected = false;
@@ -493,7 +493,7 @@ void GlobalPanel::refreshPresetList()
         }
         for (int i : node.items)
         {
-            menu.addItem (i, audioProcessor.getProgramName (i));
+            menu.addItem (i, audioProcessor.presetName (i));
             holdsSelected |= i == selected;
         }
         return holdsSelected;
@@ -509,7 +509,7 @@ void GlobalPanel::refreshPresetList()
 
 void GlobalPanel::stepPreset (int delta)
 {
-    const int n = audioProcessor.getNumPrograms();
+    const int n = audioProcessor.numPresets();
     if (n == 0) return;
     const int id = presetCombo.getSelectedId();
     const int next = id < 1 ? (delta > 0 ? 1 : n) : (id - 1 + delta + n) % n + 1;   // wraps at both ends
@@ -524,14 +524,14 @@ void GlobalPanel::deleteConfirmed()
 
 void GlobalPanel::deletePresetMenu()
 {
-    const int curr = audioProcessor.getCurrentProgram();
+    const int curr = audioProcessor.currentPreset();
     if (curr < 1)
     {
         AlertWindow::showMessageBoxAsync (juce::AlertWindow::InfoIcon, "Delete preset", "Choose a preset first.", "OK", &associatedComponent);
         return;
     }
     AlertWindow::showOkCancelBox (juce::AlertWindow::WarningIcon,
-                                  "Delete \"" + audioProcessor.getProgramName (curr) + "\"?",
+                                  "Delete \"" + audioProcessor.presetName (curr) + "\"?",
                                   "Its file is deleted:\n" + audioProcessor.getCurrentPresetFile().getFullPathName(),
                                   "Delete", "Cancel", &associatedComponent,
                                   juce::ModalCallbackFunction::create ([this] (int result) { if (result == 1) deleteConfirmed(); }));
@@ -541,12 +541,12 @@ void GlobalPanel::deletePresetMenu()
 // top); the folder starts as the current preset's.
 void GlobalPanel::showSaveDialog()
 {
-    const int curr = audioProcessor.getCurrentProgram();
+    const int curr = audioProcessor.currentPreset();
     auto* aw = new AlertWindow ("Save preset", "Folder: inside the preset folder, e.g. Bass/Dark. Leave it empty for the top.",
                                 AlertWindow::NoIcon);
     aw->setColour (AlertWindow::textColourId, Theme::textPrimary);
     aw->setColour (AlertWindow::backgroundColourId, Theme::panel);
-    aw->addTextEditor ("name", curr > 0 ? audioProcessor.getProgramName (curr) : juce::String ("My Preset"), "Name");
+    aw->addTextEditor ("name", curr > 0 ? audioProcessor.presetName (curr) : juce::String ("My Preset"), "Name");
     aw->addTextEditor ("folder", audioProcessor.presetCategory (curr), "Folder");
     aw->addButton ("Save", 1, KeyPress (KeyPress::returnKey));
     aw->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
