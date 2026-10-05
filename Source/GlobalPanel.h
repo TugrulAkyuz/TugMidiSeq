@@ -184,6 +184,82 @@ private:
 };
 
 
+// A yes / no question in the plugin's own look, shown as a call-out next to
+// the button that asks it. Return confirms; Escape or a click outside cancels.
+// With no confirm text it is just a note with an OK button.
+class ConfirmPanel : public juce::Component
+{
+public:
+    ConfirmPanel (const juce::String& titleText, const juce::String& messageText,
+                  const juce::String& confirmText, std::function<void()> onConfirm)
+        : title (titleText), message (messageText), confirm (std::move (onConfirm))
+    {
+        for (auto* b : { &okButton, &cancelButton })
+        {
+            b->setColour (juce::TextButton::buttonColourId, Theme::surfaceAlt);
+            b->setColour (juce::TextButton::textColourOffId, Theme::textSecondary);
+            b->setColour (juce::ComboBox::outlineColourId, Theme::hairline);
+            addAndMakeVisible (*b);
+        }
+        okButton.setButtonText (confirmText);
+        okButton.setColour (juce::TextButton::buttonColourId, Theme::accent);
+        okButton.setColour (juce::TextButton::textColourOffId, Theme::screen);
+        okButton.setVisible (confirmText.isNotEmpty());
+        cancelButton.setButtonText (confirmText.isNotEmpty() ? "Cancel" : "OK");
+        okButton.onClick     = [this] { auto action = confirm; dismiss(); if (action) action(); };
+        cancelButton.onClick = [this] { dismiss(); };
+        setWantsKeyboardFocus (true);
+        setSize (280, 122);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.fillAll (Theme::section);
+        auto b = getLocalBounds().reduced (12, 10);
+        Theme::drawCaption (g, title, b.removeFromTop (14), juce::Justification::centredLeft, Theme::accentBright, 10.5f);
+        b.removeFromTop (6);
+        b.removeFromBottom (32);
+        g.setColour (Theme::textPrimary);
+        g.setFont (Theme::labelFont (12.0f));
+        g.drawFittedText (message, b, juce::Justification::topLeft, 5, 1.0f);
+    }
+
+    void resized() override
+    {
+        auto b = getLocalBounds().reduced (12, 10).removeFromBottom (24);
+        cancelButton.setBounds (b.removeFromRight (84));
+        b.removeFromRight (8);
+        okButton.setBounds (b.removeFromRight (84));
+    }
+
+    void visibilityChanged() override { if (isShowing()) grabKeyboardFocus(); }
+
+    bool keyPressed (const juce::KeyPress& k) override
+    {
+        if (k == juce::KeyPress::returnKey) { (okButton.isVisible() ? okButton : cancelButton).triggerClick(); return true; }
+        if (k == juce::KeyPress::escapeKey) { dismiss(); return true; }
+        return false;
+    }
+
+    static void show (juce::Component& anchor, const juce::String& titleText, const juce::String& messageText,
+                      const juce::String& confirmText, std::function<void()> onConfirm)
+    {
+        juce::CallOutBox::launchAsynchronously (std::make_unique<ConfirmPanel> (titleText, messageText, confirmText, std::move (onConfirm)),
+                                                anchor.getScreenBounds(), nullptr);
+    }
+
+private:
+    void dismiss()
+    {
+        if (auto* box = findParentComponentOfClass<juce::CallOutBox>())
+            box->dismiss();
+    }
+
+    juce::String title, message;
+    std::function<void()> confirm;
+    juce::TextButton okButton, cancelButton;
+};
+
 class GlobalPanel   : public juce::Component , juce::Timer  , ChangeListener
 {
     public:

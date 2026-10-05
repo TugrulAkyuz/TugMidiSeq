@@ -335,7 +335,17 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     };
     resetButton.onClick = [this]
     {
-        audioProcessor.undoableEdit ([this] { audioProcessor.resetAllParam(); });
+       #if JUCE_MAC
+        const juce::String undoKey = juce::CharPointer_UTF8 ("\xe2\x8c\x98Z");   // the Cmd key sign
+       #else
+        const juce::String undoKey = "Ctrl+Z";
+       #endif
+        juce::Component::SafePointer<GlobalPanel> safe (this);   // MSVC: no SafePointer init-captures
+        ConfirmPanel::show (resetButton, "Reset everything?",
+                            "Every lane, the steps on screen and the global settings go back to their defaults. "
+                            "Mute, latch and the other pattern slots stay as they are. " + undoKey + " undoes it.",
+                            "Reset",
+                            [safe] { if (safe != nullptr) safe->audioProcessor.undoableEdit ([safe] { safe->audioProcessor.resetAllParam(); }); });
     };
     sortedOrFirstEmptySelectButton.onClick = [this]
     {
@@ -527,14 +537,13 @@ void GlobalPanel::deletePresetMenu()
     const int curr = audioProcessor.currentPreset();
     if (curr < 1)
     {
-        AlertWindow::showMessageBoxAsync (juce::AlertWindow::InfoIcon, "Delete preset", "Choose a preset first.", "OK", &associatedComponent);
+        ConfirmPanel::show (deleteButton, "Delete preset", "Choose a preset first.", {}, nullptr);
         return;
     }
-    AlertWindow::showOkCancelBox (juce::AlertWindow::WarningIcon,
-                                  "Delete \"" + audioProcessor.presetName (curr) + "\"?",
-                                  "Its file is deleted:\n" + audioProcessor.getCurrentPresetFile().getFullPathName(),
-                                  "Delete", "Cancel", &associatedComponent,
-                                  juce::ModalCallbackFunction::create ([this] (int result) { if (result == 1) deleteConfirmed(); }));
+    juce::Component::SafePointer<GlobalPanel> safe (this);
+    ConfirmPanel::show (deleteButton, "Delete \"" + audioProcessor.presetName (curr) + "\"?",
+                        "Its file goes for good:\n" + audioProcessor.getCurrentPresetFile().getFullPathName(),
+                        "Delete", [safe] { if (safe != nullptr) safe->deleteConfirmed(); });
 }
 
 // Name and folder (relative to the preset folder, "Bass/Dark", empty for the
