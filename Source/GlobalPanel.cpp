@@ -28,6 +28,9 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     addAndMakeVisible(presetPrevButton);
     addAndMakeVisible(presetNextButton);
     addAndMakeVisible(inBuiltSynthButton);
+   #if JucePlugin_IsMidiEffect
+    inBuiltSynthButton.setVisible (false);   // the MIDI FX build has no audio out to play it on
+   #endif
     addAndMakeVisible(sortedOrFirstEmptySelectButton);
     addAndMakeVisible(channelOnButton);
     

@@ -13,6 +13,13 @@ if(NOT CMAKE_MATCH_1)
 endif()
 project(TugMidiSeqEngineTest VERSION ${CMAKE_MATCH_1})
 
+# the MIDI FX AU (MidiFX/) ships with the same version
+file(READ ${REPO_ROOT}/MidiFX/TugMidiSeqMidiFX.jucer FXJUCER)
+string(REGEX MATCH "version=\"([0-9]+\\.[0-9]+\\.[0-9]+)\"[^>]*pluginAUMainType" _ "${FXJUCER}")
+if(NOT CMAKE_MATCH_1 STREQUAL PROJECT_VERSION)
+    message(WARNING "MidiFX/TugMidiSeqMidiFX.jucer is version ${CMAKE_MATCH_1}, TugMidiSeq.jucer ${PROJECT_VERSION}: bump both")
+endif()
+
 # JUCE sits next to 2RuleProgramming, as in the .jucer (../../JUCE/modules)
 set(JUCE_DIR ${REPO_ROOT}/../../JUCE CACHE PATH "JUCE checkout")
 add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/juce)
@@ -49,6 +56,29 @@ target_compile_definitions(EngineTest PRIVATE
 target_compile_options(EngineTest PRIVATE -w)
 
 target_link_libraries(EngineTest PRIVATE
+    juce::juce_audio_utils
+    juce::juce_audio_processors
+    juce::juce_gui_extra
+    juce::juce_recommended_config_flags)
+
+# The same tests against the MIDI FX build (no audio buses, no synth).
+juce_add_console_app(EngineTestMidiFX PRODUCT_NAME "EngineTestMidiFX")
+juce_generate_juce_header(EngineTestMidiFX)
+get_target_property(TEST_SOURCES EngineTest SOURCES)
+target_sources(EngineTestMidiFX PRIVATE ${TEST_SOURCES})
+target_include_directories(EngineTestMidiFX PRIVATE ${SRC})
+target_compile_definitions(EngineTestMidiFX PRIVATE
+    JucePlugin_Name="TugMidiSeq MIDI FX"
+    JucePlugin_IsSynth=0
+    JucePlugin_WantsMidiInput=1
+    JucePlugin_ProducesMidiOutput=1
+    JucePlugin_IsMidiEffect=1
+    JUCE_USE_CURL=0
+    JUCE_WEB_BROWSER=0
+    JUCE_MODAL_LOOPS_PERMITTED=1
+    JUCE_SILENCE_XCODE_15_LINKER_WARNING=1)
+target_compile_options(EngineTestMidiFX PRIVATE -w)
+target_link_libraries(EngineTestMidiFX PRIVATE
     juce::juce_audio_utils
     juce::juce_audio_processors
     juce::juce_gui_extra
