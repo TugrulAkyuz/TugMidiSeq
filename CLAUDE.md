@@ -46,11 +46,11 @@ Audio-thread engine and GUI are cleanly split; they communicate almost exclusive
 - Constants: `numOfLine` = 5 lanes, `numOfStep` = 32 steps. Note-duration units are the `myNotetUnit` / `myNotetUnitSA` arrays (`1nd`..`128nt`, d=dotted, t=triplet).
 
 ### Presets (`PresetMenu.cpp`)
-Presets are **not** stored in the APVTS/host state — they live in a single external JSON file, `TugMidiSeqPresets.json`, and are loaded into `std::vector<TugMidiSeqProgram> myProgram`. `TugMidiSeqProgram` (in `PluginProcessor.h`) is the plain-struct snapshot of all lane arrays. Preset file location (see top of `PluginProcessor.cpp`):
-- macOS: `~/Library/Audio/Presets/2Rule/…`
-- Windows: `<userAppData>/2Rule/…`
-
-`writePresetToFileJSON` / `readPresetToFileJSON` / `createPrograms` / `deletePreset` manage this file.
+A preset library like TugPhonon's / 2RuleSynth's. Presets are **not** stored in the APVTS/host state: every preset is its own `.json` file under `presetFolder` (default `defaultPresetFolder()`: `~/Library/Audio/Presets/2Rule/TugMidiSeq`, `%APPDATA%\2Rule\TugMidiSeq`, `~/.config/2Rule/TugMidiSeq`; the user's choice is kept in the settings file), and sub-folders are categories, any depth. `rescanPresets()` fills `myProgram` in menu order (a folder's sub-folders first, sorted, then its own files); its 1-based index is the host program number, and the selection is tracked by file (`currentPresetKey`, also saved in the project as `currentPreset`), not by number. `GlobalPanel` builds the preset menu as nested submenus (ticked down to the current preset), and Save (name + folder) / Delete / the Folder menu go through `savePresetAs`, `deleteCurrentPreset`, `setPresetFolder`.
+- Files are written as `{"Presets": [ one preset ]}`, the layout older versions read; a file with several entries (the old format) lists each, a plain preset object loads too.
+- The old bundle, `TugMidiSeqPresets.json` in the default folder, is split once into `Legacy/<name>.json` (`migrateLegacyPresetsIfNeeded`, marker `.legacy-split`) and left as it was; it is never listed itself.
+- `TugMidiSeqProgram` (in `PluginProcessor.h`) is the plain-struct snapshot; `presetToVar` / `varToPreset` convert it, newer fields read with `hasProperty` guards.
+- `TUGMIDISEQ_TEST_ROOT` moves the library to a scratch folder and turns the settings file off; the tests set it.
 
 ### Editor / GUI (`PluginEditor.{h,cpp}` + panels)
 - `TugMidiSeqAudioProcessorEditor` lays out 5 `Grids` (an `OwnedArray`), one `GlobalPanel`, one `Satellite`, and a row of top labels (`topLabel`).

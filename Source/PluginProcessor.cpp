@@ -40,67 +40,45 @@ valueTreeState(*this, &undoManager)
 {
     // we're on Windows
 
-    String filePath;
- 
-#if JUCE_MAC
-    // macOS: Standard Audio Presets location (~/Library/Audio/Presets/)
-    auto userHome = File::getSpecialLocation(File::userHomeDirectory);
-    File presetDir = userHome.getChildFile("Library")
-                           .getChildFile("Audio")
-                           .getChildFile("Presets")
-                           .getChildFile("2Rule")
-                           .getChildFile("TugMidiSeq");
-
-    if (!presetDir.exists())
-        presetDir.createDirectory();
-
-    filePath = presetDir.getChildFile("TugMidiSeqPresets.json").getFullPathName();
-    resourceJsonFile = new File(filePath);
-
-#elif JUCE_WINDOWS
-    // Windows: Standard AppData location
-    auto appSupport = File::getSpecialLocation(File::userApplicationDataDirectory);
-    File presetDir = appSupport.getChildFile("2Rule")
-        .getChildFile("TugMidiSeq");
-
-    if (!presetDir.exists())
-        presetDir.createDirectory();
-
-    filePath = presetDir.getChildFile("TugMidiSeqPresets.json").getFullPathName();
-    resourceJsonFile = new File(filePath);
-
-#elif JUCE_LINUX
-    // Linux: XDG config location (~/.config/2Rule/TugMidiSeq)
-    auto configDir = File::getSpecialLocation(File::userApplicationDataDirectory);
-    File presetDir = configDir.getChildFile("2Rule")
-        .getChildFile("TugMidiSeq");
-
-    if (!presetDir.exists())
-        presetDir.createDirectory();
-
-    filePath = presetDir.getChildFile("TugMidiSeqPresets.json").getFullPathName();
-    resourceJsonFile = new File(filePath);
-
-#endif
-    // persist the user-chosen single-preset folder across sessions
+    // Settings (the preset folder the user picked) live in the platform's
+    // place for them: ~/Library/Application Support/2Rule/TugMidiSeq,
+    // %APPDATA%\2Rule\TugMidiSeq, ~/.config/2Rule/TugMidiSeq. Versions up to
+    // 2.6 put the file one 2Rule/TugMidiSeq deeper on the Mac and straight in
+    // the home folder on Linux; a file found there is moved over once.
     {
         juce::PropertiesFile::Options opts;
         opts.applicationName     = "TugMidiSeq";
         opts.filenameSuffix      = "settings";
-        opts.osxLibrarySubFolder = "Application Support/2Rule/TugMidiSeq";
+        opts.osxLibrarySubFolder = "Application Support";
+       #if JUCE_LINUX || JUCE_BSD
+        opts.folderName          = ".config/2Rule/TugMidiSeq";
+       #else
         opts.folderName          = "2Rule/TugMidiSeq";
-        appProperties.setStorageParameters(opts);
-    }
-    presetFolder = resourceJsonFile->getParentDirectory();  // default
-    if (auto* props = appProperties.getUserSettings())
-    {
-        String savedPath = props->getValue("presetFolder", "");
-        if (savedPath.isNotEmpty())
+       #endif
+        auto old = opts;
+        old.osxLibrarySubFolder  = "Application Support/2Rule/TugMidiSeq";
+        old.folderName           = "2Rule/TugMidiSeq";
+        const auto oldFile = old.getDefaultFile(), newFile = opts.getDefaultFile();
+        if (testRoot().isEmpty() && oldFile != newFile && oldFile.existsAsFile() && ! newFile.exists())
         {
-            File saved(savedPath);
-            if (saved.isDirectory()) presetFolder = saved;
+            newFile.getParentDirectory().createDirectory();
+            if (oldFile.moveFileTo (newFile))
+                for (auto dir = oldFile.getParentDirectory();   // leave no empty 2Rule/TugMidiSeq behind
+                     dir.isDirectory() && dir.getNumberOfChildFiles (juce::File::findFilesAndDirectories) == 0
+                         && dir != juce::File::getSpecialLocation (juce::File::userHomeDirectory);
+                     dir = dir.getParentDirectory())
+                    dir.deleteFile();
         }
+        appProperties.setStorageParameters (opts);
     }
+    presetFolder = defaultPresetFolder();
+    if (auto* props = settings())
+    {
+        const juce::File saved (props->getValue ("presetFolder", ""));
+        if (props->getValue ("presetFolder", "").isNotEmpty() && saved.isDirectory())
+            presetFolder = saved;
+    }
+    presetFolder.createDirectory();
 
     juce::String  tmp_s;
     for(int j = 0 ; j <  numOfLine; j++)
@@ -329,8 +307,8 @@ valueTreeState(*this, &undoManager)
     valueTreeState.state = juce::ValueTree("midiSeq"); // do not forget for valuetree
 
     
-    readPresetToFileJSON();        // 1) legacy bundle file (backward compat)
-    readSinglePresetFilesJSON();   // 2) single-preset files from presetFolder
+    migrateLegacyPresetsIfNeeded();
+    rescanPresets();
     mySynth.setCurrentPlaybackSampleRate(mySampleRate);
     mySynth.clearSounds();
     mySynth.addSound(new SynthSound());
@@ -423,6 +401,7 @@ void TugMidiSeqAudioProcessor::setCurrentProgram (int index)
     if (index == 0) return;
     if(index > myProgram.size()) return;
      program = index;
+    currentPresetKey = myProgram.at (index - 1).sourceFile.getFullPathName() + "#" + juce::String (myProgram.at (index - 1).sourceEntry);
 //    if (hasEditor() == true)
 //    {
 //        auto x = getActiveEditor();
@@ -876,6 +855,7 @@ void TugMidiSeqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     // as intermediaries to make it easy to save and load complex data.
     auto state = valueTreeState.copyState();
     state.setProperty ("currentProgram", program, nullptr);
+    state.setProperty ("currentPreset", currentPresetKey, nullptr);   // the program number moves when files are added
     writeStepDataTo (state);
     writeSlotsTo (state);
     std::unique_ptr<XmlElement> xml (state.createXml());
@@ -927,6 +907,14 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
         }
 
     program = valueTreeState.state.getProperty ("currentProgram", program);
+    if (valueTreeState.state.hasProperty ("currentPreset"))
+    {
+        currentPresetKey = valueTreeState.state.getProperty ("currentPreset").toString();
+        program = 0;
+        for (size_t i = 0; i < myProgram.size(); i++)
+            if (myProgram[i].sourceFile.getFullPathName() + "#" + juce::String (myProgram[i].sourceEntry) == currentPresetKey)
+                program = (int) i + 1;
+    }
 
     midiPortName = getMidiPortNameFromXml();
     if (! offlineRender)   // the export copy must not open the user's MIDI port

@@ -228,9 +228,10 @@ class GlobalPanel   : public juce::Component , juce::Timer  , ChangeListener
     void deleteConfirmed();
     void deletePresetMenu();
     void factoryConfirmed();
-    void setPresetMenu(String preset_name);
     void stepPreset(int delta);
     void refreshPresetList();
+    void showSaveDialog();
+    void showFolderMenu();
 private:
     int myMeasure;
     Grids *otherg[5] = {};

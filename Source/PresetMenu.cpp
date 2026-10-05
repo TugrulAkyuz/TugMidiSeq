@@ -237,44 +237,7 @@ var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
     return newObj;
 }
 
-// bundle (legacy) writer — only writes presets that still live in the bundle
-// file; presets that have their own single file are skipped
-void  TugMidiSeqAudioProcessor::writePresetToFileJSON()
-{
-    if (resourceJsonFile == nullptr) return;
 
-    DynamicObject* tree = new DynamicObject();
-    Array<var> arr;
-    for(auto p = 0 ; p < myProgram.size(); p++)
-    {
-        if (myProgram.at(p).sourceFile != File()) continue;  // lives in its own file
-        arr.add(presetToVar(myProgram.at(p)));
-    }
-    tree->setProperty("Presets",arr);
-
-    // replaceWithText truncates safely (stream + setPosition(0) left stale
-    // bytes behind when the JSON got shorter, corrupting the file)
-    resourceJsonFile->replaceWithText(JSON::toString(var(tree)));
-}
-
-void TugMidiSeqAudioProcessor::writeSinglePresetToFileJSON(TugMidiSeqProgram& prg)
-{
-    if (resourceJsonFile == nullptr) return;
-    if (prg.sourceFile == File())
-    {
-        auto dir = presetFolder.isDirectory() ? presetFolder
-                                              : resourceJsonFile->getParentDirectory();
-        String legal = File::createLegalFileName(prg.myProgramname);
-        if (legal.isEmpty()) legal = "Preset";
-        auto f = dir.getChildFile(legal + ".json");
-        if (f == *resourceJsonFile) f = dir.getChildFile(legal + "_preset.json");
-        prg.sourceFile = f;
-    }
-    DynamicObject* tree = new DynamicObject();
-    Array<var> arr;  arr.add(presetToVar(prg));
-    tree->setProperty("Presets", arr);
-    prg.sourceFile.replaceWithText(JSON::toString(var(tree)));
-}
 
 TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
 {
@@ -437,68 +400,11 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
     return p;
 }
 
-void  TugMidiSeqAudioProcessor::readPresetToFileJSON()
-{
-    juce::FileInputStream inputStream (*resourceJsonFile);
-    if (inputStream.failedToOpen())
-        return;
-    String sil_string = inputStream.readString();
 
-    var jsonReply = JSON::parse(sil_string);
-    Array<var>* presetArray= jsonReply.getProperty("Presets", var()).getArray();
-    if (presetArray == nullptr)
-        return;  // corrupt / foreign file
 
-    for (auto& preset : *presetArray)
-    {
-        preset_idex++;
-        TugMidiSeqProgram p = varToPreset(preset);
-        p.sourceFile = File();  // lives in the legacy bundle file
-        myProgram.push_back(p);
-    }
-}
-
-void TugMidiSeqAudioProcessor::readSinglePresetFilesJSON()
+// The current pattern and settings as a preset (not written anywhere).
+TugMidiSeqProgram TugMidiSeqAudioProcessor::captureCurrentProgram (const juce::String& preset_name)
 {
-    if (resourceJsonFile == nullptr) return;
-    auto dir = presetFolder.isDirectory() ? presetFolder
-                                          : resourceJsonFile->getParentDirectory();
-    auto files = dir.findChildFiles(File::findFiles, false, "*.json");
-    files.sort();
-    for (auto& f : files)
-    {
-        if (f == *resourceJsonFile) continue;          // the bundle file itself
-        var jsonReply = JSON::parse(f.loadFileAsString());
-        Array<var>* presetArray = jsonReply.getProperty("Presets", var()).getArray();
-        if (presetArray == nullptr) continue;          // not our format
-        for (auto& preset : *presetArray)
-        {
-            preset_idex++;
-            TugMidiSeqProgram p = varToPreset(preset);
-            p.sourceFile = f;
-            myProgram.push_back(p);
-        }
-    }
-}
-
-void TugMidiSeqAudioProcessor::setPresetFolder(const File& dir)
-{
-    if (!dir.isDirectory()) return;
-    presetFolder = dir;
-    if (auto* props = appProperties.getUserSettings())
-    {
-        props->setValue("presetFolder", presetFolder.getFullPathName());
-        props->saveIfNeeded();
-    }
-    myProgram.clear();
-    preset_idex = 0;
-    readPresetToFileJSON();        // bundle always from its default location
-    readSinglePresetFilesJSON();   // singles from the new folder
-}
-void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
-{
-    
-    preset_idex++;
     String strName;
     juce::String  tmp_s;
     strName = preset_name;
@@ -614,17 +520,216 @@ void TugMidiSeqAudioProcessor::createPrograms(juce::String preset_name )
     paramProg.scaleKey  = (int) *valueTreeState.getRawParameterValue(valueTreeNames[SCALEKEY]);
     paramProg.scaleType = (int) *valueTreeState.getRawParameterValue(valueTreeNames[SCALETYPE]);
     
-    myProgram.push_back(paramProg);
-    writeSinglePresetToFileJSON(myProgram.back());  // new presets get their own file
+    return paramProg;
 }
 
+//==============================================================================
+// Preset library
 
-void TugMidiSeqAudioProcessor::deletePreset(int index)   // index is 1-based
+namespace
 {
-    if(index == 0) return;
-    auto& prg = myProgram.at(index - 1);
-    if (prg.sourceFile != File())
-        prg.sourceFile.deleteFile();       // single-file preset: delete its own file
-    myProgram.erase(myProgram.begin() + index -1);
-    // bundle residents: caller rewrites the bundle via writePresetToFileJSON()
+    const juce::String legacyBundleName = "TugMidiSeqPresets.json";
+
+    // the presets a file holds: its "Presets" array (every file the plugin has
+    // written), or the file itself when it's a single preset object
+    juce::Array<juce::var> presetsInFile (const juce::File& f)
+    {
+        const auto json = juce::JSON::parse (f.loadFileAsString());
+        if (auto* arr = json.getProperty ("Presets", juce::var()).getArray())
+            return *arr;
+        if (json.isObject())
+            return { json };
+        return {};
+    }
+
+    bool isPresetFile (const juce::File& f)
+    {
+        return ! f.getFileName().startsWithChar ('.') && f.hasFileExtension ("json")
+               && ! (f.getFileName() == legacyBundleName && f.getParentDirectory() == TugMidiSeqAudioProcessor::defaultPresetFolder());
+    }
+
+    // a folder's presets in menu order: its sub-folders (sorted, each the same
+    // way down) and then its own files (sorted)
+    void collectPresetFiles (const juce::File& folder, juce::Array<juce::File>& out, int depth = 0)
+    {
+        if (depth > 16) return;   // a link loop must not run away
+        auto dirs = folder.findChildFiles (juce::File::findDirectories, false);
+        dirs.sort();
+        for (auto& d : dirs)
+            if (! d.getFileName().startsWithChar ('.'))
+                collectPresetFiles (d, out, depth + 1);
+        auto files = folder.findChildFiles (juce::File::findFiles, false, "*.json");
+        files.sort();
+        for (auto& f : files)
+            if (isPresetFile (f))
+                out.add (f);
+    }
+
+    juce::String keyOf (const TugMidiSeqProgram& p)
+    {
+        return p.sourceFile.getFullPathName() + "#" + juce::String (p.sourceEntry);
+    }
+
+    // a folder path typed by the user, made safe: "Bass / Dark" -> "Bass/Dark"
+    juce::String cleanCategory (const juce::String& category)
+    {
+        juce::StringArray parts;
+        parts.addTokens (category.replaceCharacter ('\\', '/'), "/", "");
+        juce::StringArray kept;
+        for (auto p : parts)
+        {
+            p = juce::File::createLegalFileName (p.trim());
+            if (p.isNotEmpty() && p != "." && p != "..")
+                kept.add (p);
+        }
+        return kept.joinIntoString ("/");
+    }
+}
+
+// TUGMIDISEQ_TEST_ROOT (set by Tests/EngineTest) moves the library into a
+// scratch folder and keeps the settings file out of it altogether.
+juce::String TugMidiSeqAudioProcessor::testRoot()
+{
+    return juce::SystemStats::getEnvironmentVariable ("TUGMIDISEQ_TEST_ROOT", {});
+}
+
+juce::PropertiesFile* TugMidiSeqAudioProcessor::settings()
+{
+    return testRoot().isEmpty() ? appProperties.getUserSettings() : nullptr;
+}
+
+juce::File TugMidiSeqAudioProcessor::defaultPresetFolder()
+{
+    if (testRoot().isNotEmpty())
+        return juce::File (testRoot()).getChildFile ("Presets");
+   #if JUCE_MAC
+    return juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile ("Library/Audio/Presets/2Rule/TugMidiSeq");
+   #else   // %APPDATA%\2Rule\TugMidiSeq on Windows, ~/.config/2Rule/TugMidiSeq on Linux
+    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("2Rule").getChildFile ("TugMidiSeq");
+   #endif
+}
+
+void TugMidiSeqAudioProcessor::rescanPresets()
+{
+    juce::Array<juce::File> files;
+    collectPresetFiles (presetFolder, files);
+    std::vector<TugMidiSeqProgram> found;
+    for (auto& f : files)
+    {
+        const auto entries = presetsInFile (f);
+        for (int e = 0; e < entries.size(); e++)
+        {
+            auto p = varToPreset (entries[e]);
+            p.sourceFile  = f;
+            p.sourceEntry = e;
+            // a file of its own is named by its file; an old multi-preset file by its entries
+            if (entries.size() == 1 || p.myProgramname.isEmpty())
+                p.myProgramname = f.getFileNameWithoutExtension() + (entries.size() > 1 ? " " + juce::String (e + 1) : juce::String());
+            found.push_back (p);
+        }
+    }
+    myProgram = std::move (found);
+    preset_idex = (int) myProgram.size();
+
+    program = 0;   // the selection follows its file, not its old number
+    for (size_t i = 0; i < myProgram.size(); i++)
+        if (keyOf (myProgram[i]) == currentPresetKey)
+            program = (int) i + 1;
+}
+
+void TugMidiSeqAudioProcessor::setPresetFolder (const juce::File& dir)
+{
+    if (! dir.isDirectory()) return;
+    presetFolder = dir;
+    if (auto* props = settings())
+    {
+        if (dir == defaultPresetFolder()) props->removeValue ("presetFolder");
+        else                              props->setValue ("presetFolder", dir.getFullPathName());
+        props->saveIfNeeded();
+    }
+    rescanPresets();
+}
+
+juce::String TugMidiSeqAudioProcessor::presetCategory (int index) const
+{
+    if (index < 1 || index > (int) myProgram.size()) return {};
+    const auto folder = myProgram[(size_t) index - 1].sourceFile.getParentDirectory();
+    if (folder == presetFolder || ! folder.isAChildOf (presetFolder)) return {};
+    return folder.getRelativePathFrom (presetFolder).replaceCharacter ('\\', '/');
+}
+
+juce::File TugMidiSeqAudioProcessor::presetFileFor (const juce::String& name, const juce::String& category) const
+{
+    auto legal = juce::File::createLegalFileName (name.trim());
+    if (legal.isEmpty()) legal = "Preset";
+    const auto cat = cleanCategory (category);
+    const auto folder = cat.isEmpty() ? presetFolder : presetFolder.getChildFile (cat);
+    return folder.getChildFile (legal + ".json");
+}
+
+juce::File TugMidiSeqAudioProcessor::savePresetAs (const juce::String& name, const juce::String& category)
+{
+    const auto file = presetFileFor (name, category);
+    file.getParentDirectory().createDirectory();
+    auto prog = captureCurrentProgram (file.getFileNameWithoutExtension());
+    juce::Array<juce::var> one;
+    one.add (presetToVar (prog));
+    auto* root = new juce::DynamicObject();
+    root->setProperty ("Presets", one);   // the layout every TugMidiSeq version reads
+    if (! file.replaceWithText (juce::JSON::toString (juce::var (root))))
+        return {};
+    currentPresetKey = file.getFullPathName() + "#0";
+    rescanPresets();
+    return file;
+}
+
+bool TugMidiSeqAudioProcessor::deleteCurrentPreset()
+{
+    if (program < 1 || program > (int) myProgram.size()) return false;
+    const auto prog = myProgram[(size_t) program - 1];
+    auto entries = presetsInFile (prog.sourceFile);
+    bool done;
+    if (entries.size() <= 1)
+        done = prog.sourceFile.deleteFile();
+    else
+    {   // an old multi-preset file: take this one out, keep the rest
+        entries.remove (prog.sourceEntry);
+        auto* root = new juce::DynamicObject();
+        root->setProperty ("Presets", entries);
+        done = prog.sourceFile.replaceWithText (juce::JSON::toString (juce::var (root)));
+    }
+    currentPresetKey.clear();
+    rescanPresets();
+    return done;
+}
+
+juce::File TugMidiSeqAudioProcessor::getCurrentPresetFile() const
+{
+    return program >= 1 && program <= (int) myProgram.size() ? myProgram[(size_t) program - 1].sourceFile : juce::File();
+}
+
+// The bundle every preset used to share, TugMidiSeqPresets.json in the default
+// folder, is split once into <default folder>/Legacy, a file per preset. The
+// bundle itself is left as it was, and a marker keeps this from running again.
+void TugMidiSeqAudioProcessor::migrateLegacyPresetsIfNeeded()
+{
+    const auto folder = defaultPresetFolder();
+    const auto bundle = folder.getChildFile (legacyBundleName);
+    const auto marker = folder.getChildFile (".legacy-split");
+    if (! bundle.existsAsFile() || marker.exists()) return;
+
+    const auto legacy = folder.getChildFile ("Legacy");
+    for (auto& entry : presetsInFile (bundle))
+    {
+        auto name = juce::File::createLegalFileName (entry.getProperty ("PresetName", "Preset").toString().trim());
+        if (name.isEmpty()) name = "Preset";
+        legacy.createDirectory();
+        auto dest = legacy.getChildFile (name + ".json").getNonexistentSibling();
+        juce::Array<juce::var> one;
+        one.add (entry);
+        auto* root = new juce::DynamicObject();
+        root->setProperty ("Presets", one);
+        dest.replaceWithText (juce::JSON::toString (juce::var (root)));
+    }
+    marker.replaceWithText ("TugMidiSeqPresets.json was split into Legacy/ on " + juce::Time::getCurrentTime().toString (true, true) + "\n");
 }

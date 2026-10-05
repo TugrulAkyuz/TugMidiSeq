@@ -235,10 +235,10 @@ public:
     }
     
     juce::String myProgramname;
-    // where this preset lives on disk:
-    //  - empty File()  -> legacy bundle (TugMidiSeqPresets.json)
-    //  - otherwise     -> its own single-preset JSON file (TugMorpho style)
+    // the file the preset lives in, and which entry of it: files written before
+    // the one-preset-per-file library can hold several ({"Presets": [...]})
     juce::File sourceFile;
+    int sourceEntry = 0;
     int grids[numOfLine][numOfStep];
     int gridVelArr[numOfLine][numOfStep];
     int stepCond[numOfLine][numOfStep] = {};
@@ -427,18 +427,30 @@ public:
     
     bool subComputrFunc(int i,juce::MidiBuffer& midiMessages ,int sample);
     
-    void  writePresetToFileJSON();
-    void  writeSinglePresetToFileJSON(TugMidiSeqProgram& prg);
-
-    void  readPresetToFileJSON();
-    void  readSinglePresetFilesJSON();
-    void createPrograms(juce::String preset_name );
-
-    // active folder that single-preset JSON files are read from / written to;
-    // persisted across sessions via appProperties
-    juce::File presetFolder;
+    //==========================================================================
+    // Preset library, as in TugPhonon / 2RuleSynth: every preset is its own
+    // .json file under presetFolder, and sub-folders are categories, as deep as
+    // wanted. myProgram is the whole library in menu order (a folder's
+    // sub-folders first, sorted, then its own files), and its 1-based index is
+    // the host's program number. The old one-file bundle, TugMidiSeqPresets.json,
+    // is split once into <default folder>/Legacy and left as it was; files in the
+    // old {"Presets": [...]} layout still load, and new files are written in it
+    // too, so earlier versions of the plugin can read them.
+    juce::File presetFolder;                        // the library root, persisted
     juce::ApplicationProperties appProperties;
-    void setPresetFolder(const juce::File& dir);
+    static juce::File defaultPresetFolder();
+    static juce::String testRoot();
+    juce::PropertiesFile* settings();   // the user settings, none while testing
+    void setPresetFolder (const juce::File& dir);   // persists the choice and rescans
+    void rescanPresets();
+    // "Bass/Dark" for a preset in a sub-folder of the library, "" at its root (index 1-based)
+    juce::String presetCategory (int index) const;
+    juce::File presetFileFor (const juce::String& name, const juce::String& category) const;
+    juce::File savePresetAs (const juce::String& name, const juce::String& category);   // writes, rescans, selects it
+    bool deleteCurrentPreset();
+    juce::File getCurrentPresetFile() const;
+    TugMidiSeqProgram captureCurrentProgram (const juce::String& name);
+    void migrateLegacyPresetsIfNeeded();
     
     juce::AudioProcessorValueTreeState valueTreeState;
     // the grid step lane i is on (after its play direction), -1 when stopped
@@ -696,8 +708,6 @@ public:
     }
     
     void resetAllParam();
-
-    void deletePreset(int);
 
     // single preset <-> JSON object (shared by bundle and single-file IO)
     juce::var presetToVar(const TugMidiSeqProgram& prg);
@@ -1082,7 +1092,7 @@ private:
     double gridsDuration[numOfLine];
     std::vector <TugMidiSeqProgram >myProgram;
     int program;
-    juce::File *resourceJsonFile;
+    juce::String currentPresetKey;   // file path + "#" + entry of the selected preset, kept across rescans
     Synthesiser   mySynth;
     SynthVoice*  myVoice;
     SynthSound    *synthSound;

@@ -344,51 +344,8 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
         else sortedOrFirstEmptySelectButton.setButtonText("FirstIn");
     };
     
-    writeButton.onClick = [this]
-    {
-        //        String s = "Preset";
-        //        s << std::to_string(preset_index_sil);
-        //        preset_index_sil++;
-        //        audioProcessor.createPrograms(s);
-        //        const auto callback = juce::ModalCallbackFunction::create([this](int result) {
-        //            if (result == 0) { return; }// result == 0 means you click Cancel
-        //            if (result == 1) { /*factoryConfirmed();*/ }// result == 1 means you click OK
-        //            });
-        
-        pwdDialog =  new AlertWindow  ( "Add Preset", "Please enter your preset name", AlertWindow::AlertIconType::NoIcon );
-        pwdDialog->addTextEditor( "Preset", "Preset ?" );
-        pwdDialog->setColour(AlertWindow::ColourIds::textColourId, Theme::accent);
-        pwdDialog->setColour(AlertWindow::ColourIds::backgroundColourId,  Theme::panel);
-        pwdDialog->addButton("OK", 1, KeyPress(KeyPress::returnKey, 0, 0));
-        pwdDialog->addButton("Cancel", 0, KeyPress(KeyPress::escapeKey, 0, 0));
-        pwdDialog->enterModalState(true,ModalCallbackFunction::create([this](int r)
-                                                                      {
-            if (r)
-            {
-                auto text = pwdDialog->getTextEditorContents("Preset");
-                setPresetMenu(text);   // createPrograms already writes the single file
-            }
-        }), true);
-    };
-
-    openFolderButton.onClick = [this]
-    {
-        folderChooser = std::make_shared<juce::FileChooser>(
-            "Choose Preset Folder  (select folder or any preset inside it)",
-            audioProcessor.presetFolder, "*.json", true);
-        folderChooser->launchAsync(juce::FileBrowserComponent::openMode |
-                                   juce::FileBrowserComponent::canSelectDirectories |
-                                   juce::FileBrowserComponent::canSelectFiles,
-            [this](const juce::FileChooser& fc)
-            {
-                auto result = fc.getResult();
-                if (!result.exists()) return;
-                const juce::File folder = result.isDirectory() ? result
-                                                               : result.getParentDirectory();
-                audioProcessor.setPresetFolder(folder);
-                refreshPresetList();
-            });
-    };
+    writeButton.onClick      = [this] { showSaveDialog(); };
+    openFolderButton.onClick = [this] { showFolderMenu(); };
 
     presetPrevButton.onClick = [this] { stepPreset(-1); };
     presetNextButton.onClick = [this] { stepPreset(+1); };
@@ -402,19 +359,16 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
         auto x = presetCombo.getSelectedId();
         if(x == 0) return;
         audioProcessor.undoableEdit ([this, x] { audioProcessor.setCurrentProgram (x); });
-
+        // the menu marks the folders the chosen preset is in: rebuild it once the combo is done
+        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<GlobalPanel> (this)]
+                                         { if (safe != nullptr) safe->refreshPresetList(); });
     };
     deleteButton.onClick = [&]
     {
         deletePresetMenu();
     };
 
-    refreshPresetList();
-    // restore the previously selected preset in the combo (GUI reopen /
-    // project reload) without re-triggering a program load
-    const int curr = audioProcessor.getCurrentProgram();
-    if (curr > 0 && curr <= presetCombo.getNumItems())
-        presetCombo.setSelectedId(curr, juce::dontSendNotification);
+    refreshPresetList();   // also shows the current preset, without loading it again
     associatedComponent.getLookAndFeel().setColour(AlertWindow::ColourIds::backgroundColourId, Theme::panel);
     associatedComponent.getLookAndFeel().setColour(AlertWindow::ColourIds::textColourId, Theme::accent);
     
@@ -502,80 +456,161 @@ void GlobalPanel::resized()
 }
 
 
+// The preset menu mirrors the library: each sub-folder a submenu (as deep as
+// they go), then the folder's own presets. Item ids are the program numbers,
+// which run in that same order, so the arrows step through it as listed. The
+// folders holding the current preset are ticked.
 void GlobalPanel::refreshPresetList()
 {
-    presetCombo.clear(NotificationType::dontSendNotification);
-    const int k = audioProcessor.getNumPrograms();
-    for (auto i = 0; i < k; i++)
+    presetCombo.clear (juce::dontSendNotification);
+    struct Node { std::map<juce::String, Node> children; juce::StringArray order; std::vector<int> items; };
+    Node root;
+    const int n = audioProcessor.getNumPrograms();
+    for (int i = 1; i <= n; i++)
     {
-        String s = audioProcessor.getProgramName(i + 1);
-        if (s.isEmpty()) continue;
-        presetCombo.addItem(s, i + 1);
+        auto* node = &root;
+        juce::StringArray parts;
+        parts.addTokens (audioProcessor.presetCategory (i), "/", "");
+        parts.removeEmptyStrings();
+        for (auto& part : parts)
+        {
+            if (node->children.count (part) == 0) node->order.add (part);
+            node = &node->children[part];
+        }
+        node->items.push_back (i);
     }
+
+    const int selected = audioProcessor.getCurrentProgram();
+    std::function<bool (const Node&, juce::PopupMenu&)> build = [&] (const Node& node, juce::PopupMenu& menu)
+    {
+        bool holdsSelected = false;
+        for (auto& name : node.order)
+        {
+            juce::PopupMenu sub;
+            const bool here = build (node.children.at (name), sub);
+            menu.addSubMenu (name, sub, true, nullptr, here);
+            holdsSelected |= here;
+        }
+        for (int i : node.items)
+        {
+            menu.addItem (i, audioProcessor.getProgramName (i));
+            holdsSelected |= i == selected;
+        }
+        return holdsSelected;
+    };
+    build (root, *presetCombo.getRootMenu());
+    if (n == 0)
+        presetCombo.setTextWhenNothingSelected ("No presets");
+    else
+        presetCombo.setTextWhenNothingSelected ("Presets");
+    if (selected > 0 && selected <= n)
+        presetCombo.setSelectedId (selected, juce::dontSendNotification);
 }
 
-void GlobalPanel::stepPreset(int delta)
+void GlobalPanel::stepPreset (int delta)
 {
-    const int n = presetCombo.getNumItems();
+    const int n = audioProcessor.getNumPrograms();
     if (n == 0) return;
-    int idx = presetCombo.getSelectedItemIndex();
-    if (idx < 0) idx = (delta > 0 ? 0 : n - 1);   // no selection: start from an end
-    else         idx = (idx + delta + n) % n;      // wraps around at both ends
-    presetCombo.setSelectedItemIndex(idx);         // onChange -> loads the program
+    const int id = presetCombo.getSelectedId();
+    const int next = id < 1 ? (delta > 0 ? 1 : n) : (id - 1 + delta + n) % n + 1;   // wraps at both ends
+    presetCombo.setSelectedId (next);   // onChange -> loads the program
 }
 
 void GlobalPanel::deleteConfirmed()
 {
-    int k = audioProcessor.getNumPrograms();
-    if (k == 0) return;
-    int curr_prg = audioProcessor.getCurrentProgram();
-    if (curr_prg == 0) return;
-    audioProcessor.deletePreset(curr_prg);
+    if (! audioProcessor.deleteCurrentPreset()) return;
     refreshPresetList();
-    k = audioProcessor.getNumPrograms();
-    if ((k + 1) == curr_prg)  curr_prg--;
-    presetCombo.setSelectedId(curr_prg);
-    audioProcessor.setCurrentProgram(curr_prg);
-    // harmless & needed: only rewrites bundle residents, so a deleted bundle
-    // preset actually drops out of the legacy file
-    audioProcessor.writePresetToFileJSON();
-
 }
 
 void GlobalPanel::deletePresetMenu()
 {
-    
-    const auto callback = juce::ModalCallbackFunction::create([this](int result) {
-        if (result == 0) { return; }// result == 0 means you click Cancel
-        if (result == 1) { deleteConfirmed(); }// result == 1 means you click OK
-    });
-    //juce::NativeMessageBox::showYesNoBox(juce::AlertWindow::WarningIcon,"Are you sure to delete?", "Are you sure to delete?", this, callback);
-    /*AlertWindow *alertWindow = new AlertWindow("Save changes to the current project?",
-     "The current project has unsaved changed that will be lost if you don't save them.",
-     AlertWindow::InfoIcon);
-     */
-    AlertWindow::showOkCancelBox(juce::AlertWindow::WarningIcon,
-                                 "The preset will be deleted.",
-                                 "Are you sure to delete it?",
-                                 "Yes",
-                                 "Cancel",
-                                 &associatedComponent,
-                                 callback);
-    
-    return;
-    // int result = alertWindow->runModalLoop();
-    
-    
-    
+    const int curr = audioProcessor.getCurrentProgram();
+    if (curr < 1)
+    {
+        AlertWindow::showMessageBoxAsync (juce::AlertWindow::InfoIcon, "Delete preset", "Choose a preset first.", "OK", &associatedComponent);
+        return;
+    }
+    AlertWindow::showOkCancelBox (juce::AlertWindow::WarningIcon,
+                                  "Delete \"" + audioProcessor.getProgramName (curr) + "\"?",
+                                  "Its file is deleted:\n" + audioProcessor.getCurrentPresetFile().getFullPathName(),
+                                  "Delete", "Cancel", &associatedComponent,
+                                  juce::ModalCallbackFunction::create ([this] (int result) { if (result == 1) deleteConfirmed(); }));
 }
 
-
-void GlobalPanel::setPresetMenu(String preset_name)
+// Name and folder (relative to the preset folder, "Bass/Dark", empty for the
+// top); the folder starts as the current preset's.
+void GlobalPanel::showSaveDialog()
 {
-    audioProcessor.createPrograms(preset_name);
-    int k =  audioProcessor.getNumPrograms();
-    refreshPresetList();
-    audioProcessor.setCurrentProgram(k);
-    presetCombo.setSelectedId(k);
+    const int curr = audioProcessor.getCurrentProgram();
+    auto* aw = new AlertWindow ("Save preset", "Folder: inside the preset folder, e.g. Bass/Dark. Leave it empty for the top.",
+                                AlertWindow::NoIcon);
+    aw->setColour (AlertWindow::textColourId, Theme::textPrimary);
+    aw->setColour (AlertWindow::backgroundColourId, Theme::panel);
+    aw->addTextEditor ("name", curr > 0 ? audioProcessor.getProgramName (curr) : juce::String ("My Preset"), "Name");
+    aw->addTextEditor ("folder", audioProcessor.presetCategory (curr), "Folder");
+    aw->addButton ("Save", 1, KeyPress (KeyPress::returnKey));
+    aw->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
+    aw->enterModalState (true, ModalCallbackFunction::create ([this, aw] (int r)
+    {
+        if (r != 1) return;
+        const auto name = aw->getTextEditorContents ("name"), folder = aw->getTextEditorContents ("folder");
+        auto save = [safe = juce::Component::SafePointer<GlobalPanel> (this), name, folder]
+        {
+            if (safe == nullptr) return;
+            safe->audioProcessor.savePresetAs (name, folder);
+            safe->refreshPresetList();
+        };
+        const auto file = audioProcessor.presetFileFor (name, folder);
+        if (file.existsAsFile())
+            AlertWindow::showOkCancelBox (AlertWindow::WarningIcon, "Replace \"" + file.getFileNameWithoutExtension() + "\"?",
+                                          "A preset with that name is already in this folder.", "Replace", "Cancel",
+                                          &associatedComponent, ModalCallbackFunction::create ([save] (int ok) { if (ok == 1) save(); }));
+        else
+            save();
+    }), true);
+}
 
+void GlobalPanel::showFolderMenu()
+{
+    enum { chooseId = 1, defaultId, openId };
+    const auto folder = audioProcessor.presetFolder;
+    const auto def = TugMidiSeqAudioProcessor::defaultPresetFolder();
+    juce::PopupMenu m;
+    m.setLookAndFeel (&myLookAndFeel);
+    m.addSectionHeader ("Preset folder");
+    m.addItem (-1, folder.getFullPathName(), false);
+    m.addSeparator();
+    m.addItem (chooseId, "Choose folder...");
+    m.addItem (defaultId, "Use the default folder", folder != def);
+   #if JUCE_MAC
+    m.addItem (openId, "Show in Finder");
+   #elif JUCE_WINDOWS
+    m.addItem (openId, "Show in Explorer");
+   #else
+    m.addItem (openId, "Open the folder");
+   #endif
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&openFolderButton),
+                     [safe = juce::Component::SafePointer<GlobalPanel> (this), def] (int id)
+    {
+        if (safe == nullptr) return;
+        auto& proc = safe->audioProcessor;
+        if (id == defaultId) { def.createDirectory(); proc.setPresetFolder (def); safe->refreshPresetList(); }
+        if (id == openId)    proc.presetFolder.startAsProcess();
+        if (id == chooseId)
+        {
+            // JUCE's own browser, not the system one: the Windows and Linux system
+            // dialogs can't show the presets while picking a folder (and zenity
+            // can't pick a folder at all when files are asked for too)
+            safe->folderChooser = std::make_shared<juce::FileChooser> ("Choose the preset folder", proc.presetFolder, "*.json", false);
+            safe->folderChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                [safe] (const juce::FileChooser& fc)
+                {
+                    if (safe == nullptr) return;
+                    const auto r = fc.getResult();
+                    if (! r.exists()) return;
+                    safe->audioProcessor.setPresetFolder (r.isDirectory() ? r : r.getParentDirectory());
+                    safe->refreshPresetList();
+                });
+        }
+    });
 }

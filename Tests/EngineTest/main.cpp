@@ -8,6 +8,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "Grids.h"
+#include <unistd.h>   // getpid, setenv
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::cout << "  ok   " << msg << "\n"; \
@@ -967,8 +968,113 @@ static int snapshot (const File& png)
 }
 
 //==============================================================================
+static File testLibrary() { return File (SystemStats::getEnvironmentVariable ("TUGMIDISEQ_TEST_ROOT", {})).getChildFile ("Presets"); }
+
+static void writePresets (const File& f, TugMidiSeqAudioProcessor& p, StringArray names, bool plainObject = false)
+{
+    Array<var> entries;
+    for (auto& n : names)
+    {
+        TugMidiSeqProgram prog (n);
+        entries.add (p.presetToVar (p.varToPreset (p.presetToVar (prog))));
+    }
+    f.getParentDirectory().createDirectory();
+    if (plainObject) { f.replaceWithText (JSON::toString (entries[0])); return; }
+    auto* root = new DynamicObject();
+    root->setProperty ("Presets", entries);
+    f.replaceWithText (JSON::toString (var (root)));
+}
+
+static StringArray programNames (TugMidiSeqAudioProcessor& p)
+{
+    StringArray s;
+    for (int i = 1; i <= p.getNumPrograms(); i++) s.add (p.getProgramName (i));
+    return s;
+}
+
+static int programIndex (TugMidiSeqAudioProcessor& p, const String& name)
+{
+    for (int i = 1; i <= p.getNumPrograms(); i++) if (p.getProgramName (i) == name) return i;
+    return 0;
+}
+
+static void testPresetLibrary()
+{
+    std::cout << "Preset library\n";
+    const auto lib = testLibrary();
+    lib.deleteRecursively();
+    lib.createDirectory();
+    {   // the old bundle is split once into Legacy/, and left alone
+        Rig maker;
+        writePresets (lib.getChildFile ("TugMidiSeqPresets.json"), *maker.p, { "Old One", "Old Two" });
+        Rig r;
+        CHECK (lib.getChildFile ("Legacy/Old One.json").existsAsFile() && lib.getChildFile ("Legacy/Old Two.json").existsAsFile()
+               && lib.getChildFile ("TugMidiSeqPresets.json").existsAsFile(),
+               "the old bundle becomes Legacy/<name>.json, the bundle stays");
+        CHECK (programNames (*r.p) == StringArray ({ "Old One", "Old Two" }) && r.p->presetCategory (1) == "Legacy",
+               "listed once, under Legacy, the bundle itself not");
+        Rig again;
+        CHECK (again.p->getNumPrograms() == 2, "a second instance doesn't split it again " + programNames (*again.p).joinIntoString (","));
+    }
+    {   // the tree: sub-folders first (sorted, all the way down), then the folder's own files
+        Rig r;
+        writePresets (lib.getChildFile ("Bass/Dark/B.json"), *r.p, { "B" });
+        writePresets (lib.getChildFile ("Bass/C.json"), *r.p, { "C" });
+        writePresets (lib.getChildFile ("Pads/D.json"), *r.p, { "D" });
+        writePresets (lib.getChildFile ("A.json"), *r.p, { "A" });
+        writePresets (lib.getChildFile ("old.json"), *r.p, { "O1", "O2" });
+        writePresets (lib.getChildFile ("plain.json"), *r.p, { "ignored name" }, true);
+        writePresets (lib.getChildFile (".hidden.json"), *r.p, { "H" });
+        r.p->rescanPresets();
+        const auto names = programNames (*r.p);
+        CHECK (names == StringArray ({ "B", "C", "Old One", "Old Two", "D", "A", "O1", "O2", "plain" }),
+               "menu order " + names.joinIntoString (","));
+        CHECK (r.p->presetCategory (programIndex (*r.p, "B")) == "Bass/Dark" && r.p->presetCategory (programIndex (*r.p, "C")) == "Bass"
+               && r.p->presetCategory (programIndex (*r.p, "A")).isEmpty(), "categories are the folders, as deep as they go");
+
+        r.p->setCurrentProgram (programIndex (*r.p, "D"));
+        writePresets (lib.getChildFile ("Bass/AAA.json"), *r.p, { "AAA" });
+        r.p->rescanPresets();
+        CHECK (r.p->getProgramName (r.p->getCurrentProgram()) == "D", "the selection follows its file when others are added");
+
+        r.step (0, 5);
+        const auto saved = r.p->savePresetAs ("Lead 1", " Leads / Hot ");
+        CHECK (saved == lib.getChildFile ("Leads/Hot/Lead 1.json") && saved.existsAsFile(), "Save writes <folder>/<name>.json");
+        CHECK (r.p->getProgramName (r.p->getCurrentProgram()) == "Lead 1" && r.p->presetCategory (r.p->getCurrentProgram()) == "Leads/Hot",
+               "and selects it");
+        r.step (0, 5, 0);
+        r.p->setCurrentProgram (programIndex (*r.p, "Lead 1"));
+        CHECK (r.cellParam (0, 5) == 1, "loading it brings the pattern back");
+
+        r.p->setCurrentProgram (programIndex (*r.p, "Lead 1"));
+        CHECK (r.p->deleteCurrentPreset() && ! saved.existsAsFile() && programIndex (*r.p, "Lead 1") == 0, "Delete removes its file");
+        r.p->setCurrentProgram (programIndex (*r.p, "O2"));
+        r.p->deleteCurrentPreset();
+        // what's left is a one-preset file, listed by its file name like every other
+        CHECK (lib.getChildFile ("old.json").existsAsFile() && programIndex (*r.p, "old") > 0 && programIndex (*r.p, "O2") == 0,
+               "in an old two-preset file only that preset goes " + programNames (*r.p).joinIntoString (","));
+
+        r.p->setCurrentProgram (programIndex (*r.p, "D"));
+        MemoryBlock state; r.p->getStateInformation (state);
+        writePresets (lib.getChildFile ("0 first.json"), *r.p, { "0 first" });   // shifts every number
+        Rig b; b.p->setStateInformation (state.getData(), (int) state.getSize());
+        CHECK (b.p->getProgramName (b.p->getCurrentProgram()) == "D", "a project remembers its preset by file, not number");
+
+        const auto other = lib.getParentDirectory().getChildFile ("Elsewhere");
+        writePresets (other.getChildFile ("E.json"), *r.p, { "E" });
+        r.p->setPresetFolder (other);
+        CHECK (programNames (*r.p) == StringArray ({ "E" }), "another folder shows only its own presets (no old bundle)");
+        r.p->setPresetFolder (TugMidiSeqAudioProcessor::defaultPresetFolder());
+        CHECK (programIndex (*r.p, "D") > 0, "and the default folder comes back");
+    }
+}
+
+//==============================================================================
 int main (int argc, char** argv)
 {
+    // presets and settings go to a scratch folder, never the user's own
+    const auto scratch = File::getSpecialLocation (File::tempDirectory).getChildFile ("TugMidiSeqEngineTest-" + String (getpid()));
+    setenv ("TUGMIDISEQ_TEST_ROOT", scratch.getFullPathName().toRawUTF8(), 1);
     ScopedJuceInitialiser_GUI init;
     const StringArray args (argv + 1, argc - 1);
 
@@ -995,6 +1101,8 @@ int main (int argc, char** argv)
     testPatternSlots();
     testStateAndExport();
     testEditor();
+    testPresetLibrary();
+    scratch.deleteRecursively();
 
     std::cout << (failures == 0 ? "\nALL PASSED\n" : "\nFAILURES: " + std::to_string (failures) + "\n");
     return failures == 0 ? 0 : 1;
