@@ -278,6 +278,7 @@ valueTreeState(*this, &undoManager)
     for (int i = 0; i < numOfLine; i++)
     {
         activeSlot[i].store (0);
+        mirroredSlot[i].store (0);
         mirrorDirty[i].store (false);
     }
     resetSlots();
@@ -902,8 +903,7 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
             if (! readSlotsFrom (restored))   // a project from before the slots plays slot A
                 if (auto* slotParam = valueTreeState.getParameter (valueTreeNames[PATTERNSLOT]))
                     slotParam->setValueNotifyingHost (0.0f);
-            for (auto& d : mirrorDirty)       // the pads show what the slots hold
-                d.store (true);
+            syncPadsToActiveSlots();          // the pads show what the slots hold
         }
 
     program = valueTreeState.state.getProperty ("currentProgram", program);
@@ -2152,11 +2152,13 @@ void TugMidiSeqAudioProcessor::mirrorActiveSlots()
         for (int j = 0; j < numOfStep; j++)
             for (bool vel : { false, true })
             {
+                const int value = (vel ? slotVel : slotCell)[slot][i][j].load();
+                if (juce::roundToInt ((vel ? gridVelArrAtomic : gridsArr)[i][j]->load()) == value)
+                    continue;   // already there: leave the tree alone
                 const auto id = valueTreeNames[vel ? VELGRIDBUTTON : BLOCK] + juce::String (i) + juce::String (j);
-                const double value = (vel ? slotVel : slotCell)[slot][i][j].load();
                 auto child = valueTreeState.state.getChildWithProperty ("id", id);
                 if (child.isValid())
-                    child.setProperty ("value", value, nullptr);
+                    child.setProperty ("value", (double) value, nullptr);
                 else
                     setParamValue (id, (float) value);
             }
@@ -2164,6 +2166,30 @@ void TugMidiSeqAudioProcessor::mirrorActiveSlots()
     if (switched)
         undoManager.clearUndoHistory();
     myGridChangeListener.sendChangeMessage();
+}
+
+// After a state restore: the pads take what the lanes' active slots hold, here
+// and now. Left to mirrorActiveSlots (a timer on the message thread) it would
+// race a host that restores state from another thread - AU hosts and pluginval
+// do - and a pad could come back with the wrong value. They normally match
+// already (the pads were saved as the mirror), so usually nothing is written.
+void TugMidiSeqAudioProcessor::syncPadsToActiveSlots()
+{
+    for (int i = 0; i < numOfLine; i++)
+    {
+        const int slot = getActiveSlot (i);
+        for (int j = 0; j < numOfStep; j++)
+            for (bool vel : { false, true })
+            {
+                const int value = (vel ? slotVel : slotCell)[slot][i][j].load();
+                if (juce::roundToInt ((vel ? gridVelArrAtomic : gridsArr)[i][j]->load()) == value)
+                    continue;
+                if (auto* prm = valueTreeState.getParameter (valueTreeNames[vel ? VELGRIDBUTTON : BLOCK] + juce::String (i) + juce::String (j)))
+                    prm->setValueNotifyingHost (prm->convertTo0to1 ((float) value));
+            }
+        mirroredSlot[i].store (slot);
+        mirrorDirty[i].store (false);
+    }
 }
 
 // one slot's step data, five values per step: cell, velocity, condition, ratchet, pitch

@@ -1007,7 +1007,8 @@ private:
     std::atomic<int> activeSlot[numOfLine];
     std::atomic<bool> mirrorDirty[numOfLine];
     std::atomic<float> *patternSlotAtomic = nullptr;
-    int  mirroredSlot[numOfLine] = {};   // message thread: the slot the pad parameters hold
+    std::atomic<int> mirroredSlot[numOfLine];   // the slot the pad parameters hold
+    void syncPadsToActiveSlots();               // on the calling thread, see setStateInformation
     bool mirroring = false;              // message thread: mirrorActiveSlots is writing them
     void switchLaneSlot (int line, int slot);   // audio thread
     void cellParamChanged (int line, int step, bool velocity, float value);
