@@ -841,10 +841,12 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         
     }
 
+   #if ! JucePlugin_IsMidiEffect   // the MIDI FX build has no audio out, so no synth
     mySynth.renderNextBlock(buffer, midiMessages, 0 , buffer.getNumSamples());
     if(*inBuiltSynthAtomic == false)
         for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
             buffer.clear (i, 0, buffer.getNumSamples());
+   #endif
     if(*channelOnAtamic == true && ! offlineRender)
     {
 

@@ -16,7 +16,8 @@ Tests/EngineTest/build/EngineTest_artefacts/Debug/EngineTest
 ```
 
 Prints one line per check and ends with `ALL PASSED` (exit code 0) or the
-number of failures. JUCE is expected next to `2RuleProgramming`, as in the
+number of failures. `EngineTestMidiFX` runs the same checks built as the MIDI
+FX AU (`MidiFX/`): no audio buses, no synth. JUCE is expected next to `2RuleProgramming`, as in the
 `.jucer`; pass `-DJUCE_DIR=...` otherwise.
 
 ## Screenshots

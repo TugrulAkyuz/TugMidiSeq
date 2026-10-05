@@ -857,6 +857,12 @@ static void testEditor()
     };
     walk (*ed);
     CHECK (boxes > 10 && focusable == 0, "no combo box takes the keyboard focus, so arrows reach the shortcuts");
+   #if JucePlugin_IsMidiEffect
+    CHECK (r.p->isMidiEffect() && r.p->getTotalNumOutputChannels() == 0 && r.p->producesMidi(),
+           "MIDI FX build: a MIDI effect, no audio out, MIDI out");
+   #else
+    CHECK (! r.p->isMidiEffect() && r.p->getTotalNumOutputChannels() == 2, "instrument build: stereo out for the synth");
+   #endif
 }
 
 //==============================================================================
