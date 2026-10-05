@@ -360,8 +360,8 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
         if(x == 0) return;
         audioProcessor.undoableEdit ([this, x] { audioProcessor.setCurrentProgram (x); });
         // the menu marks the folders the chosen preset is in: rebuild it once the combo is done
-        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<GlobalPanel> (this)]
-                                         { if (safe != nullptr) safe->refreshPresetList(); });
+        juce::Component::SafePointer<GlobalPanel> safe (this);
+        juce::MessageManager::callAsync ([safe] { if (safe != nullptr) safe->refreshPresetList(); });
     };
     deleteButton.onClick = [&]
     {
@@ -554,7 +554,8 @@ void GlobalPanel::showSaveDialog()
     {
         if (r != 1) return;
         const auto name = aw->getTextEditorContents ("name"), folder = aw->getTextEditorContents ("folder");
-        auto save = [safe = juce::Component::SafePointer<GlobalPanel> (this), name, folder]
+        juce::Component::SafePointer<GlobalPanel> safe (this);
+        auto save = [safe, name, folder]
         {
             if (safe == nullptr) return;
             safe->audioProcessor.savePresetAs (name, folder);
@@ -589,8 +590,9 @@ void GlobalPanel::showFolderMenu()
    #else
     m.addItem (openId, "Open the folder");
    #endif
+    juce::Component::SafePointer<GlobalPanel> safe (this);
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&openFolderButton),
-                     [safe = juce::Component::SafePointer<GlobalPanel> (this), def] (int id)
+                     [safe, def] (int id)
     {
         if (safe == nullptr) return;
         auto& proc = safe->audioProcessor;
