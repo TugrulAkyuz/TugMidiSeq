@@ -418,7 +418,7 @@ void NoteMap::drawLegend (juce::Graphics& g) const
         const auto text = n >= 0 ? caption + " " + juce::String (n) : caption;
         const float w = juce::GlyphArrangement::getStringWidth (Theme::labelFont (8.0f), text.toUpperCase()) + 4.0f;
         Theme::drawCaption (g, text, r.removeFromLeft (w).toNearestInt(), juce::Justification::centredLeft,
-                            n > 0 || n < 0 ? Theme::textSecondary : Theme::textDim, 8.0f);
+                            n > 0 || n < 0 ? Theme::textSecondary : Theme::textDisabled, 8.0f);
         r.removeFromLeft (12.0f);
     };
 
@@ -510,7 +510,7 @@ void SlotSelector::paint (juce::Graphics& g)
             g.setColour (Theme::accent);
             g.drawRoundedRectangle (b.reduced (0.5f), Theme::radMd, 1.4f);
         }
-        const auto text = lit ? Theme::screen : proc.isSlotEmpty (s) ? Theme::textDim : Theme::textPrimary;
+        const auto text = lit ? Theme::screen : proc.isSlotEmpty (s) ? Theme::textDisabled : Theme::textPrimary;
         Theme::drawCaption (g, slotNames[s], b.toNearestInt(), juce::Justification::centred, text, 11.0f);
     }
 }

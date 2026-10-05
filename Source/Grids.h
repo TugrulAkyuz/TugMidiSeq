@@ -160,7 +160,7 @@ public:
         auto inner = body.reduced (4.0f, 3.0f);
 
         Theme::drawCaption (g, caption, inner.removeFromTop (11.0f).toNearestInt(),
-                            juce::Justification::centred, isDim ? Theme::textDim : Theme::textSecondary, 8.5f);
+                            juce::Justification::centred, isDim ? Theme::textDisabled : Theme::textSecondary, 8.5f);
 
         // A knob drawn like the panel's own (MyLookAndFeel::drawRotarySlider,
         // CustomRoratySlider's 270-degree sweep), value in the cap. The arc runs
@@ -186,7 +186,7 @@ public:
             Path value;
             value.addCentredArc (centre.x, centre.y, arcR, arcR, 0.0f,
                                  angleAt (jmin (meterFrom, meterTo)), angleAt (jmax (meterFrom, meterTo)), true);
-            g.setColour (isDim ? Theme::textDim : lane);
+            g.setColour (isDim ? Theme::textDisabled : lane);
             g.strokePath (value, stroke);
         }
 
@@ -201,13 +201,13 @@ public:
         g.drawEllipse (cap.reduced (0.75f), 0.75f);
 
         const float a = angleAt (meterTo) - MathConstants<float>::halfPi;
-        g.setColour (isDim ? Theme::textDim : Theme::textPrimary);
+        g.setColour (isDim ? Theme::textDisabled : Theme::textPrimary);
         g.drawLine (centre.x + capR * 0.62f * std::cos (a), centre.y + capR * 0.62f * std::sin (a),
                     centre.x + (capR - 1.5f) * std::cos (a), centre.y + (capR - 1.5f) * std::sin (a),
                     jmax (1.6f, lineW * 0.7f));
 
         g.setFont (Theme::valueFont (11.0f));
-        g.setColour (isDim ? Theme::textDim : Theme::textValue);
+        g.setColour (isDim ? Theme::textDisabled : Theme::textValue);
         g.drawText (valueText, cap, juce::Justification::centred, false);
     }
 

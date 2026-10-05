@@ -206,7 +206,7 @@ private:
 
             auto ca = std::cos (toAngle - juce::MathConstants<float>::halfPi);
             auto sa = std::sin (toAngle - juce::MathConstants<float>::halfPi);
-            g.setColour (slider.isEnabled() ? Theme::textPrimary : Theme::textDim);
+            g.setColour (slider.isEnabled() ? Theme::textPrimary : Theme::textDisabled);
             g.drawLine (centre.x + capR * 0.4f * ca, centre.y + capR * 0.4f * sa,
                         centre.x + (capR - 1.5f) * ca, centre.y + (capR - 1.5f) * sa,
                         juce::jmax (1.6f, lineW * 0.7f));
@@ -241,7 +241,7 @@ private:
         path.startNewSubPath (cx - 3.0f, cy - 1.5f);
         path.lineTo          (cx,        cy + 2.5f);
         path.lineTo          (cx + 3.0f, cy - 1.5f);
-        g.setColour (box.isEnabled() ? Theme::textSecondary : Theme::textDim);
+        g.setColour (box.isEnabled() ? Theme::textSecondary : Theme::textDisabled);
         g.strokePath (path, PathStrokeType (1.4f, PathStrokeType::curved, PathStrokeType::rounded));
 
         // note-value boxes: glyph + fraction (their label is hidden, see below)
@@ -466,7 +466,7 @@ private:
 
         // value read-out inside the knob cap
         g.setFont (Theme::valueFont (11.0f));
-        g.setColour (isEnabled() ? Theme::textValue : Theme::textDim);
+        g.setColour (isEnabled() ? Theme::textValue : Theme::textDisabled);
         g.drawText (valueText != nullptr ? valueText (getValue()) : juce::String (juce::roundToInt (getValue())),
                     b, juce::Justification::centred, false);
 

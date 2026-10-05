@@ -32,8 +32,11 @@ namespace Theme
 
     //== Text ==================================================================
     const Colour textPrimary  (0xffe9e4da); // warm off-white
-    const Colour textSecondary(0xff908d86); // silkscreen labels
-    const Colour textDim      (0xff5c5a55); // min/max, hints
+    // Contrast on the lane surfaces: secondary ~7:1, dim ~4.6:1 (both readable
+    // at the small sizes used), disabled ~2.8:1 (meant to read as "off").
+    const Colour textSecondary(0xffb3aea4); // silkscreen labels
+    const Colour textDim      (0xff908c84); // min/max, hints, captions
+    const Colour textDisabled (0xff6a6760); // disabled controls, empty / unused things
     const Colour textValue    (0xffcfcabf); // numeric read-outs
 
     //== Accent (deep brass — the single interactive highlight) ================
