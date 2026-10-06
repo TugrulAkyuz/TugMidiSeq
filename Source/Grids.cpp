@@ -488,16 +488,14 @@ void Grids::showLaneMenu()
                          else if (r == shiftAllRightId) p.shiftAllLanes (+1);
                          else if (r == clearId)      p.clearLane (line);
                          else if (r == euclidId)
-                             juce::CallOutBox::launchAsynchronously (std::make_unique<EuclidPanel> (p, line),
-                                                                     safe->myLineLabel.getScreenBounds(), nullptr);
+                             launchCallOut (std::make_unique<EuclidPanel> (p, line), safe->myLineLabel);
                          safe->repaint();
                      });
 }
 
 void Grids::showStrumShape()
 {
-    juce::CallOutBox::launchAsynchronously (std::make_unique<StrumShapePanel> (audioProcessor, myLine),
-                                            spreadKnob.getScreenBounds(), nullptr);
+    launchCallOut (std::make_unique<StrumShapePanel> (audioProcessor, myLine), spreadKnob);
 }
 
 //== Strum shape call-out ======================================================

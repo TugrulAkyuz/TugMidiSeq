@@ -244,8 +244,7 @@ public:
     static void show (juce::Component& anchor, const juce::String& titleText, const juce::String& messageText,
                       const juce::String& confirmText, std::function<void()> onConfirm)
     {
-        juce::CallOutBox::launchAsynchronously (std::make_unique<ConfirmPanel> (titleText, messageText, confirmText, std::move (onConfirm)),
-                                                anchor.getScreenBounds(), nullptr);
+        launchCallOut (std::make_unique<ConfirmPanel> (titleText, messageText, confirmText, std::move (onConfirm)), anchor);
     }
 
 private:

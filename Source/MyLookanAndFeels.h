@@ -352,6 +352,17 @@ private:
 // gate on a delta threshold (that made slow / single notches do nothing).
 // Instead: one step per wheel event by sign, with a short time window that
 // merges a trackpad's momentum burst so a single notch = a single step.
+// Opens `content` as a call-out next to `anchor`, at the editor's size: a
+// CallOutBox is a window of its own, so it doesn't inherit the scale the
+// editor is drawn at (window resizing, the host's display scale).
+inline void launchCallOut (std::unique_ptr<juce::Component> content, juce::Component& anchor)
+{
+    const float scale = juce::Component::getApproximateScaleFactorForComponent (&anchor);
+    if (std::abs (scale - 1.0f) > 0.01f)
+        content->setTransform (juce::AffineTransform::scale (scale));
+    juce::CallOutBox::launchAsynchronously (std::move (content), anchor.getScreenBounds(), nullptr);
+}
+
 class WheelComboBox : public juce::ComboBox
 {
 public:
