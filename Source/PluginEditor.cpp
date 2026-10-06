@@ -493,5 +493,11 @@ void EditorContent::showHelp()
     o.escapeKeyTriggersCloseButton = true;
     o.useNativeTitleBar = true;
     o.resizable = true;
+    o.componentToCentreAround = this;   // on the plugin's screen, not the main one
     helpWindow = o.launchAsync();
+
+    // and kept inside that screen when the plugin sits near its edge
+    if (helpWindow != nullptr)
+        if (auto* display = juce::Desktop::getInstance().getDisplays().getDisplayForRect (getScreenBounds()))
+            helpWindow->setBounds (helpWindow->getBounds().constrainedWithin (display->userArea));
 }
