@@ -28,10 +28,24 @@ static constexpr int kEditorDesignH = 276 + kNoteMapH;
 // All widgets live here at the fixed design size. The editor owns one of these
 // and applies a uniform scale transform when the window is resized, so the
 // magic-number layout never has to change.
+// The version stamp over the satellite. A click opens the help window
+// (what's new, controls and shortcuts); the (i) and the hover say it can.
+class VersionBadge : public juce::Component
+{
+public:
+    VersionBadge() { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
+    std::function<void()> onClick;
+    void paint (juce::Graphics&) override;
+    void mouseEnter (const juce::MouseEvent&) override { repaint(); }
+    void mouseExit (const juce::MouseEvent&) override  { repaint(); }
+    void mouseUp (const juce::MouseEvent& e) override  { if (contains (e.getPosition()) && onClick) onClick(); }
+};
+
 class EditorContent  : public juce::Component
 {
 public:
     EditorContent (TugMidiSeqAudioProcessor&);
+    ~EditorContent() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -47,6 +61,9 @@ private:
     GlobalPanel globalPanel;
     juce::OwnedArray< juce::Label > topInLabel;
     juce::Rectangle<int> laneMenuHint;   // over the lane numbers: they open a menu
+    VersionBadge versionBadge;
+    juce::Component::SafePointer<juce::DialogWindow> helpWindow;
+    void showHelp();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EditorContent)
 };

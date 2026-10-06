@@ -62,6 +62,7 @@ A preset library like TugPhonon's / 2RuleSynth's. Presets are **not** stored in 
 - **Pad markings** live in compartments (`MultiStateButton::paintButton`): step pitch in the top row, trig condition in the bottom row, the Event bow-tie in what's left (its dot in the top-right corner always). Ratchet is drawn by `SubGrids` as the note-length strip above the pad split into its hits. The MIDI-in box shows ALL (+ strum arrow) for chord / strum lanes and is styled by where its note comes from, like the note map: MIDI filled, latched hollow, and a note picked with the mouse rings the lane number in brass (the on-screen keyboard rings the number on the key the same way); the note map's legend row counts MIDI / clicked / latched notes.
 - Right-clicking a step pad opens its trig-condition menu (`MultiStateButton::showStepMenu`); ctrl+click stays "Event cell", so check `isRightButtonDown()`, not `isPopupMenu()`.
 - `MyLookanAndFeels.h` — shared custom `LookAndFeel`.
+- **Help window**: the version stamp (`VersionBadge`, over the satellite) opens a two-tab window, What's New / Controls & Shortcuts, written in `writeNews` / `writeControls` in `PluginEditor.cpp`. Update them with every new feature, control or shortcut (and the news at a version bump).
 
 ### Cross-thread signalling
 Three file-scope globals (declared `extern` in headers, defined in `PluginProcessor.cpp`) push updates from engine/processor to GUI:
