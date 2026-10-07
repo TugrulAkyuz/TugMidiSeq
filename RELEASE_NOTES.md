@@ -1,6 +1,6 @@
 # TugMidiSeq 2.6.1
 
-- **Logic MIDI FX:** keeps time at every sample rate. In a 48 kHz (or 88.2 / 96 kHz) project the MIDI FX version restarted its lanes on every audio block, so the playhead shook at the start and the lanes didn't play. The instrument, AU and VST3, was not affected.
+- **Steady playback in Logic.** Right after a project was opened, Logic's slightly rounded song position made the lanes restart every few milliseconds: the playhead shook at the start and the lanes kept replaying their first step until the tempo was changed. Fixed in the instrument and in the MIDI FX version.
 
 # What's New in TugMidiSeq 2.6 — October 2026 Update
 

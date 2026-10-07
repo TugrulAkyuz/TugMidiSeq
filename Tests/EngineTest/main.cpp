@@ -18,6 +18,7 @@ static int failures = 0;
 struct FakePlayHead : AudioPlayHead
 {
     double sr = 48000, bpm = 120;
+    double quantum = 0;   // round the beat position to this (Logic: 1/15360 beat)
     int64 pos = 0;
     bool playing = false;
     Optional<PositionInfo> getPosition() const override
@@ -26,7 +27,8 @@ struct FakePlayHead : AudioPlayHead
         i.setBpm (bpm);
         i.setIsPlaying (playing);
         i.setTimeInSamples (pos);
-        i.setPpqPosition ((double) pos / (sr * 60.0 / bpm));
+        const double ppq = (double) pos / (sr * 60.0 / bpm);
+        i.setPpqPosition (quantum > 0 ? std::floor (ppq / quantum) * quantum : ppq);
         i.setTimeSignature (TimeSignature { 4, 4 });
         return i;
     }
@@ -63,14 +65,15 @@ struct Rig
         for (int n : notes) in (t++, MidiMessage::noteOn (1, n, vel));
     }
 
-    void run (int64 samples)
+    void run (int64 samples, int blockSize = block)
     {
-        for (int64 done = 0; done < samples; done += block)
+        for (int64 done = 0; done < samples; done += blockSize)
         {
             MidiBuffer mb;
             for (auto& [t, m] : pending)
-                if (t >= ph.pos && t < ph.pos + block)
+                if (t >= ph.pos && t < ph.pos + blockSize)
                     mb.addEvent (m, (int) (t - ph.pos));
+            buf.setSize (2, blockSize, false, false, true);
             buf.clear();
             p->processBlock (buf, mb);
             if (ph.playing)
@@ -82,12 +85,12 @@ struct Rig
                     else if (m.isNoteOff())
                         offs.push_back ({ ph.pos + meta.samplePosition, m.getChannel() - 10, m.getNoteNumber(), 0 });
                 }
-            ph.pos += block;
+            ph.pos += blockSize;
         }
     }
     void stop (int64 samples = 4 * block) { ph.playing = false; run (samples); }
     int64 startAt() const { return ((ph.pos + bar - 1) / bar) * bar; }   // playback starts on a bar line
-    void play (int64 samples)
+    void play (int64 samples, int blockSize = block)
     {
         if (! ph.playing)
         {
@@ -95,7 +98,7 @@ struct Rig
             ph.playing = true;
             playStart = ph.pos;
         }
-        run (samples);
+        run (samples, blockSize);
     }
 
     // note-ons of a lane, as times from the start of playback, in [from, to)
@@ -190,45 +193,31 @@ static void testBasics()
 }
 
 //==============================================================================
-// JUCE's AU wrapper tells a plugin without audio buses (the MIDI FX AU) it runs
-// at 44.1 kHz whatever Logic's rate is; the engine must time itself from the
-// host's beat position instead, or every block looks like a new bar.
-static void testHostRate()
+// Logic rounds its beat position to 1/15360 of a beat, so a block can start a
+// hair behind the engine's own count. That must not count as a new bar: every
+// lane restarted every few blocks (the playhead shook, step 1 kept firing).
+static void testHostJitter()
 {
-    std::cout << "Sample rate\n";
-    for (const double told : { 48000.0, 44100.0 })
-    {
-       #if ! JucePlugin_IsMidiEffect
-        if (told != 48000.0) continue;   // the instrument is always told the real rate
-       #endif
-        Rig r;
-        r.p->prepareToPlay (told, Rig::block);
-        r.ph.bpm = 130;
-        const double quarter = 48000.0 * 60.0 / 130.0;   // 22153.8 samples
-        for (int s : { 0, 4, 8, 12 }) r.step (0, s);
-        r.hold ({ 60 });
-        r.stop();
-        r.ph.pos = 0;              // a bar line at 130 BPM
-        r.play ((int64) (8 * quarter) + Rig::block);
-        auto t = r.onsets (0, 0, (int64) (7.5 * quarter));   // two bars: 8 quarters
-        bool onBeat = t.size() == 8;
-        for (size_t k = 0; onBeat && k < t.size(); k++)
-            onBeat = near (t[k], (int) std::lround ((double) k * quarter), 40);
-        CHECK (onBeat, "130 BPM at 48 kHz, plugin told " + String ((int) told) + ": quarters on the beat " + str (t));
-
-        // Logic prepares the plugin again (e.g. around a bounce): still on the beat
-        r.stop();
-        r.p->prepareToPlay (told, Rig::block);
-        r.out.clear();
-        r.ph.pos = r.playStart = (int64) std::lround (8 * quarter);   // bar 3 (play() rounds to 120 BPM bars)
-        r.ph.playing = true;
-        r.run ((int64) (4 * quarter));
-        t = r.onsets (0, 0, (int64) (3.5 * quarter));
-        onBeat = t.size() == 4;
-        for (size_t k = 0; onBeat && k < t.size(); k++)
-            onBeat = near (t[k], (int) std::lround ((double) k * quarter), 40);
-        CHECK (onBeat, "... and after being prepared again " + str (t));
-    }
+    std::cout << "Host position rounding\n";
+    for (const double bpm : { 120.0, 130.0 })
+        for (const int block : { 128, 512 })
+        {
+            Rig r;
+            r.p->prepareToPlay (48000, block);
+            r.ph.bpm = bpm;
+            r.ph.quantum = 1.0 / 15360;
+            const double quarter = 48000.0 * 60.0 / bpm;
+            for (int s : { 0, 4, 8, 12 }) r.step (0, s);
+            r.hold ({ 60 });
+            r.stop();
+            r.ph.pos = 0;              // a bar line at any tempo
+            r.play ((int64) (8 * quarter) + Rig::block, block);
+            auto t = r.onsets (0, 0, (int64) (7.5 * quarter));   // two bars: 8 quarters
+            bool onBeat = t.size() == 8;
+            for (size_t k = 0; onBeat && k < t.size(); k++)
+                onBeat = near (t[k], (int) std::lround ((double) k * quarter), 40);
+            CHECK (onBeat, String (bpm, 0) + " BPM, " + String (block) + "-sample blocks: quarters on the beat " + str (t));
+        }
 }
 
 //==============================================================================
@@ -1146,7 +1135,7 @@ int main (int argc, char** argv)
     }
 
     testBasics();
-    testHostRate();
+    testHostJitter();
     testLatchAndKeyboard();
     testConditions();
     testStepTools();

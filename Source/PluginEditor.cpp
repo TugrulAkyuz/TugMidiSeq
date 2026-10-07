@@ -302,8 +302,8 @@ namespace
         w.text ("Projects and presets from earlier versions open as before.");
 
         w.heading ("Fixed in 2.6.1");
-        w.text ("The Logic MIDI FX version keeps time at every sample rate: in a 48 kHz project it restarted "
-                "its lanes on every block.");
+        w.text ("Steady playback in Logic: when a project had just been opened, the lanes restarted every few "
+                "milliseconds (the playhead shook at the start) until the tempo was changed.");
 
         w.put ("\nNew in 2.6\n", w.title.withHeight (16.0f), Theme::textPrimary);
 

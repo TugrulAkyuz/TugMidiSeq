@@ -929,14 +929,6 @@ public:
     bool offlineRender = false;
 
 private:
-   #if JucePlugin_IsMidiEffect
-    // JUCE's AU wrapper tells an AU without audio buses (this MIDI FX) that it
-    // runs at 44.1 kHz, whatever Logic's rate is. The real rate is measured from
-    // how far the host's beat position moves over a block; true when it changed.
-    bool measureHostRate (int numSamples);
-    double measuredRate = 0.0, rateProbePpq = 0.0, rateProbeBpm = 0.0;
-    int rateProbeSamples = 0;
-   #endif
     int soloLane = -1;
     
     String midiPortName = "Press To Select Midi Port";
@@ -1095,7 +1087,7 @@ private:
     std::vector<juce::MidiMessage> inMidiNoteListVector;
     //std::list<juce::MidiMessage> inMidiNoteListTmp;
     //std::vector<juce::MidiMessage> inMidiNoteListVectorTmp;
-    void initForVariables();
+    void initForVariables (bool barResync = false);
     struct RealMidiNoteList
     {
         juce::MidiMessage sentMidi;
@@ -1116,6 +1108,7 @@ private:
     float remaining[numOfLine] = {};
     float gauge[numOfLine] = {};
     double prevppq = 0;
+    static constexpr double kHostPpqJitter = 1.0 / 256;   // beats; smaller steps back are rounding
     //juce::AudioProcessorValueTreeState::ParameterLayout createAllParameters();
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TugMidiSeqAudioProcessor)
