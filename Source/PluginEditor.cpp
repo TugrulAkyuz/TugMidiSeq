@@ -301,6 +301,12 @@ namespace
         w.put ("TugMidiSeq " + juce::String (ProjectInfo::versionString) + "\n", w.title.withHeight (18.0f), Theme::textPrimary);
         w.text ("Projects and presets from earlier versions open as before.");
 
+        w.heading ("Fixed in 2.6.1");
+        w.text ("The Logic MIDI FX version keeps time at every sample rate: in a 48 kHz project it restarted "
+                "its lanes on every block.");
+
+        w.put ("\nNew in 2.6\n", w.title.withHeight (16.0f), Theme::textPrimary);
+
         w.heading ("Pattern slots A " + kDash + " D");
         w.text ("Four patterns in one instance. Each lane switches when its own loop comes round, so lanes of "
                 "different lengths change over without cutting a pattern in half. Right-click a slot to copy or "

@@ -929,6 +929,14 @@ public:
     bool offlineRender = false;
 
 private:
+   #if JucePlugin_IsMidiEffect
+    // JUCE's AU wrapper tells an AU without audio buses (this MIDI FX) that it
+    // runs at 44.1 kHz, whatever Logic's rate is. The real rate is measured from
+    // how far the host's beat position moves over a block; true when it changed.
+    bool measureHostRate (int numSamples);
+    double measuredRate = 0.0, rateProbePpq = 0.0, rateProbeBpm = 0.0;
+    int rateProbeSamples = 0;
+   #endif
     int soloLane = -1;
     
     String midiPortName = "Press To Select Midi Port";

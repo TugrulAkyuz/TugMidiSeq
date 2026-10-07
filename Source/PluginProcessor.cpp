@@ -528,6 +528,10 @@ void TugMidiSeqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
     mySampleRate = sampleRate;
+   #if JucePlugin_IsMidiEffect
+    if (measuredRate > 0 && ! offlineRender)   // the wrapper's 44.1 kHz is not the host's rate
+        mySampleRate = measuredRate;
+   #endif
     mySynth.setCurrentPlaybackSampleRate(mySampleRate);
     for(auto i = 0 ; i <  mySynth.getNumVoices()  ; i++)
     {
@@ -541,6 +545,33 @@ void TugMidiSeqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
     initPrepareValue();
   
 }
+
+#if JucePlugin_IsMidiEffect
+bool TugMidiSeqAudioProcessor::measureHostRate (int numSamples)
+{
+    const bool playing = positionInfo.isPlaying && positionInfo.bpm > 0;
+    bool changed = false;
+    if (playing && rateProbeSamples > 0 && positionInfo.bpm == rateProbeBpm)
+    {
+        const double seconds = (positionInfo.ppqPosition - rateProbePpq) * 60.0 / positionInfo.bpm;
+        if (seconds > 0)   // a cycle jump or a relocate gives nonsense: no standard rate is near it
+        {
+            const double estimate = rateProbeSamples / seconds;
+            for (double rate : { 22050.0, 32000.0, 44100.0, 48000.0, 88200.0, 96000.0, 176400.0, 192000.0, 352800.0, 384000.0 })
+                if (std::abs (estimate / rate - 1.0) < 0.01)
+                {
+                    changed = rate != mySampleRate;
+                    mySampleRate = measuredRate = rate;
+                    break;
+                }
+        }
+    }
+    rateProbePpq = positionInfo.ppqPosition;
+    rateProbeBpm = positionInfo.bpm;
+    rateProbeSamples = playing ? numSamples : 0;
+    return changed;
+}
+#endif
 
 void TugMidiSeqAudioProcessor::releaseResources()
 {
@@ -609,6 +640,11 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     midiMessagesStack.clear();
     midiMessagesStack.addEvents(midiMessages, 0, buffer.getNumSamples(), 0);
     playHead->getCurrentPosition(positionInfo);
+   #if JucePlugin_IsMidiEffect
+    const bool rateChanged = ! offlineRender && measureHostRate (buffer.getNumSamples());
+   #else
+    const bool rateChanged = false;
+   #endif
 
     // pattern slots: while stopped a lane moves to the requested slot at once
     const int wantedSlot = getRequestedSlot();
@@ -697,6 +733,10 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         }
         
         auto xx = 4.0/(double)((4*mySampleRate)/myBps);
+        // The blocks before the rate was measured ran ahead of the host; that
+        // overshoot is not a new bar (a real bar line wraps the position by ~4).
+        if (rateChanged && prevppq - ppq < 2.0)
+            prevppq = ppq - xx;
         for(int s = 0 ; s < buffer.getNumSamples();  s++)/**ppq ye bakma code*/
         {
 

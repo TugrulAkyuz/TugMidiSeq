@@ -190,6 +190,48 @@ static void testBasics()
 }
 
 //==============================================================================
+// JUCE's AU wrapper tells a plugin without audio buses (the MIDI FX AU) it runs
+// at 44.1 kHz whatever Logic's rate is; the engine must time itself from the
+// host's beat position instead, or every block looks like a new bar.
+static void testHostRate()
+{
+    std::cout << "Sample rate\n";
+    for (const double told : { 48000.0, 44100.0 })
+    {
+       #if ! JucePlugin_IsMidiEffect
+        if (told != 48000.0) continue;   // the instrument is always told the real rate
+       #endif
+        Rig r;
+        r.p->prepareToPlay (told, Rig::block);
+        r.ph.bpm = 130;
+        const double quarter = 48000.0 * 60.0 / 130.0;   // 22153.8 samples
+        for (int s : { 0, 4, 8, 12 }) r.step (0, s);
+        r.hold ({ 60 });
+        r.stop();
+        r.ph.pos = 0;              // a bar line at 130 BPM
+        r.play ((int64) (8 * quarter) + Rig::block);
+        auto t = r.onsets (0, 0, (int64) (7.5 * quarter));   // two bars: 8 quarters
+        bool onBeat = t.size() == 8;
+        for (size_t k = 0; onBeat && k < t.size(); k++)
+            onBeat = near (t[k], (int) std::lround ((double) k * quarter), 40);
+        CHECK (onBeat, "130 BPM at 48 kHz, plugin told " + String ((int) told) + ": quarters on the beat " + str (t));
+
+        // Logic prepares the plugin again (e.g. around a bounce): still on the beat
+        r.stop();
+        r.p->prepareToPlay (told, Rig::block);
+        r.out.clear();
+        r.ph.pos = r.playStart = (int64) std::lround (8 * quarter);   // bar 3 (play() rounds to 120 BPM bars)
+        r.ph.playing = true;
+        r.run ((int64) (4 * quarter));
+        t = r.onsets (0, 0, (int64) (3.5 * quarter));
+        onBeat = t.size() == 4;
+        for (size_t k = 0; onBeat && k < t.size(); k++)
+            onBeat = near (t[k], (int) std::lround ((double) k * quarter), 40);
+        CHECK (onBeat, "... and after being prepared again " + str (t));
+    }
+}
+
+//==============================================================================
 static void testLatchAndKeyboard()
 {
     std::cout << "Latch / on-screen keyboard\n";
@@ -1104,6 +1146,7 @@ int main (int argc, char** argv)
     }
 
     testBasics();
+    testHostRate();
     testLatchAndKeyboard();
     testConditions();
     testStepTools();

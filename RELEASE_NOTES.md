@@ -1,3 +1,7 @@
+# TugMidiSeq 2.6.1
+
+- **Logic MIDI FX:** keeps time at every sample rate. In a 48 kHz (or 88.2 / 96 kHz) project the MIDI FX version restarted its lanes on every audio block, so the playhead shook at the start and the lanes didn't play. The instrument, AU and VST3, was not affected.
+
 # What's New in TugMidiSeq 2.6 — October 2026 Update
 
 TugMidiSeq grows from a step sequencer into a performance instrument: four switchable patterns, chords and strums, conditional steps, ratchets, scale lock and a lot more — while everything you made in 2.5 opens exactly as before.

@@ -6,7 +6,7 @@
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
               pluginManufacturer="2Rule" pluginCharacteristicsValue="pluginIsMidiEffectPlugin,pluginProducesMidiOut,pluginWantsMidiIn"
               pluginFormats="buildAU" bundleIdentifier="2Rule.TugMidiSeqMidiFX"
-              version="2.6.0" pluginAUMainType="'aumi'" companyName="2Rule"
+              version="2.6.1" pluginAUMainType="'aumi'" companyName="2Rule"
               companyWebsite="https://akyuz5.wixsite.com/mysite" companyEmail="tugrulvega@gmail.com">
   <MAINGROUP id="soeMpr" name="TugMidiSeqMidiFX">
     <GROUP id="{8DE839C0-F477-F119-F4B1-66A417831F51}" name="PNGs"/>
