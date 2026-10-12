@@ -301,6 +301,10 @@ namespace
         w.put ("TugMidiSeq " + juce::String (ProjectInfo::versionString) + "\n", w.title.withHeight (18.0f), Theme::textPrimary);
         w.text ("Projects and presets from earlier versions open as before.");
 
+        w.heading ("Fixed in 2.6.2");
+        w.text ("The same note coming in more than once (a mono controller copied to several lanes) fills that "
+                "many lanes again, as before 2.6.");
+
         w.heading ("Fixed in 2.6.1");
         w.text ("Steady playback in Logic: when a project had just been opened, the lanes restarted every few "
                 "milliseconds (the playhead shook at the start) until the tempo was changed.");

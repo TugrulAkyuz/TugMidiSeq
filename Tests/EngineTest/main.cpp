@@ -256,6 +256,40 @@ static void testLatchAndKeyboard()
         CHECK (r.notes (0) == std::vector<int> ({ 62 }), "latch: the next key replaces the latched chord");
     }
     {
+        // sorted lanes show the held list: a second 60 would put 64 on lane 3
+        Rig r;
+        r.param ("latch", 1);
+        for (int lane = 0; lane < 3; lane++) r.step (lane, 0);
+        r.hold ({ 60, 64 });
+        r.in (r.ph.pos + 100, MidiMessage::noteOff (1, 60));                 // latched, 64 still down
+        r.in (r.ph.pos + 200, MidiMessage::noteOn (1, 60, (uint8) 100));    // pressed again
+        r.stop();
+        r.play (Rig::bar / 4);
+        CHECK (r.notes (0) == std::vector<int> ({ 60 }) && r.notes (1) == std::vector<int> ({ 64 }) && r.notes (2).empty(),
+               "latch: a latched note pressed again is held once");
+    }
+    // The same note sent several times (a mono controller copied to every lane)
+    // fills that many lanes, as it did before 2.6.
+    for (const int firstEmpty : { 0, 1 })
+    {
+        Rig r;
+        r.param ("sortedOrFirstEmptySelect", (float) firstEmpty);
+        for (int lane = 0; lane < 5; lane++) r.step (lane, 0);
+        for (int ch = 1; ch <= 5; ch++) r.in (r.ph.pos + ch, MidiMessage::noteOn (ch, 36, (uint8) 100));
+        r.stop();
+        r.play (Rig::bar / 4);
+        bool all = true;
+        for (int lane = 0; lane < 5; lane++) all = all && r.notes (lane) == std::vector<int> ({ 36 });
+        const String mode = firstEmpty ? "first empty" : "sorted";
+        CHECK (all, "five copies of one note play on all five lanes (" + mode + ")");
+
+        r.in (r.ph.pos + 10, MidiMessage::noteOff (3, 36));                 // one copy released
+        r.play (Rig::bar);
+        int playing = 0;
+        for (int lane = 0; lane < 5; lane++) playing += r.onsets (lane, Rig::bar / 2).empty() ? 0 : 1;
+        CHECK (playing == 4, "releasing one copy frees one lane (" + mode + "), playing " + String (playing));
+    }
+    {
         Rig r;
         r.step (0, 0);
         r.p->toggleScreenNote (62);

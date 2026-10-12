@@ -1,3 +1,7 @@
+# TugMidiSeq 2.6.2
+
+- **Duplicate input notes are back.** The same note sent several times (for example a monophonic wind controller copied to every lane) again fills that many lanes, as it did before 2.6, and releasing one copy frees one lane. 2.6 had started merging repeated notes into one. Latch still holds a latched note only once when you press it again.
+
 # TugMidiSeq 2.6.1
 
 - **Steady playback in Logic.** Right after a project was opened, Logic's slightly rounded song position made the lanes restart every few milliseconds: the playhead shook at the start and the lanes kept replaying their first step until the tempo was changed. Fixed in the instrument and in the MIDI FX version.

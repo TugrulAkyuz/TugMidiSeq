@@ -998,7 +998,7 @@ private:
 
     // Latch: which keys are physically down right now (the held-note lists keep
     // latched notes after release, so they can't answer that themselves).
-    bool physHeld[128] = {};
+    std::uint8_t physHeld[128] = {};   // keys down per note: the same note can come in more than once
     int  physHeldCount = 0;
     bool prevLatch = false;
     void clearHeldNotes();

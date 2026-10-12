@@ -1404,10 +1404,12 @@ void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int 
             // keys pressed while others are still down add to it.
             if (*latchAtomic > 0.5f && physHeldCount == 0)
                 clearHeldNotes();
-            if (! physHeld[noteNumber]) { physHeld[noteNumber] = true; physHeldCount++; }
+            if (physHeld[noteNumber] < 255) { physHeld[noteNumber]++; physHeldCount++; }
 
-            // a latched note pressed again is already in the lists
-            if (std::find_if(inMidiNoteList.begin(), inMidiNoteList.end(), sameNote) != inMidiNoteList.end())
+            // One entry per key down, so a note sent several times (a mono controller
+            // copied to every lane) fills that many lanes, as before 2.6. A latched
+            // note pressed again is already in the lists and gets no second entry.
+            if (std::count_if (inMidiNoteList.begin(), inMidiNoteList.end(), sameNote) >= physHeld[noteNumber])
                 continue;
 
             inMidiNoteList.push_back(currentMessage);
@@ -1425,7 +1427,7 @@ void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int 
         }
         else if(currentMessage.isNoteOff())
         {
-            if (physHeld[noteNumber]) { physHeld[noteNumber] = false; physHeldCount--; }
+            if (physHeld[noteNumber] > 0) { physHeld[noteNumber]--; physHeldCount--; }
             if (*latchAtomic > 0.5f) continue;   // latched: keep playing it
 
             auto it = std::find_if(inMidiNoteList.begin(), inMidiNoteList.end(), sameNote);
@@ -1524,11 +1526,14 @@ void TugMidiSeqAudioProcessor::clearHeldNotes()
 
 void TugMidiSeqAudioProcessor::releaseUnheldNotes()
 {
+    // keep as many copies of each note as there are keys down for it
+    int kept[128] = {};
     inMidiNoteList.erase (std::remove_if (inMidiNoteList.begin(), inMidiNoteList.end(),
-                                          [this] (const MidiMessage& m) { return ! physHeld[m.getNoteNumber()]; }),
+                                          [this, &kept] (const MidiMessage& m) { const int n = m.getNoteNumber(); return kept[n]++ >= physHeld[n]; }),
                           inMidiNoteList.end());
+    int keptSlots[128] = {};
     for (auto& slot : inMidiNoteListVector)
-        if (slot.getVelocity() != 0 && ! physHeld[slot.getNoteNumber()])
+        if (slot.getVelocity() != 0 && keptSlots[slot.getNoteNumber()]++ >= physHeld[slot.getNoteNumber()])
             slot.setVelocity (0.0f);
 }
 
