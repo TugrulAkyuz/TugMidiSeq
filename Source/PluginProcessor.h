@@ -18,6 +18,7 @@ extern ChangeBroadcaster updateMidiPort;;
 
 #include "SynthVoice.h"
 #include "Tuning.h"
+#include "MTS/libMTSClient.h"
 
 extern ChangeBroadcaster myGridChangeListener;
 
@@ -932,22 +933,26 @@ public:
     // Tuning (Scala .scl + optional .kbm). The message thread changes it; the
     // audio thread reads a published snapshot. While one is loaded this
     // instance is the MTS-ESP master, unless another master got there first.
+    // Without one it follows any MTS-ESP master as a client.
     juce::String loadTuningFile (const juce::File& file);   // .scl or .kbm; returns an error
     void clearKbm();
     void resetTuning();
-    bool hasTuning() const;
+    bool hasTuning() const;         // a tuning of its own is loaded
+    bool isTuned() const;           // playing a tuning: its own or a master's
+    bool isFollowingMts() const;    // playing an MTS-ESP master's tuning
     bool hasKbm() const;
     juce::String getTuningName() const;
     juce::String getTuningDetails() const;
     bool scaleBoxApplies() const;   // the 12-TET scales only fit a 12-key period with every key mapped
     int  octaveKeys() const;        // what the Octave knob moves by: the tuning's period in keys
     double noteHz (int note) const; // the built-in synth's pitch
-    enum class MtsState { off, master, otherMaster, notInstalled };
+    enum class MtsState { off, master, otherMaster, notInstalled, following };
     MtsState getMtsState (int& clients) const;
     void retryMtsMaster();   // registers as the master if this has a tuning and none is active
     bool mtsLibraryOutdated() const;    // the installed libMTS is older than this API
     bool canReinitializeMts() const;    // another master is registered over IPC: maybe a crashed one
     void reinitializeMts();             // resets MTS-ESP (only meant for after a crash) and registers
+    void pollMtsClient();               // message thread: follow the master's tuning while there's none of our own
 
 private:
     struct TuningPlay
@@ -965,6 +970,10 @@ private:
     Tuning tuning;                         // guarded by tuningLock
     juce::CriticalSection tuningLock;
     bool mtsMaster = false;
+    MTSClient* mtsClient = nullptr;        // registered for the processor's life (not in the tests)
+    bool following = false;                // guarded by tuningLock, like followedName
+    juce::String followedName;
+    void publishTuning (const TuningPlay& s);   // with tuningLock held
     void setTuning (const Tuning& t);      // publish it and update the MTS-ESP master
     void updateMtsMaster();
     void writeTuningTo (juce::ValueTree& state) const;
@@ -1084,6 +1093,7 @@ private:
         {
             proc.mirrorActiveSlots();
             if (++ticks % 33 == 0) proc.retryMtsMaster();   // about once a second: take over when another master closes
+            if (ticks % 10 == 0)   proc.pollMtsClient();    // a master's tuning shows up within a third of a second
         }
         int ticks = 0;
         TugMidiSeqAudioProcessor& proc;

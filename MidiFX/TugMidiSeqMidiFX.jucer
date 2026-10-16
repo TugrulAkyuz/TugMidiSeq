@@ -26,6 +26,8 @@
       <GROUP id="{5B1D2C3E-7A4F-4E21-9C11-3D5E6F7A8B9C}" name="MTS">
         <FILE id="mts001" name="libMTSMaster.cpp" compile="1" resource="0" file="../Source/MTS/libMTSMaster.cpp"/>
         <FILE id="mts002" name="libMTSMaster.h" compile="0" resource="0" file="../Source/MTS/libMTSMaster.h"/>
+        <FILE id="mts003" name="libMTSClient.cpp" compile="1" resource="0" file="../Source/MTS/libMTSClient.cpp"/>
+        <FILE id="mts004" name="libMTSClient.h" compile="0" resource="0" file="../Source/MTS/libMTSClient.h"/>
       </GROUP>
       <FILE id="ntm001" name="NoteMap.cpp" compile="1" resource="0" file="../Source/NoteMap.cpp"/>
       <FILE id="ntm002" name="NoteMap.h" compile="0" resource="0" file="../Source/NoteMap.h"/>

@@ -306,7 +306,8 @@ namespace
                 "the lanes. The built-in synth plays it, and TugMidiSeq becomes the MTS-ESP master, so every "
                 "MTS-ESP synth you send its MIDI to plays it too (MTS-ESP is free from oddsound.com). Octave moves "
                 "by the tuning's period, and a mapping that leaves keys out becomes the scale lock. The tuning is "
-                "saved with the project; MIDI files and presets stay plain notes.");
+                "saved with the project; MIDI files and presets stay plain notes. With no tuning of its own, "
+                "TugMidiSeq follows another MTS-ESP master instead.");
 
         w.heading ("Fixes since 2.6");
         w.text ("The same note coming in more than once (a mono controller copied to several lanes) fills that "

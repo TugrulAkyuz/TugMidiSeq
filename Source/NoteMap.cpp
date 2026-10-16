@@ -112,10 +112,11 @@ private:
                : state == S::otherMaster  ? (canReset ? juce::String ("Another MTS-ESP master is registered. If none is open (after a crash), Reset MTS-ESP.")
                                                       : juce::String ("Another MTS-ESP master is active, so other synths follow it; TugMidiSeq takes over when it closes. The built-in synth plays this tuning."))
                : state == S::notInstalled ? "MTS-ESP isn't installed (free from oddsound.com): only the built-in synth plays this tuning."
+               : state == S::following    ? "Following the MTS-ESP master: the built-in synth, Octave and the scale play its tuning. Load a .scl to use your own."
                                           : "Load a Scala tuning to retune the built-in synth and, as the MTS-ESP master, every MTS-ESP synth.";
         if (state == S::master && proc.mtsLibraryOutdated())
             status << " Update MTS-ESP (oddsound.com) for every feature.";
-        statusColour = state == S::master ? Theme::accentBright : Theme::textSecondary;
+        statusColour = state == S::master || state == S::following ? Theme::accentBright : Theme::textSecondary;
         mtsResetButton.setVisible (canReset);
         kbmButton.setEnabled (proc.hasTuning());
         linearButton.setEnabled (proc.hasKbm());
@@ -295,7 +296,7 @@ void NoteMap::timerCallback()
     fillButton.setToggleState (audioProcessor.isFillOn(), juce::dontSendNotification);
     slotSelector.repaint();
     // a tuning with its own period or unmapped keys replaces the 12-TET scales
-    tuningButton.setToggleState (audioProcessor.hasTuning(), juce::dontSendNotification);
+    tuningButton.setToggleState (audioProcessor.isTuned(), juce::dontSendNotification);   // its own or a master's
     tuningButton.setTooltip (audioProcessor.getTuningName());
     keyBox.setEnabled (audioProcessor.scaleBoxApplies());
     scaleBox.setEnabled (audioProcessor.scaleBoxApplies());

@@ -40,7 +40,8 @@ target_sources(EngineTest PRIVATE
     ${SRC}/SynthVoice.cpp
     ${SRC}/NoteMap.cpp
     ${SRC}/Tuning.cpp
-    ${SRC}/MTS/libMTSMaster.cpp)
+    ${SRC}/MTS/libMTSMaster.cpp
+    ${SRC}/MTS/libMTSClient.cpp)
 
 target_include_directories(EngineTest PRIVATE ${SRC})
 

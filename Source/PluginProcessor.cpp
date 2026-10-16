@@ -338,6 +338,8 @@ valueTreeState(*this, &undoManager)
     
 
     midiProcessor = std::make_unique<MidiProcessor>();
+    if (std::getenv ("TUGMIDISEQ_TEST_ROOT") == nullptr)   // the tests never touch MTS-ESP
+        mtsClient = MTS_RegisterClient();
     mirrorTimer.startTimer (30);
 
 }
@@ -348,6 +350,8 @@ TugMidiSeqAudioProcessor::~TugMidiSeqAudioProcessor()
     {
         const juce::ScopedLock sl (tuningLock);
         if (mtsMaster) MTS_DeregisterMaster();
+        if (mtsClient != nullptr) MTS_DeregisterClient (mtsClient);   // only the message thread used it
+        mtsClient = nullptr;
     }
     for (auto& m : cellMirrors)
         valueTreeState.removeParameterListener (valueTreeNames[m->velocity ? VELGRIDBUTTON : BLOCK] + juce::String (m->line) + juce::String (m->step), m.get());
@@ -1840,6 +1844,10 @@ juce::MidiMessageSequence TugMidiSeqAudioProcessor::renderPattern (int bars, con
     juce::MemoryBlock state;
     getStateInformation (state);
     copy.setStateInformation (state.getData(), (int) state.getSize());
+    {
+        const juce::ScopedLock sl (copy.tuningLock);
+        if (isFollowingMts()) copy.publishTuning (tuningPlay());   // the master's tuning, as it is now
+    }
     copy.setParamValue (valueTreeNames[INBUILTSYNTH], 0.0f);
     copy.setParamValue (valueTreeNames[LATCH], 0.0f);   // the notes below are simply held
 
@@ -2010,7 +2018,9 @@ namespace
     bool mtsAllowed() { return std::getenv ("TUGMIDISEQ_TEST_ROOT") == nullptr; }
 }
 
-bool TugMidiSeqAudioProcessor::hasTuning() const     { return tuningPlay().active; }
+bool TugMidiSeqAudioProcessor::hasTuning() const      { const juce::ScopedLock sl (tuningLock); return tuning.isLoaded(); }
+bool TugMidiSeqAudioProcessor::isTuned() const        { return tuningPlay().active; }
+bool TugMidiSeqAudioProcessor::isFollowingMts() const { const juce::ScopedLock sl (tuningLock); return following; }
 int  TugMidiSeqAudioProcessor::octaveKeys() const    { return tuningPlay().periodKeys; }
 bool TugMidiSeqAudioProcessor::scaleBoxApplies() const { return tuningPlay().scaleBox; }
 
@@ -2029,14 +2039,16 @@ bool TugMidiSeqAudioProcessor::hasKbm() const
 juce::String TugMidiSeqAudioProcessor::getTuningName() const
 {
     const juce::ScopedLock sl (tuningLock);
-    return tuning.isLoaded() ? tuning.name : juce::String ("12-TET");
+    return tuning.isLoaded() ? tuning.name : following ? followedName : juce::String ("12-TET");
 }
 
 juce::String TugMidiSeqAudioProcessor::getTuningDetails() const
 {
     const juce::ScopedLock sl (tuningLock);
     if (! tuning.isLoaded())
-        return "Standard tuning. Load a Scala .scl file to retune.";
+        return following ? "From the MTS-ESP master" + juce::String (juce::CharPointer_UTF8 (" \xc2\xb7 period "))
+                               + juce::String (tuningPlay().periodKeys) + " keys"
+                         : juce::String ("Standard tuning. Load a Scala .scl file to retune.");
     const juce::String dot (juce::CharPointer_UTF8 (" \xc2\xb7 "));
     return tuning.sclFile + dot + juce::String (tuning.notes) + " notes" + dot
          + (tuning.kbmFile.isNotEmpty() ? tuning.kbmFile : juce::String ("linear mapping"))
@@ -2076,14 +2088,20 @@ void TugMidiSeqAudioProcessor::clearKbm()
 
 void TugMidiSeqAudioProcessor::resetTuning() { setTuning ({}); }
 
+void TugMidiSeqAudioProcessor::publishTuning (const TuningPlay& s)
+{
+    tuningSlots[1 - tuningSlot.load()] = s;
+    tuningSlot.store (1 - tuningSlot.load(), std::memory_order_release);
+}
+
 void TugMidiSeqAudioProcessor::setTuning (const Tuning& t)
 {
     {
         const juce::ScopedLock sl (tuningLock);
         tuning = t;
+        following = false;   // our own (or none: the next poll may follow a master again)
 
-        auto& s = tuningSlots[1 - tuningSlot.load()];
-        s = TuningPlay();
+        TuningPlay s;
         if (t.isLoaded())
         {
             s.active     = true;
@@ -2096,11 +2114,66 @@ void TugMidiSeqAudioProcessor::setTuning (const Tuning& t)
                         s.pattern[s.patternSize++] = o;
             std::copy (std::begin (t.freq), std::end (t.freq), s.freq);
         }
-        tuningSlot.store (1 - tuningSlot.load(), std::memory_order_release);
+        publishTuning (s);
         updateMtsMaster();
     }
     if (juce::MessageManager::existsAndIsCurrentThread() && ! offlineRender)
+    {
+        pollMtsClient();
         updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
+    }
+}
+
+// Follows an MTS-ESP master while there's no tuning of our own (and we aren't
+// the master): its frequencies, its period (the map size, else 12 keys) and,
+// when it filters keys, those keys as the scale.
+void TugMidiSeqAudioProcessor::pollMtsClient()
+{
+    if (mtsClient == nullptr || offlineRender) return;
+    const juce::ScopedLock sl (tuningLock);
+    if (tuning.isLoaded()) return;
+
+    if (mtsMaster || ! MTS_HasMaster (mtsClient))
+    {
+        if (following) publishTuning (TuningPlay());   // back to 12-TET
+        following = false;
+        followedName.clear();
+        return;
+    }
+
+    TuningPlay s;
+    s.active = true;
+    bool mapped[128], anyFiltered = false;
+    for (int key = 0; key < 128; key++)
+    {
+        s.freq[key] = MTS_NoteToFrequency (mtsClient, (char) key, -1);
+        mapped[key] = ! MTS_ShouldFilterNote (mtsClient, (char) key, -1);
+        anyFiltered = anyFiltered || ! mapped[key];
+    }
+    const int mapSize = MTS_GetMapSize (mtsClient);
+    s.periodKeys = mapSize > 0 ? mapSize : 12;
+    s.scaleBox   = s.periodKeys == 12 && ! anyFiltered;
+    if (anyFiltered && mapSize > 0)
+    {
+        const int start = MTS_GetMapStartKey (mtsClient);
+        s.root = start >= 0 ? start : 60;
+        for (int o = 0; o < mapSize; o++)
+        {
+            int key = s.root + o;
+            while (key > 127) key -= mapSize;
+            if (mapped[key]) s.pattern[s.patternSize++] = o;
+        }
+    }
+    followedName = juce::String (juce::CharPointer_UTF8 (MTS_GetScaleName (mtsClient)));
+    if (followedName.isEmpty()) followedName = "MTS-ESP";
+
+    const auto& now = tuningPlay();
+    const bool changed = ! following || now.periodKeys != s.periodKeys || now.patternSize != s.patternSize
+                      || now.scaleBox != s.scaleBox || now.root != s.root
+                      || std::memcmp (now.freq, s.freq, sizeof (s.freq)) != 0
+                      || std::memcmp (now.pattern, s.pattern, sizeof (s.pattern)) != 0;
+    if (changed) publishTuning (s);
+    following = true;
 }
 
 // called with tuningLock held
@@ -2168,8 +2241,9 @@ TugMidiSeqAudioProcessor::MtsState TugMidiSeqAudioProcessor::getMtsState (int& c
 {
     clients = 0;
     const juce::ScopedLock sl (tuningLock);
-    if (! tuning.isLoaded()) return MtsState::off;
-    if (mtsMaster) { clients = MTS_GetNumClients(); return MtsState::master; }
+    if (! tuning.isLoaded()) return following ? MtsState::following : MtsState::off;
+    // (our own client is registered too: it isn't a synth listening)
+    if (mtsMaster) { clients = juce::jmax (0, MTS_GetNumClients() - (mtsClient != nullptr ? 1 : 0)); return MtsState::master; }
     return mtsInstalled() ? MtsState::otherMaster : MtsState::notInstalled;
 }
 
