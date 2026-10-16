@@ -75,11 +75,10 @@ public:
     explicit NoteMap (TugMidiSeqAudioProcessor&);
     ~NoteMap() override;
 
-    // Opens a file chooser for a .scl (or .kbm) and loads it; `done` gets the
-    // error, empty when it loaded. The chooser lives here, not in the call-out,
-    // which may close while it is open.
-    void chooseTuningFile (bool kbm, std::function<void (const juce::String&)> done);
-    std::unique_ptr<juce::Component> makeTuningPanel();   // what the Tuning button opens
+    // Opens a file chooser for a .scl (or .kbm), loads it and opens the Tuning
+    // panel again with the result. The chooser lives here: the panel is closed.
+    void chooseTuningFile (bool kbm);
+    std::unique_ptr<juce::Component> makeTuningPanel (const juce::String& loadError = {});   // what the Tuning button opens
 
     void paint (juce::Graphics&) override;
     void resized() override;

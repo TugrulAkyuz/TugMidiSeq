@@ -2141,6 +2141,29 @@ void TugMidiSeqAudioProcessor::retryMtsMaster()
         updateMtsMaster();
 }
 
+bool TugMidiSeqAudioProcessor::mtsLibraryOutdated() const
+{
+    const juce::ScopedLock sl (tuningLock);
+    return mtsMaster && MTS_Master_ShouldUpdateLibrary();
+}
+
+// ODDSound's rule: offer a reset only when another master is registered and the
+// host shares MTS-ESP over IPC, where a crashed master can stay registered.
+bool TugMidiSeqAudioProcessor::canReinitializeMts() const
+{
+    const juce::ScopedLock sl (tuningLock);
+    return tuning.isLoaded() && ! mtsMaster && ! offlineRender && mtsAllowed() && mtsInstalled()
+        && ! MTS_CanRegisterMaster() && MTS_HasIPC();
+}
+
+void TugMidiSeqAudioProcessor::reinitializeMts()
+{
+    if (! canReinitializeMts()) return;
+    const juce::ScopedLock sl (tuningLock);
+    MTS_Reinitialize();
+    updateMtsMaster();
+}
+
 TugMidiSeqAudioProcessor::MtsState TugMidiSeqAudioProcessor::getMtsState (int& clients) const
 {
     clients = 0;

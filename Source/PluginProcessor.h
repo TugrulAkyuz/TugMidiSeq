@@ -945,6 +945,9 @@ public:
     enum class MtsState { off, master, otherMaster, notInstalled };
     MtsState getMtsState (int& clients) const;
     void retryMtsMaster();   // registers as the master if this has a tuning and none is active
+    bool mtsLibraryOutdated() const;    // the installed libMTS is older than this API
+    bool canReinitializeMts() const;    // another master is registered over IPC: maybe a crashed one
+    void reinitializeMts();             // resets MTS-ESP (only meant for after a crash) and registers
 
 private:
     struct TuningPlay

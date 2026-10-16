@@ -10,31 +10,46 @@
 
 //==============================================================================
 // The Tuning call-out: load a Scala .scl and .kbm, go back to 12-TET, and see
-// whether TugMidiSeq is the MTS-ESP master.
+// whether TugMidiSeq is the MTS-ESP master. Choosing a file closes it (a native
+// file dialog over a modal call-out leaves it deaf to clicks outside) and
+// NoteMap opens it again with the result.
 class TuningPanel : public juce::Component, private juce::Timer
 {
 public:
-    TuningPanel (TugMidiSeqAudioProcessor& p, NoteMap& m) : proc (p), map (m)
+    TuningPanel (TugMidiSeqAudioProcessor& p, NoteMap& m, const juce::String& loadError)
+        : proc (p), map (m), error (loadError)
     {
-        for (auto* b : { &sclButton, &kbmButton, &linearButton, &resetButton })
+        for (auto* b : { &sclButton, &kbmButton, &linearButton, &resetButton, &mtsResetButton })
         {
             b->setColour (juce::TextButton::buttonColourId, Theme::surfaceAlt);
             b->setColour (juce::TextButton::textColourOffId, Theme::textSecondary);
             b->setColour (juce::ComboBox::outlineColourId, Theme::hairline);
             b->setMouseCursor (juce::MouseCursor::NormalCursor);
+            b->setWantsKeyboardFocus (false);   // Esc reaches the panel
             addAndMakeVisible (*b);
         }
         sclButton.setButtonText ("Load .scl" + juce::String (juce::CharPointer_UTF8 ("\xe2\x80\xa6")));
         kbmButton.setButtonText ("Load .kbm" + juce::String (juce::CharPointer_UTF8 ("\xe2\x80\xa6")));
         linearButton.setButtonText ("No .kbm");
         resetButton.setButtonText ("12-TET");
-        sclButton.onClick    = [this] { choose (false); };
-        kbmButton.onClick    = [this] { choose (true); };
-        linearButton.onClick = [this] { proc.clearKbm();       error.clear(); refresh(); };
-        resetButton.onClick  = [this] { proc.resetTuning();    error.clear(); refresh(); };
+        mtsResetButton.setButtonText ("Reset MTS-ESP");
+        sclButton.onClick      = [this] { choose (false); };
+        kbmButton.onClick      = [this] { choose (true); };
+        linearButton.onClick   = [this] { proc.clearKbm();        error.clear(); refresh(); };
+        resetButton.onClick    = [this] { proc.resetTuning();     error.clear(); refresh(); };
+        mtsResetButton.onClick = [this] { proc.reinitializeMts(); refresh(); };
+        setWantsKeyboardFocus (true);
         setSize (340, 200);
         refresh();
         startTimer (500);   // the client count changes as synths come and go
+    }
+
+    void visibilityChanged() override { if (isShowing()) grabKeyboardFocus(); }
+
+    bool keyPressed (const juce::KeyPress& k) override
+    {
+        if (k == juce::KeyPress::escapeKey) { close(); return true; }
+        return false;
     }
 
     void paint (juce::Graphics& g) override
@@ -51,6 +66,7 @@ public:
         g.drawFittedText (proc.getTuningDetails(), b.removeFromTop (16), juce::Justification::centredLeft, 1, 0.8f);
         b.removeFromTop (6);
         auto statusArea = b.removeFromTop (46);
+        if (mtsResetButton.isVisible()) statusArea.removeFromRight (112);
         g.setColour (error.isNotEmpty() ? juce::Colour (0xffe0806f) : statusColour);
         g.drawFittedText (error.isNotEmpty() ? error : status, statusArea, juce::Justification::topLeft, 3, 0.9f);
     }
@@ -58,6 +74,7 @@ public:
     void resized() override
     {
         auto b = getLocalBounds().reduced (12, 10);
+        mtsResetButton.setBounds (b.getRight() - 106, b.getY() + 60, 106, 22);   // beside the status line
         auto row2 = b.removeFromBottom (24);
         b.removeFromBottom (6);
         auto row1 = b.removeFromBottom (24);
@@ -69,13 +86,17 @@ public:
     }
 
 private:
+    void close()
+    {
+        if (auto* box = findParentComponentOfClass<juce::CallOutBox>())
+            box->dismiss();
+    }
+
     void choose (bool kbm)
     {
-        juce::Component::SafePointer<TuningPanel> safe (this);
-        map.chooseTuningFile (kbm, [safe] (const juce::String& err)
-        {
-            if (safe != nullptr) { safe->error = err; safe->refresh(); }
-        });
+        auto& m = map;
+        close();   // (dismiss is asynchronous)
+        m.chooseTuningFile (kbm);
     }
 
     void timerCallback() override { refresh(); }
@@ -85,12 +106,17 @@ private:
         int clients = 0;
         const auto state = proc.getMtsState (clients);
         using S = TugMidiSeqAudioProcessor::MtsState;
+        const bool canReset = state == S::otherMaster && proc.canReinitializeMts();
         status = state == S::master       ? "MTS-ESP master" + juce::String (juce::CharPointer_UTF8 (" \xc2\xb7 "))
                                               + juce::String (clients) + (clients == 1 ? " synth" : " synths") + " connected."
-               : state == S::otherMaster  ? "Another MTS-ESP master is active, so other synths follow it; TugMidiSeq takes over when it closes. The built-in synth plays this tuning."
+               : state == S::otherMaster  ? (canReset ? juce::String ("Another MTS-ESP master is registered. If none is open (after a crash), Reset MTS-ESP.")
+                                                      : juce::String ("Another MTS-ESP master is active, so other synths follow it; TugMidiSeq takes over when it closes. The built-in synth plays this tuning."))
                : state == S::notInstalled ? "MTS-ESP isn't installed (free from oddsound.com): only the built-in synth plays this tuning."
                                           : "Load a Scala tuning to retune the built-in synth and, as the MTS-ESP master, every MTS-ESP synth.";
+        if (state == S::master && proc.mtsLibraryOutdated())
+            status << " Update MTS-ESP (oddsound.com) for every feature.";
         statusColour = state == S::master ? Theme::accentBright : Theme::textSecondary;
+        mtsResetButton.setVisible (canReset);
         kbmButton.setEnabled (proc.hasTuning());
         linearButton.setEnabled (proc.hasKbm());
         resetButton.setEnabled (proc.hasTuning());
@@ -100,31 +126,36 @@ private:
 
     TugMidiSeqAudioProcessor& proc;
     NoteMap& map;
-    juce::TextButton sclButton, kbmButton, linearButton, resetButton;
+    juce::TextButton sclButton, kbmButton, linearButton, resetButton, mtsResetButton;
     juce::String status, error;
     juce::Colour statusColour { Theme::textSecondary };
 };
 
-std::unique_ptr<juce::Component> NoteMap::makeTuningPanel()
+std::unique_ptr<juce::Component> NoteMap::makeTuningPanel (const juce::String& loadError)
 {
-    return std::make_unique<TuningPanel> (audioProcessor, *this);
+    return std::make_unique<TuningPanel> (audioProcessor, *this, loadError);
 }
 
-void NoteMap::chooseTuningFile (bool kbm, std::function<void (const juce::String&)> done)
+void NoteMap::chooseTuningFile (bool kbm)
 {
     static juce::File lastFolder = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
     tuningChooser = std::make_unique<juce::FileChooser> (kbm ? "Load a keyboard mapping" : "Load a Scala scale",
                                                          lastFolder, kbm ? "*.kbm" : "*.scl");
     juce::Component::SafePointer<NoteMap> safe (this);
     tuningChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                                [safe, done] (const juce::FileChooser& fc)
+                                [safe] (const juce::FileChooser& fc)
     {
+        if (safe == nullptr) return;
         const auto file = fc.getResult();
-        if (safe == nullptr || file == juce::File()) return;
-        lastFolder = file.getParentDirectory();
-        const auto error = safe->audioProcessor.loadTuningFile (file);
+        juce::String error;
+        if (file != juce::File())
+        {
+            lastFolder = file.getParentDirectory();
+            error = safe->audioProcessor.loadTuningFile (file);
+        }
         safe->timerCallback();
-        if (done) done (error);
+        if (safe->tuningButton.isShowing())   // back to the panel, with the result
+            launchCallOut (safe->makeTuningPanel (error), safe->tuningButton);
     });
 }
 
