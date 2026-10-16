@@ -4,7 +4,7 @@
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
               pluginManufacturer="2Rule" pluginCharacteristicsValue="pluginIsSynth,pluginProducesMidiOut,pluginWantsMidiIn"
               pluginFormats="buildAU,buildStandalone,buildVST3" bundleIdentifier="2Rule.TugMidiSeq"
-              version="2.6.2" pluginAUMainType="'aumu'" companyName="2Rule"
+              version="2.7.0" pluginAUMainType="'aumu'" companyName="2Rule"
               companyWebsite="https://akyuz5.wixsite.com/mysite" companyEmail="tugrulvega@gmail.com">
   <MAINGROUP id="soeMpr" name="TugMidiSeq">
     <GROUP id="{8DE839C0-F477-F119-F4B1-66A417831F51}" name="PNGs"/>
@@ -19,6 +19,12 @@
       <FILE id="UIPv5n" name="MyLookanAndFeels.h" compile="0" resource="0"
             file="Source/MyLookanAndFeels.h"/>
       <FILE id="thm001" name="Theme.h" compile="0" resource="0" file="Source/Theme.h"/>
+      <FILE id="tun001" name="Tuning.cpp" compile="1" resource="0" file="Source/Tuning.cpp"/>
+      <FILE id="tun002" name="Tuning.h" compile="0" resource="0" file="Source/Tuning.h"/>
+      <GROUP id="{5B1D2C3E-7A4F-4E21-9C11-3D5E6F7A8B9C}" name="MTS">
+        <FILE id="mts001" name="libMTSMaster.cpp" compile="1" resource="0" file="Source/MTS/libMTSMaster.cpp"/>
+        <FILE id="mts002" name="libMTSMaster.h" compile="0" resource="0" file="Source/MTS/libMTSMaster.h"/>
+      </GROUP>
       <FILE id="ntm001" name="NoteMap.cpp" compile="1" resource="0" file="Source/NoteMap.cpp"/>
       <FILE id="ntm002" name="NoteMap.h" compile="0" resource="0" file="Source/NoteMap.h"/>
       <FILE id="hY8DMs" name="Grids.cpp" compile="1" resource="0" file="Source/Grids.cpp"/>

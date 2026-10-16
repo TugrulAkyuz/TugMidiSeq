@@ -107,6 +107,7 @@ class SynthVoice : public SynthesiserVoice
 public:
     
     SynthVoice(int index);
+    std::function<double (int)> noteToHz;   // the processor's tuning (12-TET when not set)
     
     ~SynthVoice();
     void prepare_to_play(double sampleRate,int samplesPerBlock);

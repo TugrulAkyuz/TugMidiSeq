@@ -7,6 +7,7 @@
  */
 
 #include "PluginProcessor.h"
+#include "MTS/libMTSMaster.h"
 #include "PluginEditor.h"
 
 ChangeBroadcaster myGridChangeListener;
@@ -315,7 +316,9 @@ valueTreeState(*this, &undoManager)
     mySynth.addSound(new SynthSound());
     for(auto i = 0; i < numOfLine; i++)
     {
-        mySynth.addVoice(new SynthVoice(i));
+        auto* voice = new SynthVoice(i);
+        voice->noteToHz = [this] (int note) { return noteHz (note); };
+        mySynth.addVoice(voice);
     }
     inMidiNoteListVector.resize(numOfLine);
     //inMidiNoteListVectorTmp.resize(numOfLine);
@@ -342,6 +345,10 @@ valueTreeState(*this, &undoManager)
 TugMidiSeqAudioProcessor::~TugMidiSeqAudioProcessor()
 {
     mirrorTimer.stopTimer();
+    {
+        const juce::ScopedLock sl (tuningLock);
+        if (mtsMaster) MTS_DeregisterMaster();
+    }
     for (auto& m : cellMirrors)
         valueTreeState.removeParameterListener (valueTreeNames[m->velocity ? VELGRIDBUTTON : BLOCK] + juce::String (m->line) + juce::String (m->step), m.get());
 }
@@ -872,6 +879,7 @@ void TugMidiSeqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     state.setProperty ("currentPreset", currentPresetKey, nullptr);   // the program number moves when files are added
     writeStepDataTo (state);
     writeSlotsTo (state);
+    writeTuningTo (state);
     std::unique_ptr<XmlElement> xml (state.createXml());
     copyXmlToBinary (*xml, destData);
    
@@ -896,6 +904,7 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
                 activeSlot[i].store (i < actives.size() ? jlimit (0, numSlots - 1, actives[i].getIntValue()) : 0);
 
             readStepDataFrom (restored);
+            readTuningFrom (restored);
             valueTreeState.replaceState (restored);
 
             // Force every parameter to reflect the restored value-tree value.
@@ -1134,7 +1143,7 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
         }
         
         
-        it.setNoteNumber (pitchedNote (it.getNoteNumber() + (int) *octave[i] * 12,
+        it.setNoteNumber (pitchedNote (it.getNoteNumber() + (int) *octave[i] * octaveKeys(),
                                        getStepPitch (i, playStep[i])));
         
         auto midiNote = [&](const RealMidiNoteList& l){ return l.sentMidi.getNoteNumber() == it.getNoteNumber() && l.lineNo == midRouteIndex; };
@@ -1230,7 +1239,7 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, int window, ju
     for (const auto& held : inMidiNoteList)
     {
         if (count == maxStrumNotes) break;
-        const int n = pitchedNote (held.getNoteNumber() + (int) *octave[line] * 12, getStepPitch (line, playStep[line]));
+        const int n = pitchedNote (held.getNoteNumber() + (int) *octave[line] * octaveKeys(), getStepPitch (line, playStep[line]));
         bool dup = false;   // the scale lock can fold two keys onto one note
         for (int k = 0; k < count; k++) dup |= notes[k] == n;
         if (dup) continue;
@@ -1937,25 +1946,21 @@ bool TugMidiSeqAudioProcessor::isInScale (int note) const
 // Scale off: note + offset semitones. Scale on: the note is snapped to the
 // nearest scale tone (ties go down), then moved by `offset` scale degrees —
 // so in C major, +2 from C is E, and an incoming F# plays as F.
-int TugMidiSeqAudioProcessor::pitchedNote (int note, int offset) const
+// Snaps `note` to the nearest of `scale` (offsets from `key` within one period
+// of `period` keys) and moves it `offset` scale degrees.
+static int snapToScale (int note, int offset, int key, int period, const int* scale, int size)
 {
-    const auto& scale = scaleIntervals[(size_t) jlimit (0, (int) scaleIntervals.size() - 1, getScaleType())];
-    if (scale.empty())
-        return jlimit (0, 127, note + offset);
-
-    const int key  = getScaleKey();
-    const int size = (int) scale.size();
-    const int rel  = note - key;                                   // relative to the key's C-octave
-    const int oct  = (rel >= 0 ? rel : rel - 11) / 12;             // floor division
-    const int pc   = rel - oct * 12;
+    const int rel  = note - key;                                   // relative to the key's period
+    const int oct  = (rel >= 0 ? rel : rel - (period - 1)) / period;   // floor division
+    const int pc   = rel - oct * period;
 
     // nearest scale degree to pc (searching down first, so ties go down)
-    int degree = 0, best = 99;
+    int degree = 0, best = 1 << 20;
     for (int d = 0; d < size; d++)
-        for (int shift : { 0, -12, 12 })                           // wrap across the octave
+        for (int shift : { 0, -period, period })                   // wrap across the period
         {
-            const int dist = std::abs (scale[(size_t) d] + shift - pc);
-            if (dist < best || (dist == best && scale[(size_t) d] + shift < pc))
+            const int dist = std::abs (scale[d] + shift - pc);
+            if (dist < best || (dist == best && scale[d] + shift < pc))
             {
                 best = dist;
                 degree = d + (shift < 0 ? -size : shift > 0 ? size : 0);
@@ -1965,7 +1970,212 @@ int TugMidiSeqAudioProcessor::pitchedNote (int note, int offset) const
     const int target    = degree + offset;
     const int targetOct = (target >= 0 ? target : target - (size - 1)) / size;
     const int targetDeg = target - targetOct * size;
-    return jlimit (0, 127, key + (oct + targetOct) * 12 + scale[(size_t) targetDeg]);
+    return jlimit (0, 127, key + (oct + targetOct) * period + scale[targetDeg]);
+}
+
+int TugMidiSeqAudioProcessor::pitchedNote (int note, int offset) const
+{
+    // A tuning that leaves keys unmapped is the scale: steps move over its mapped
+    // keys. One with every key mapped and a period other than 12 has no scale:
+    // a step is a key, which is a step of the tuning.
+    const auto& tp = tuningPlay();
+    if (tp.active && ! tp.scaleBox)
+        return tp.patternSize > 0 ? snapToScale (note, offset, tp.root, tp.periodKeys, tp.pattern, tp.patternSize)
+                                  : jlimit (0, 127, note + offset);
+
+    const auto& scale = scaleIntervals[(size_t) jlimit (0, (int) scaleIntervals.size() - 1, getScaleType())];
+    if (scale.empty())
+        return jlimit (0, 127, note + offset);
+    return snapToScale (note, offset, getScaleKey(), 12, scale.data(), (int) scale.size());
+}
+
+//==============================================================================
+// Tuning
+
+namespace
+{
+    bool mtsInstalled()
+    {
+       #if JUCE_WINDOWS
+        return juce::File::getSpecialLocation (juce::File::globalApplicationsDirectory)
+                   .getChildFile ("Common Files/MTS-ESP/LIBMTS.dll").existsAsFile();
+       #elif JUCE_MAC
+        return juce::File ("/Library/Application Support/MTS-ESP/libMTS.dylib").existsAsFile();
+       #else
+        return juce::File ("/usr/local/lib/libMTS.so").existsAsFile();
+       #endif
+    }
+
+    // the tests must never take over the machine's MTS-ESP master
+    bool mtsAllowed() { return std::getenv ("TUGMIDISEQ_TEST_ROOT") == nullptr; }
+}
+
+bool TugMidiSeqAudioProcessor::hasTuning() const     { return tuningPlay().active; }
+int  TugMidiSeqAudioProcessor::octaveKeys() const    { return tuningPlay().periodKeys; }
+bool TugMidiSeqAudioProcessor::scaleBoxApplies() const { return tuningPlay().scaleBox; }
+
+double TugMidiSeqAudioProcessor::noteHz (int note) const
+{
+    const auto& tp = tuningPlay();
+    return tp.active ? tp.freq[jlimit (0, 127, note)] : juce::MidiMessage::getMidiNoteInHertz (note);
+}
+
+bool TugMidiSeqAudioProcessor::hasKbm() const
+{
+    const juce::ScopedLock sl (tuningLock);
+    return tuning.kbm.trim().isNotEmpty();
+}
+
+juce::String TugMidiSeqAudioProcessor::getTuningName() const
+{
+    const juce::ScopedLock sl (tuningLock);
+    return tuning.isLoaded() ? tuning.name : juce::String ("12-TET");
+}
+
+juce::String TugMidiSeqAudioProcessor::getTuningDetails() const
+{
+    const juce::ScopedLock sl (tuningLock);
+    if (! tuning.isLoaded())
+        return "Standard tuning. Load a Scala .scl file to retune.";
+    const juce::String dot (juce::CharPointer_UTF8 (" \xc2\xb7 "));
+    return tuning.sclFile + dot + juce::String (tuning.notes) + " notes" + dot
+         + (tuning.kbmFile.isNotEmpty() ? tuning.kbmFile : juce::String ("linear mapping"))
+         + dot + "period " + juce::String (tuning.periodKeys()) + " keys";
+}
+
+juce::String TugMidiSeqAudioProcessor::loadTuningFile (const juce::File& file)
+{
+    if (file.getSize() > 1024 * 1024) return "That file is too big for a tuning.";
+    const auto text = file.loadFileAsString();
+    const bool isKbm = file.hasFileExtension ("kbm");
+
+    Tuning t;
+    {
+        const juce::ScopedLock sl (tuningLock);
+        if (isKbm && ! tuning.isLoaded()) return "Load a .scl scale first, then its keyboard mapping.";
+        t.sclFile = isKbm ? tuning.sclFile : file.getFileName();
+        t.kbmFile = isKbm ? file.getFileName() : tuning.kbmFile;
+        const auto error = t.load (isKbm ? tuning.scl : text, isKbm ? text : tuning.kbm);
+        if (error.isNotEmpty()) return error;
+    }
+    setTuning (t);
+    return {};
+}
+
+void TugMidiSeqAudioProcessor::clearKbm()
+{
+    Tuning t;
+    {
+        const juce::ScopedLock sl (tuningLock);
+        if (! tuning.isLoaded()) return;
+        t.sclFile = tuning.sclFile;
+        if (t.load (tuning.scl, {}).isNotEmpty()) t = {};
+    }
+    setTuning (t);
+}
+
+void TugMidiSeqAudioProcessor::resetTuning() { setTuning ({}); }
+
+void TugMidiSeqAudioProcessor::setTuning (const Tuning& t)
+{
+    {
+        const juce::ScopedLock sl (tuningLock);
+        tuning = t;
+
+        auto& s = tuningSlots[1 - tuningSlot.load()];
+        s = TuningPlay();
+        if (t.isLoaded())
+        {
+            s.active     = true;
+            s.periodKeys = t.periodKeys();
+            s.scaleBox   = s.periodKeys == 12 && ! t.hasUnmappedKeys();
+            s.root       = t.middleKey;
+            if (t.hasUnmappedKeys())
+                for (int o = 0; o < t.mapSize; o++)
+                    if (t.mapping[(size_t) o] >= 0)
+                        s.pattern[s.patternSize++] = o;
+            std::copy (std::begin (t.freq), std::end (t.freq), s.freq);
+        }
+        tuningSlot.store (1 - tuningSlot.load(), std::memory_order_release);
+        updateMtsMaster();
+    }
+    if (juce::MessageManager::existsAndIsCurrentThread() && ! offlineRender)
+        updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
+}
+
+// called with tuningLock held
+void TugMidiSeqAudioProcessor::updateMtsMaster()
+{
+    if (offlineRender || ! mtsAllowed()) return;
+
+    if (! tuning.isLoaded())
+    {
+        if (mtsMaster) MTS_DeregisterMaster();   // clients go back to 12-TET
+        mtsMaster = false;
+        return;
+    }
+    if (! mtsMaster && mtsInstalled() && MTS_CanRegisterMaster())
+    {
+        MTS_RegisterMaster();
+        mtsMaster = true;
+    }
+    if (! mtsMaster) return;
+
+    MTS_SetNoteTunings (tuning.freq);
+    MTS_SetScaleName (tuning.name.toRawUTF8());
+    MTS_SetPeriodRatio (tuning.periodRatio());
+    const int start = tuning.mapStartKey();
+    MTS_SetMapSize (tuning.periodKeys() <= 127 ? (signed char) tuning.periodKeys() : (signed char) -1);
+    MTS_SetMapStartKey (start >= 0 && start <= 127 ? (signed char) start : (signed char) -1);
+    MTS_SetRefKey ((signed char) tuning.refKey);
+    MTS_ClearNoteFilter();
+    for (int key = 0; key < 128; key++)
+        if (! tuning.mapped[key])
+            MTS_FilterNote (true, (char) key, -1);
+}
+
+void TugMidiSeqAudioProcessor::retryMtsMaster()
+{
+    const juce::ScopedLock sl (tuningLock);
+    if (tuning.isLoaded() && ! mtsMaster)
+        updateMtsMaster();
+}
+
+TugMidiSeqAudioProcessor::MtsState TugMidiSeqAudioProcessor::getMtsState (int& clients) const
+{
+    clients = 0;
+    const juce::ScopedLock sl (tuningLock);
+    if (! tuning.isLoaded()) return MtsState::off;
+    if (mtsMaster) { clients = MTS_GetNumClients(); return MtsState::master; }
+    return mtsInstalled() ? MtsState::otherMaster : MtsState::notInstalled;
+}
+
+void TugMidiSeqAudioProcessor::writeTuningTo (juce::ValueTree& state) const
+{
+    state.removeChild (state.getChildWithName ("tuning"), nullptr);
+    const juce::ScopedLock sl (tuningLock);
+    if (! tuning.isLoaded()) return;
+    juce::ValueTree node ("tuning");
+    node.setProperty ("scl", tuning.scl, nullptr);
+    node.setProperty ("kbm", tuning.kbm, nullptr);
+    node.setProperty ("sclFile", tuning.sclFile, nullptr);
+    node.setProperty ("kbmFile", tuning.kbmFile, nullptr);
+    state.appendChild (node, nullptr);
+}
+
+void TugMidiSeqAudioProcessor::readTuningFrom (const juce::ValueTree& state)
+{
+    const auto node = state.getChildWithName ("tuning");
+    Tuning t;
+    if (node.isValid())
+    {
+        t.sclFile = node.getProperty ("sclFile").toString();
+        t.kbmFile = node.getProperty ("kbmFile").toString();
+        if (t.load (node.getProperty ("scl").toString(), node.getProperty ("kbm").toString()).isNotEmpty())
+            t = {};
+    }
+    if (t.isLoaded() || hasTuning())   // a project without one goes back to 12-TET
+        setTuning (t);
 }
 
 //==============================================================================

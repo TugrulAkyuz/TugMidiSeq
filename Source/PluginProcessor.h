@@ -17,6 +17,7 @@ using namespace juce;
 extern ChangeBroadcaster updateMidiPort;;
 
 #include "SynthVoice.h"
+#include "Tuning.h"
 
 extern ChangeBroadcaster myGridChangeListener;
 
@@ -928,7 +929,43 @@ public:
     // no in-built synth
     bool offlineRender = false;
 
+    // Tuning (Scala .scl + optional .kbm). The message thread changes it; the
+    // audio thread reads a published snapshot. While one is loaded this
+    // instance is the MTS-ESP master, unless another master got there first.
+    juce::String loadTuningFile (const juce::File& file);   // .scl or .kbm; returns an error
+    void clearKbm();
+    void resetTuning();
+    bool hasTuning() const;
+    bool hasKbm() const;
+    juce::String getTuningName() const;
+    juce::String getTuningDetails() const;
+    bool scaleBoxApplies() const;   // the 12-TET scales only fit a 12-key period with every key mapped
+    int  octaveKeys() const;        // what the Octave knob moves by: the tuning's period in keys
+    double noteHz (int note) const; // the built-in synth's pitch
+    enum class MtsState { off, master, otherMaster, notInstalled };
+    MtsState getMtsState (int& clients) const;
+    void retryMtsMaster();   // registers as the master if this has a tuning and none is active
+
 private:
+    struct TuningPlay
+    {
+        bool   active = false;
+        int    periodKeys = 12;
+        bool   scaleBox = true;            // the 12-TET scales apply
+        int    root = 60, patternSize = 0;
+        int    pattern[128] {};            // mapped keys of one period, as offsets from root
+        double freq[128] {};
+    };
+    TuningPlay tuningSlots[2];
+    std::atomic<int> tuningSlot { 0 };
+    const TuningPlay& tuningPlay() const { return tuningSlots[tuningSlot.load (std::memory_order_acquire)]; }
+    Tuning tuning;                         // guarded by tuningLock
+    juce::CriticalSection tuningLock;
+    bool mtsMaster = false;
+    void setTuning (const Tuning& t);      // publish it and update the MTS-ESP master
+    void updateMtsMaster();
+    void writeTuningTo (juce::ValueTree& state) const;
+    void readTuningFrom (const juce::ValueTree& state);
     int soloLane = -1;
     
     String midiPortName = "Press To Select Midi Port";
@@ -1040,7 +1077,12 @@ private:
     struct MirrorTimer : juce::Timer
     {
         explicit MirrorTimer (TugMidiSeqAudioProcessor& p) : proc (p) {}
-        void timerCallback() override { proc.mirrorActiveSlots(); }
+        void timerCallback() override
+        {
+            proc.mirrorActiveSlots();
+            if (++ticks % 33 == 0) proc.retryMtsMaster();   // about once a second: take over when another master closes
+        }
+        int ticks = 0;
         TugMidiSeqAudioProcessor& proc;
     };
     MirrorTimer mirrorTimer { *this };

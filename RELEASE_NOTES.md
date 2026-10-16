@@ -1,3 +1,8 @@
+# TugMidiSeq 2.7 — Tunings and MTS-ESP
+
+- **Scala tunings.** Load a .scl scale, and a .kbm keyboard mapping if you like, from the new **Tuning** button under the lanes. The built-in synth plays it, the Octave knob moves by the tuning's period (19 keys in 19-EDO), and a mapping that leaves keys out becomes the scale lock, so steps only land on mapped keys. The tuning is saved with the project.
+- **MTS-ESP master.** With a tuning loaded, TugMidiSeq becomes the MTS-ESP master: every MTS-ESP synth you send its MIDI to plays in the same tuning. MTS-ESP is free from oddsound.com; if another master is already running, TugMidiSeq waits and takes over when it closes.
+
 # TugMidiSeq 2.6.2
 
 - **Duplicate input notes are back.** The same note sent several times (for example a monophonic wind controller copied to every lane) again fills that many lanes, as it did before 2.6, and releasing one copy frees one lane. 2.6 had started merging repeated notes into one. Latch still holds a latched note only once when you press it again.

@@ -142,7 +142,7 @@ void SynthVoice::startNote (int midiNoteNumber,
     
     myMidiNoteNumber = midiNoteNumber;
     level = velocity/5;
-    frequency = MidiMessage::getMidiNoteInHertz(midiNoteNumber);
+    frequency = noteToHz ? noteToHz (midiNoteNumber) : MidiMessage::getMidiNoteInHertz(midiNoteNumber);
     
     smoothLevel.setTargetValue(level);
     

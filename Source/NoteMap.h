@@ -75,6 +75,12 @@ public:
     explicit NoteMap (TugMidiSeqAudioProcessor&);
     ~NoteMap() override;
 
+    // Opens a file chooser for a .scl (or .kbm) and loads it; `done` gets the
+    // error, empty when it loaded. The chooser lives here, not in the call-out,
+    // which may close while it is open.
+    void chooseTuningFile (bool kbm, std::function<void (const juce::String&)> done);
+    std::unique_ptr<juce::Component> makeTuningPanel();   // what the Tuning button opens
+
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
@@ -113,6 +119,10 @@ private:
     juce::TextButton undoButton, redoButton;   // right end of the strip
     MidiExportButton midiExport { audioProcessor };
     SlotSelector slotSelector { audioProcessor };
+
+    // tuning: opens the TuningPanel; lit while a tuning is loaded
+    juce::TextButton tuningButton;
+    std::unique_ptr<juce::FileChooser> tuningChooser;
 
     // scale lock
     MyLookAndFeel comboLookAndFeel;

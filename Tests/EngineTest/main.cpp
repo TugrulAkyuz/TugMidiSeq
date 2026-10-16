@@ -386,6 +386,89 @@ static void testStepTools()
 }
 
 //==============================================================================
+static String edoScl (int n)
+{
+    String s ("! test\n" + String (n) + "-EDO\n " + String (n) + "\n!\n");
+    for (int i = 1; i <= n; i++) s << " " << String (1200.0 * i / n, 3) << "\n";
+    return s;
+}
+
+static File writeTemp (const String& name, const String& text)
+{
+    auto f = File::getSpecialLocation (File::tempDirectory).getChildFile ("TugMidiSeqTuning-" + String (getpid())).getChildFile (name);
+    f.getParentDirectory().createDirectory();
+    f.replaceWithText (text);
+    return f;
+}
+
+static void testTuning()
+{
+    std::cout << "Tuning (.scl / .kbm)\n";
+    const String just ("! just.scl\nJust major\n 7\n 9/8\n 5/4\n 4/3\n 3/2\n 5/3\n 15/8\n 2/1\n");
+    // a 12-key map of the 7-note scale: the white keys, A4 = 440
+    const String whiteKeys ("! white.kbm\n12\n0\n127\n60\n69\n440.0\n7\n0\nx\n1\nx\n2\n3\nx\n4\nx\n5\nx\n6\n");
+    {
+        Tuning t;
+        CHECK (t.load (edoScl (12), {}).isEmpty() && t.notes == 12 && std::abs (t.freq[69] - 440.0) < 1e-6
+                 && std::abs (t.freq[60] - 261.6255653) < 1e-6 && t.periodKeys() == 12,
+               "12-EDO from cents: A4 = 440, middle C = 261.63 (no .kbm)");
+        CHECK (t.load (just, {}).isEmpty() && t.periodKeys() == 7 && std::abs (t.freq[61] / t.freq[60] - 9.0 / 8) < 1e-9
+                 && std::abs (t.freq[67] / t.freq[60] - 2.0) < 1e-9 && t.name == "Just major",
+               "ratios, linear mapping: a key per degree, the period 7 keys up");
+        CHECK (t.load (just, whiteKeys).isEmpty() && t.hasUnmappedKeys() && ! t.mapped[61] && t.mapped[62]
+                 && std::abs (t.freq[69] - 440.0) < 1e-9 && t.freq[61] == t.freq[60]
+                 && std::abs (t.freq[64] / t.freq[60] - 5.0 / 4) < 1e-9 && std::abs (t.freq[72] / t.freq[60] - 2.0) < 1e-9,
+               ".kbm: white keys mapped, A4 = 440, an unmapped key sounds like the one below");
+        CHECK (t.load ("! x\nBroken\n 3\n 100.0\n 200.0\n", {}).isNotEmpty()
+                 && t.load ("! x\nBroken\n 2\n 100.0\n two\n", {}).isNotEmpty()
+                 && t.load (just, "12\n0\n127\n60\n61\n440\n7\n0\nx\n1\n").isNotEmpty(),
+               "missing notes, a bad pitch and an unmapped reference key are errors: \"" + t.load (just, "12\n0\n127\n60\n61\n440\n7\n0\nx\n1\n") + "\"");
+    }
+    {
+        Rig r;
+        r.step (0, 0);
+        r.param ("Octave0", 1);
+        CHECK (r.p->loadTuningFile (writeTemp ("19.scl", edoScl (19))).isEmpty() && r.p->hasTuning()
+                 && r.p->octaveKeys() == 19 && ! r.p->scaleBoxApplies(), "19-EDO loads; a period is 19 keys");
+        r.hold ({ 60 });
+        r.stop(); r.play (Rig::bar / 4);
+        CHECK (r.notes (0) == std::vector<int> ({ 79 }), "Octave +1 moves 19 keys " + str (r.notes (0)));
+        CHECK (std::abs (r.p->noteHz (79) / r.p->noteHz (60) - 2.0) < 1e-9, "the built-in synth plays the tuning");
+    }
+    {
+        Rig r;
+        r.step (0, 0); r.step (0, 1);
+        r.p->setStepPitch (0, 1, 1);
+        r.p->loadTuningFile (writeTemp ("just.scl", just));
+        CHECK (r.p->loadTuningFile (writeTemp ("white.kbm", whiteKeys)).isEmpty() && r.p->hasKbm()
+                 && r.p->octaveKeys() == 12 && ! r.p->scaleBoxApplies(), "with the .kbm the period is 12 keys and it is the scale");
+        r.hold ({ 61 });
+        r.stop(); r.play (Rig::bar / 4);
+        CHECK (r.notes (0) == std::vector<int> ({ 60, 62 }), "an unmapped key snaps to a mapped one, step pitch moves over mapped keys " + str (r.notes (0)));
+
+        MemoryBlock state;
+        r.p->getStateInformation (state);
+        TugMidiSeqAudioProcessor restored;
+        restored.setStateInformation (state.getData(), (int) state.getSize());
+        CHECK (restored.hasTuning() && restored.getTuningName() == "Just major" && restored.hasKbm()
+                 && restored.noteHz (69) == r.p->noteHz (69), "the project keeps the tuning");
+
+        TugMidiSeqAudioProcessor plain;
+        MemoryBlock plainState;
+        plain.getStateInformation (plainState);
+        restored.setStateInformation (plainState.getData(), (int) plainState.getSize());
+        CHECK (! restored.hasTuning() && restored.octaveKeys() == 12, "a project without one goes back to 12-TET");
+
+        r.p->clearKbm();
+        CHECK (r.p->hasTuning() && ! r.p->hasKbm() && r.p->octaveKeys() == 7, "dropping the .kbm keeps the scale, linear");
+        r.p->resetTuning();
+        CHECK (! r.p->hasTuning() && r.p->scaleBoxApplies() && std::abs (r.p->noteHz (69) - 440.0) < 1e-9, "Reset: 12-TET");
+        CHECK (r.p->loadTuningFile (writeTemp ("white2.kbm", whiteKeys)).isNotEmpty(), "a .kbm alone is refused");
+    }
+    writeTemp ("x", "").getParentDirectory().deleteRecursively();
+}
+
+//==============================================================================
 static void testScales()
 {
     std::cout << "Scales\n";
@@ -1174,6 +1257,7 @@ int main (int argc, char** argv)
     testConditions();
     testStepTools();
     testScales();
+    testTuning();
     testLanes();
     testStrum();
     testStrumTiming();

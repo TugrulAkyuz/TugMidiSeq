@@ -38,7 +38,9 @@ target_sources(EngineTest PRIVATE
     ${SRC}/GlobalPanel.cpp
     ${SRC}/Satellite.cpp
     ${SRC}/SynthVoice.cpp
-    ${SRC}/NoteMap.cpp)
+    ${SRC}/NoteMap.cpp
+    ${SRC}/Tuning.cpp
+    ${SRC}/MTS/libMTSMaster.cpp)
 
 target_include_directories(EngineTest PRIVATE ${SRC})
 

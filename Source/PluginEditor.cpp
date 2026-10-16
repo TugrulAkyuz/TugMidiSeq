@@ -301,13 +301,16 @@ namespace
         w.put ("TugMidiSeq " + juce::String (ProjectInfo::versionString) + "\n", w.title.withHeight (18.0f), Theme::textPrimary);
         w.text ("Projects and presets from earlier versions open as before.");
 
-        w.heading ("Fixed in 2.6.2");
-        w.text ("The same note coming in more than once (a mono controller copied to several lanes) fills that "
-                "many lanes again, as before 2.6.");
+        w.heading ("Tunings and MTS-ESP");
+        w.text ("Load a Scala .scl scale (and a .kbm keyboard mapping if you like) from the Tuning button under "
+                "the lanes. The built-in synth plays it, and TugMidiSeq becomes the MTS-ESP master, so every "
+                "MTS-ESP synth you send its MIDI to plays it too (MTS-ESP is free from oddsound.com). Octave moves "
+                "by the tuning's period, and a mapping that leaves keys out becomes the scale lock. The tuning is "
+                "saved with the project; MIDI files and presets stay plain notes.");
 
-        w.heading ("Fixed in 2.6.1");
-        w.text ("Steady playback in Logic: when a project had just been opened, the lanes restarted every few "
-                "milliseconds (the playhead shook at the start) until the tempo was changed.");
+        w.heading ("Fixes since 2.6");
+        w.text ("The same note coming in more than once (a mono controller copied to several lanes) fills that "
+                "many lanes again. Steady playback in Logic right after a project opens.");
 
         w.put ("\nNew in 2.6\n", w.title.withHeight (16.0f), Theme::textPrimary);
 
@@ -399,7 +402,8 @@ namespace
         w.item ("Latch", "Keeps the chord after you let go; the next key replaces it.");
         w.item ("Fill", "While held, FILL steps play and !FILL steps rest.");
         w.item ("A B C D", "Pattern slots. Blinks until every lane has switched.");
-        w.item ("Key / Scale", "Scale lock for every lane.");
+        w.item ("Key / Scale", "Scale lock for every lane (greyed while a tuning brings its own).");
+        w.item ("Tuning", "Load a Scala .scl / .kbm; the built-in synth and MTS-ESP synths play it. Lit while one is loaded.");
         w.item ("Keyboard", "Held notes in their lane's colour, dots for the notes sounding.");
         w.item ("MIDI", "Drag out the pattern; click for length (1 " + kDash + " 16 bars) and Save as.");
         w.item ("Undo / Redo", "Every edit.");

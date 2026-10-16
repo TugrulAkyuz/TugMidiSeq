@@ -8,6 +8,126 @@
 
 #include "NoteMap.h"
 
+//==============================================================================
+// The Tuning call-out: load a Scala .scl and .kbm, go back to 12-TET, and see
+// whether TugMidiSeq is the MTS-ESP master.
+class TuningPanel : public juce::Component, private juce::Timer
+{
+public:
+    TuningPanel (TugMidiSeqAudioProcessor& p, NoteMap& m) : proc (p), map (m)
+    {
+        for (auto* b : { &sclButton, &kbmButton, &linearButton, &resetButton })
+        {
+            b->setColour (juce::TextButton::buttonColourId, Theme::surfaceAlt);
+            b->setColour (juce::TextButton::textColourOffId, Theme::textSecondary);
+            b->setColour (juce::ComboBox::outlineColourId, Theme::hairline);
+            b->setMouseCursor (juce::MouseCursor::NormalCursor);
+            addAndMakeVisible (*b);
+        }
+        sclButton.setButtonText ("Load .scl" + juce::String (juce::CharPointer_UTF8 ("\xe2\x80\xa6")));
+        kbmButton.setButtonText ("Load .kbm" + juce::String (juce::CharPointer_UTF8 ("\xe2\x80\xa6")));
+        linearButton.setButtonText ("No .kbm");
+        resetButton.setButtonText ("12-TET");
+        sclButton.onClick    = [this] { choose (false); };
+        kbmButton.onClick    = [this] { choose (true); };
+        linearButton.onClick = [this] { proc.clearKbm();       error.clear(); refresh(); };
+        resetButton.onClick  = [this] { proc.resetTuning();    error.clear(); refresh(); };
+        setSize (340, 200);
+        refresh();
+        startTimer (500);   // the client count changes as synths come and go
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.fillAll (Theme::section);
+        auto b = getLocalBounds().reduced (12, 10);
+        Theme::drawCaption (g, "TUNING", b.removeFromTop (14), juce::Justification::centredLeft, Theme::accentBright, 10.5f);
+        b.removeFromTop (6);
+        g.setColour (Theme::textPrimary);
+        g.setFont (Theme::labelFont (14.0f));
+        g.drawFittedText (proc.getTuningName(), b.removeFromTop (18), juce::Justification::centredLeft, 1, 0.8f);
+        g.setColour (Theme::textDim);
+        g.setFont (Theme::labelFont (11.0f));
+        g.drawFittedText (proc.getTuningDetails(), b.removeFromTop (16), juce::Justification::centredLeft, 1, 0.8f);
+        b.removeFromTop (6);
+        auto statusArea = b.removeFromTop (46);
+        g.setColour (error.isNotEmpty() ? juce::Colour (0xffe0806f) : statusColour);
+        g.drawFittedText (error.isNotEmpty() ? error : status, statusArea, juce::Justification::topLeft, 3, 0.9f);
+    }
+
+    void resized() override
+    {
+        auto b = getLocalBounds().reduced (12, 10);
+        auto row2 = b.removeFromBottom (24);
+        b.removeFromBottom (6);
+        auto row1 = b.removeFromBottom (24);
+        const int w = (row1.getWidth() - 8) / 2;
+        sclButton.setBounds (row1.removeFromLeft (w));
+        kbmButton.setBounds (row1.removeFromRight (w));
+        resetButton.setBounds (row2.removeFromLeft (w));
+        linearButton.setBounds (row2.removeFromRight (w));
+    }
+
+private:
+    void choose (bool kbm)
+    {
+        juce::Component::SafePointer<TuningPanel> safe (this);
+        map.chooseTuningFile (kbm, [safe] (const juce::String& err)
+        {
+            if (safe != nullptr) { safe->error = err; safe->refresh(); }
+        });
+    }
+
+    void timerCallback() override { refresh(); }
+
+    void refresh()
+    {
+        int clients = 0;
+        const auto state = proc.getMtsState (clients);
+        using S = TugMidiSeqAudioProcessor::MtsState;
+        status = state == S::master       ? "MTS-ESP master" + juce::String (juce::CharPointer_UTF8 (" \xc2\xb7 "))
+                                              + juce::String (clients) + (clients == 1 ? " synth" : " synths") + " connected."
+               : state == S::otherMaster  ? "Another MTS-ESP master is active, so other synths follow it; TugMidiSeq takes over when it closes. The built-in synth plays this tuning."
+               : state == S::notInstalled ? "MTS-ESP isn't installed (free from oddsound.com): only the built-in synth plays this tuning."
+                                          : "Load a Scala tuning to retune the built-in synth and, as the MTS-ESP master, every MTS-ESP synth.";
+        statusColour = state == S::master ? Theme::accentBright : Theme::textSecondary;
+        kbmButton.setEnabled (proc.hasTuning());
+        linearButton.setEnabled (proc.hasKbm());
+        resetButton.setEnabled (proc.hasTuning());
+        resized();
+        repaint();
+    }
+
+    TugMidiSeqAudioProcessor& proc;
+    NoteMap& map;
+    juce::TextButton sclButton, kbmButton, linearButton, resetButton;
+    juce::String status, error;
+    juce::Colour statusColour { Theme::textSecondary };
+};
+
+std::unique_ptr<juce::Component> NoteMap::makeTuningPanel()
+{
+    return std::make_unique<TuningPanel> (audioProcessor, *this);
+}
+
+void NoteMap::chooseTuningFile (bool kbm, std::function<void (const juce::String&)> done)
+{
+    static juce::File lastFolder = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
+    tuningChooser = std::make_unique<juce::FileChooser> (kbm ? "Load a keyboard mapping" : "Load a Scala scale",
+                                                         lastFolder, kbm ? "*.kbm" : "*.scl");
+    juce::Component::SafePointer<NoteMap> safe (this);
+    tuningChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                [safe, done] (const juce::FileChooser& fc)
+    {
+        const auto file = fc.getResult();
+        if (safe == nullptr || file == juce::File()) return;
+        lastFolder = file.getParentDirectory();
+        const auto error = safe->audioProcessor.loadTuningFile (file);
+        safe->timerCallback();
+        if (done) done (error);
+    });
+}
+
 NoteMap::NoteMap (TugMidiSeqAudioProcessor& p) : audioProcessor (p)
 {
     latchButton.setButtonText ("Latch");
@@ -58,6 +178,16 @@ NoteMap::NoteMap (TugMidiSeqAudioProcessor& p) : audioProcessor (p)
     }
     keyAttachment   = std::make_unique<AudioProcessorValueTreeState::ComboBoxAttachment> (audioProcessor.valueTreeState, valueTreeNames[SCALEKEY], keyBox);
     scaleAttachment = std::make_unique<AudioProcessorValueTreeState::ComboBoxAttachment> (audioProcessor.valueTreeState, valueTreeNames[SCALETYPE], scaleBox);
+
+    tuningButton.setButtonText ("Tuning");
+    tuningButton.setColour (TextButton::textColourOffId, Theme::textSecondary);
+    tuningButton.setColour (TextButton::textColourOnId, Theme::screen);
+    tuningButton.setColour (TextButton::buttonColourId, Theme::surfaceAlt);
+    tuningButton.setColour (TextButton::buttonOnColourId, Theme::accent);
+    tuningButton.setColour (ComboBox::outlineColourId, Theme::hairline);
+    tuningButton.setMouseCursor (juce::MouseCursor::NormalCursor);
+    tuningButton.onClick = [this] { launchCallOut (makeTuningPanel(), tuningButton); };
+    addAndMakeVisible (tuningButton);
 
     midiExport.menuLookAndFeel = &comboLookAndFeel;
     addAndMakeVisible (midiExport);
@@ -133,6 +263,11 @@ void NoteMap::timerCallback()
     // lit while held here or while the host automates the parameter
     fillButton.setToggleState (audioProcessor.isFillOn(), juce::dontSendNotification);
     slotSelector.repaint();
+    // a tuning with its own period or unmapped keys replaces the 12-TET scales
+    tuningButton.setToggleState (audioProcessor.hasTuning(), juce::dontSendNotification);
+    tuningButton.setTooltip (audioProcessor.getTuningName());
+    keyBox.setEnabled (audioProcessor.scaleBoxApplies());
+    scaleBox.setEnabled (audioProcessor.scaleBoxApplies());
 
     auto now = takeSnapshot();
     if (now != shown)
@@ -154,6 +289,7 @@ void NoteMap::resized()
     area.removeFromLeft (4);
     keyBox.setBounds (area.removeFromLeft (46).reduced (2, 4));
     scaleBox.setBounds (area.removeFromLeft (122).reduced (2, 4));   // room for "Hungarian Min."
+    tuningButton.setBounds (area.removeFromLeft (60).reduced (2, 4));
     area.removeFromLeft (8);
 
     area.removeFromRight (6);
