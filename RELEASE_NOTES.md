@@ -1,3 +1,7 @@
+# TugMidiSeq 2.7.1
+
+- **Clean on Linux virus scanners.** The Linux build carried a small helper program that JUCE embeds for its web browser component — something TugMidiSeq never uses. Some scanners read an executable tucked inside a plugin as a trojan, and a few flagged 2.7.0 because of it. The component is switched off now: the helper is gone, the plugin is 1.5 MB smaller, and scanners come back clean. Nothing about how the plugin works has changed.
+
 # TugMidiSeq 2.7 — Tunings and MTS-ESP
 
 - **Scala tunings.** Load a .scl scale, and a .kbm keyboard mapping if you like, from the new **Tuning** button under the lanes. The built-in synth plays it, the Octave knob moves by the tuning's period (19 keys in 19-EDO), and a mapping that leaves keys out becomes the scale lock, so steps only land on mapped keys. The tuning is saved with the project.

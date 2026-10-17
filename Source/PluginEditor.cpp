@@ -309,6 +309,11 @@ namespace
                 "saved with the project; MIDI files and presets stay plain notes. With no tuning of its own, "
                 "TugMidiSeq follows another MTS-ESP master instead.");
 
+        w.heading ("Fixes in 2.7.1");
+        w.text ("The Linux build no longer carries the helper program JUCE embeds for its web browser component, "
+                "which TugMidiSeq never used. Some virus scanners read that embedded executable as a trojan and "
+                "flagged 2.7.0. The plugin plays exactly as before, and is smaller.");
+
         w.heading ("Fixes since 2.6");
         w.text ("The same note coming in more than once (a mono controller copied to several lanes) fills that "
                 "many lanes again. Steady playback in Logic right after a project opens.");
