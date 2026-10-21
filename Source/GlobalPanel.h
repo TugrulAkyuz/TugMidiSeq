@@ -270,6 +270,8 @@ class GlobalPanel   : public juce::Component , juce::Timer  , ChangeListener
     {
        updateMidiPort.removeChangeListener(this);
        setLookAndFeel (nullptr);
+       if (saveDialog != nullptr)   // lives inside the editor: it closes with it
+           delete saveDialog.getComponent();
     }
     
     void timerCallback() override
@@ -306,6 +308,7 @@ class GlobalPanel   : public juce::Component , juce::Timer  , ChangeListener
     void stepPreset(int delta);
     void refreshPresetList();
     void showSaveDialog();
+    juce::Component::SafePointer<juce::AlertWindow> saveDialog;
     void showFolderMenu();
 private:
     int myMeasure;

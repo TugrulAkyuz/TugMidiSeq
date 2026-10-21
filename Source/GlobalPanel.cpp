@@ -559,6 +559,21 @@ void GlobalPanel::showSaveDialog()
     aw->addTextEditor ("folder", audioProcessor.presetCategory (curr), "Folder");
     aw->addButton ("Save", 1, KeyPress (KeyPress::returnKey));
     aw->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
+
+    // Inside the plugin's window, not a window of its own: hosts like Ableton
+    // only hand the plugin's own window the typing, so in a separate one the
+    // letters went to the host and only a few keys (Delete) reached the name.
+    // The content below the editor is the scaled one, so the dialog scales too.
+    juce::Component* content = this;
+    while (content->getParentComponent() != nullptr && content->getParentComponent()->getParentComponent() != nullptr)
+        content = content->getParentComponent();
+    saveDialog = aw;
+    if (content != this)
+    {
+        content->addAndMakeVisible (aw);
+        aw->setCentrePosition (content->getLocalBounds().getCentre());
+    }
+
     aw->enterModalState (true, ModalCallbackFunction::create ([this, aw] (int r)
     {
         if (r != 1) return;
@@ -578,6 +593,12 @@ void GlobalPanel::showSaveDialog()
         else
             save();
     }), true);
+
+    if (auto* nameBox = aw->getTextEditor ("name"))
+    {
+        nameBox->grabKeyboardFocus();
+        nameBox->selectAll();
+    }
 }
 
 void GlobalPanel::showFolderMenu()
