@@ -301,6 +301,24 @@ namespace
         w.put ("TugMidiSeq " + juce::String (ProjectInfo::versionString) + "\n", w.title.withHeight (18.0f), Theme::textPrimary);
         w.text ("Projects and presets from earlier versions open as before.");
 
+        w.heading ("Arp lanes");
+        w.text ("A new play mode in the lane menu: the lane plays the held notes one per step, Up, Down, "
+                "Up/Down, Random or As Played. Five lanes, five arps, each with its own speed and length.");
+
+        w.heading ("Slide and Accent");
+        w.text ("Right-click a pad. Accent plays the step louder. Slide runs its note into the next hit for "
+                "legato and glide on mono synths, and into the same note it ties, 303 style.");
+
+        w.heading ("Pattern chain");
+        w.text ("Right-click a slot, Chain...: up to 16 slots played in turn, one, two, four or eight bars "
+                "each, round and round. Song mode for the four patterns.");
+
+        w.heading ("Also");
+        w.text ("Save preset opens inside the plugin window, so typing a name works in Ableton. Presets renamed "
+                "or added in the Finder or Explorer appear when the preset menu opens.");
+
+        w.put ("\nNew in 2.7\n", w.title.withHeight (16.0f), Theme::textPrimary);
+
         w.heading ("Tunings and MTS-ESP");
         w.text ("Load a Scala .scl scale (and a .kbm keyboard mapping if you like) from the Tuning button under "
                 "the lanes. The built-in synth plays it, and TugMidiSeq becomes the MTS-ESP master, so every "
@@ -379,22 +397,22 @@ namespace
                                        "Event step: plays by the EVENT chance");
         w.key (plus (kShift, "drag pad"), "Step velocity");
         w.key (plus (kAlt, "drag pad"),   "Step pitch");
-        w.key ("right-click pad",      "Condition, ratchet, reset pitch");
+        w.key ("right-click pad",      "Condition, ratchet, accent, slide, reset pitch");
         w.key ("click lane number",    "Lane menu (also the arrow under it)");
         w.key ("click note box",       "Solo the lane");
         w.key (plus (kShift, "click note box"), "Mute the lane");
         w.key ("right-click STRM",     "Strum Shape");
-        w.key ("right-click A B C D",  "Copy / clear a pattern slot");
+        w.key ("right-click A B C D",  "Copy / clear a pattern slot, the pattern chain");
         w.key ("click a key",          "Hold / release that note");
         w.key ("right-click keyboard", "Release every clicked note");
         w.key ("drag MIDI",            "The pattern as a MIDI clip");
         w.key ("wheel on a menu",      "Step through its values");
 
         w.heading ("Lane");
-        w.item ("MIDI", "The note the lane plays, ALL for a chord / strum lane. Filled: from MIDI, hollow: latched, ringed number: clicked on the keyboard.");
+        w.item ("MIDI", "The note the lane plays, ALL for a chord / strum lane, ARP and its order for an arp. Filled: from MIDI, hollow: latched, ringed number: clicked on the keyboard.");
         w.item ("STRM", "Strum width and direction for chord lanes (right-click: Strum Shape).");
         w.item ("OCT", "Octave, " + kDash + "2 to +2.");
-        w.item ("GRIDS", "The steps. Bar above a pad: note length (split for ratchets). Line under: the playhead.");
+        w.item ("GRIDS", "The steps. Bar above a pad: note length (split for ratchets). Bar on a pad's left: accent; chevron on its right: slide. Line under: the playhead.");
         w.item ("#GRID", "Number of steps, 2 to 32.");
         w.item ("SPEED", "Length of a step, as a note value.");
         w.item ("DURATION", "Length of each note.");
@@ -407,7 +425,7 @@ namespace
         w.heading ("Under the lanes");
         w.item ("Latch", "Keeps the chord after you let go; the next key replaces it.");
         w.item ("Fill", "While held, FILL steps play and !FILL steps rest.");
-        w.item ("A B C D", "Pattern slots. Blinks until every lane has switched.");
+        w.item ("A B C D", "Pattern slots. Blinks until every lane has switched. A line under them: a chain is playing.");
         w.item ("Key / Scale", "Scale lock for every lane (greyed while a tuning brings its own).");
         w.item ("Tuning", "Load a Scala .scl / .kbm; the built-in synth and MTS-ESP synths play it. Lit while one is loaded.");
         w.item ("Keyboard", "Held notes in their lane's colour, dots for the notes sounding.");

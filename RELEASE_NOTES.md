@@ -1,3 +1,11 @@
+# TugMidiSeq 2.8 — Arp lanes, Slide & Accent, Pattern chains
+
+- **Arp lanes.** A new play mode: the lane plays the held notes one per step, Up, Down, Up/Down, Random or As Played. Five lanes can run five different arps, each with its own speed, length and direction.
+- **Slide and Accent.** Right-click a pad. Accent plays the step louder; Slide runs its note into the next hit for legato and glide on mono synths, and ties when the next note is the same, 303 style.
+- **Pattern chain.** Right-click a slot button, Chain...: play up to 16 slots in turn, 1, 2, 4 or 8 bars each. Picking a slot by hand turns the chain off.
+- **Typing preset names in Ableton.** The Save dialog now opens inside the plugin window; in Live the letters used to go to Live instead.
+- **Presets renamed or added outside the plugin** show up when the preset menu opens.
+
 # TugMidiSeq 2.7.1
 
 - **Clean on Linux virus scanners.** The Linux build carried a small helper program that JUCE embeds for its web browser component — something TugMidiSeq never uses. Some scanners read an executable tucked inside a plugin as a trojan, and a few flagged 2.7.0 because of it. The component is switched off now: the helper is gone, the plugin is 1.5 MB smaller, and scanners come back clean. Nothing about how the plugin works has changed.
