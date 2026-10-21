@@ -66,7 +66,7 @@ void TugMidiSeqAudioProcessor::resetAllParam()
         tmp_s << valueTreeNames[MUTATE] << j;
         valueTreeState.getParameter(tmp_s)->setValueNotifyingHost(valueTreeState.getParameter(tmp_s)->getDefaultValue());
 
-        for (int id : { PLAYMODE, SPREAD, STRUMSHAPE, STRUMTENSION, STRUMVEL, STRUMHUMAN, STRUMSYNC, STRUMDIV })
+        for (int id : { PLAYMODE, SPREAD, STRUMSHAPE, STRUMTENSION, STRUMVEL, STRUMHUMAN, STRUMSYNC, STRUMDIV, ARPORDER })
         {
             auto* prm = valueTreeState.getParameter (valueTreeNames[id] + juce::String (j));
             prm->setValueNotifyingHost (prm->getDefaultValue());
@@ -79,6 +79,7 @@ void TugMidiSeqAudioProcessor::resetAllParam()
             setStepCondUndoable (j, i, CondNone);
             setStepRatchetUndoable (j, i, 1);
             setStepPitchUndoable (j, i, 0);
+            setStepFlagsUndoable (j, i, 0);
         }
     notifyStateChanged();
     tmp_s.clear();
@@ -140,6 +141,12 @@ var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
                 tmp_s << stepCondKey << i << j;
                 newObj.getDynamicObject()->setProperty(tmp_s, prg.stepCond[i][j]);
             }
+            if (prg.stepFlags[i][j] != 0)
+            {
+                tmp_s.clear();
+                tmp_s << stepFlagsKey << i << j;
+                newObj.getDynamicObject()->setProperty(tmp_s, prg.stepFlags[i][j]);
+            }
             if (prg.stepRatchet[i][j] > 1)
             {
                 tmp_s.clear();
@@ -199,6 +206,7 @@ var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
         newObj.getDynamicObject()->setProperty(tmp_s, prg.mutate[i]);
 
         newObj.getDynamicObject()->setProperty(valueTreeNames[PLAYMODE] + juce::String (i), prg.playMode[i]);
+        newObj.getDynamicObject()->setProperty(valueTreeNames[ARPORDER] + juce::String (i), prg.arpOrder[i]);
         newObj.getDynamicObject()->setProperty(valueTreeNames[SPREAD] + juce::String (i), prg.spread[i]);
         newObj.getDynamicObject()->setProperty(valueTreeNames[STRUMSHAPE] + juce::String (i), prg.strumShape[i]);
         newObj.getDynamicObject()->setProperty(valueTreeNames[STRUMTENSION] + juce::String (i), prg.strumTension[i]);
@@ -280,6 +288,11 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
             if (preset.hasProperty(tmp_s))
                 p.stepPitch[i][j] = jlimit(-maxStepPitch, maxStepPitch, (int) preset.getProperty(tmp_s, var()));
 
+            tmp_s.clear();
+            tmp_s << stepFlagsKey << i << j;
+            if (preset.hasProperty(tmp_s))
+                p.stepFlags[i][j] = jlimit(0, stepFlagsMax, (int) preset.getProperty(tmp_s, var()));
+
         }
         tmp_s.clear();
         tmp_s <<valueTreeNames[SPEEED]<< i;
@@ -341,6 +354,8 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
         if (preset.hasProperty(tmp_s))
             p.mutate[i] = jlimit(0, 100, (int) preset.getProperty(tmp_s, var()));
 
+        if (preset.hasProperty(valueTreeNames[ARPORDER] + juce::String (i)))
+            p.arpOrder[i] = jlimit(0, arpOrderNames.size() - 1, (int) preset.getProperty(valueTreeNames[ARPORDER] + juce::String (i), var()));
         if (preset.hasProperty(valueTreeNames[PLAYMODE] + juce::String (i)))
             p.playMode[i] = jlimit(0, playModeNames.size() - 1, (int) preset.getProperty(valueTreeNames[PLAYMODE] + juce::String (i), var()));
         if (preset.hasProperty(valueTreeNames[SPREAD] + juce::String (i)))
@@ -426,6 +441,7 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::captureCurrentProgram (const juce::S
             paramProg.stepCond[i][j] = getStepCond(i, j);
             paramProg.stepRatchet[i][j] = getStepRatchet(i, j);
             paramProg.stepPitch[i][j] = getStepPitch(i, j);
+            paramProg.stepFlags[i][j] = getStepFlags(i, j);
         }
         tmp_s.clear();
         tmp_s <<valueTreeNames[SPEEED]<< i;
@@ -480,6 +496,7 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::captureCurrentProgram (const juce::S
         tmp_s <<valueTreeNames[MUTATE]<< i;
         paramProg.mutate[i] = (int) *valueTreeState.getRawParameterValue(tmp_s);
         paramProg.playMode[i] = (int) *valueTreeState.getRawParameterValue(valueTreeNames[PLAYMODE] + juce::String (i));
+        paramProg.arpOrder[i] = (int) *valueTreeState.getRawParameterValue(valueTreeNames[ARPORDER] + juce::String (i));
         paramProg.spread[i]   = (int) *valueTreeState.getRawParameterValue(valueTreeNames[SPREAD] + juce::String (i));
         paramProg.strumShape[i]   = (int) *valueTreeState.getRawParameterValue(valueTreeNames[STRUMSHAPE] + juce::String (i));
         paramProg.strumTension[i] = (int) *valueTreeState.getRawParameterValue(valueTreeNames[STRUMTENSION] + juce::String (i));

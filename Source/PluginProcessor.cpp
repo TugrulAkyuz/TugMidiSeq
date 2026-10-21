@@ -274,6 +274,12 @@ valueTreeState(*this, &undoManager)
         gridsStrumDivAtomic[j] = valueTreeState.getRawParameterValue (divId);
         strumSqueezed[j].store (false);
     }
+    for (int j = 0; j < numOfLine; j++)
+    {
+        const auto arpId = valueTreeNames[ARPORDER] + juce::String (j);
+        valueTreeState.createAndAddParameter (std::make_unique<juce::AudioParameterChoice> (ParameterID { arpId, 1 }, arpId, arpOrderNames, ArpUp));
+        gridsArpOrderAtomic[j] = valueTreeState.getRawParameterValue (arpId);
+    }
 
     // C++17: std::atomic members start uninitialised
     for (int i = 0; i < numOfLine; i++)
@@ -456,12 +462,14 @@ void TugMidiSeqAudioProcessor::loadPreset (int index)
                     setStepCondUndoable (i, j, prog.stepCond[i][j]);
                     setStepRatchetUndoable (i, j, prog.stepRatchet[i][j]);
                     setStepPitchUndoable (i, j, prog.stepPitch[i][j]);
+                    setStepFlagsUndoable (i, j, prog.stepFlags[i][j]);
                 }
                 else
                 {
                     setStepCond (i, j, prog.stepCond[i][j]);
                     setStepRatchet (i, j, prog.stepRatchet[i][j]);
                     setStepPitch (i, j, prog.stepPitch[i][j]);
+                    setStepFlags (i, j, prog.stepFlags[i][j]);
                 }
             }
             tmp_s.clear();
@@ -510,6 +518,7 @@ void TugMidiSeqAudioProcessor::loadPreset (int index)
             setParamValue(valueTreeNames[STRUMHUMAN] + juce::String (i), prog.strumHuman[i]);
             setParamValue(valueTreeNames[STRUMSYNC] + juce::String (i), (float) prog.strumSync[i]);
             setParamValue(valueTreeNames[STRUMDIV] + juce::String (i), (float) prog.strumDiv[i]);
+            setParamValue(valueTreeNames[ARPORDER] + juce::String (i), (float) prog.arpOrder[i]);
 
         }
     setParamValue(valueTreeNames[GLOBALRESTBAR],  prog.globalResyncBar);
@@ -666,6 +675,8 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             resetTrigCondState();   // conditions count loops from the next play
             for (auto& r : ratchetLeft) r = 0;   // no leftover repeats on the next play
             for (auto& c : strumCount) c = 0;    // ... or strums
+            for (auto& a : arpPos) a = 0;        // arps start from their first note
+            for (auto& a : arpLastCount) a = 0;
             for (auto& f : strumFlipped) f = false;   // Up/Down starts the way its sign says
             for (auto& q : strumSqueezed) q.store (false);
             for (auto& m : mutateMask) m = 0;    // every play starts from the written pattern
@@ -801,7 +812,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
                     if (getPlayMode (i) == PlayVoice)
                         emitLaneNote (i, ratchetNote[i], ratchetDuration[i], midiMessages, s);
                     else
-                        playChord (i, ratchetDuration[i], ratchetInterval[i], midiMessages, s);   // the whole chord / strum again
+                        playChord (i, ratchetDuration[i], ratchetInterval[i], midiMessages, s, ratchetFlags[i]);   // the whole chord / strum again
                     if (--ratchetLeft[i] > 0)
                         ratchetCountdown[i] = ratchetInterval[i];
                 }
@@ -1105,7 +1116,9 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
     if(soloLane != -1 && soloLane != i ) return true;
     if (isLaneMuted (i)) return true;   // the step still counted for PRE / NEI, it just isn't played
 
-    if (getPlayMode (i) != PlayVoice)
+    const int flags = getStepFlags (i, playStep[i]);
+    const int mode  = getPlayMode (i);
+    if (mode != PlayVoice && mode != PlayArp)
     {
         if (! myIsPlaying || inMidiNoteList.empty()) return true;
         int duration = jmax (0, stepmidStopSampleIntervalForShuffle[i][steps[i]] - 1);
@@ -1121,54 +1134,39 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
             ratchetInterval[i]  = interval;
             ratchetCountdown[i] = interval;
             ratchetDuration[i]  = duration;
+            ratchetFlags[i]     = flags & StepAccent;   // a slide only makes sense on a single hit
         }
-        playChord (i, duration, window, midiMessages, s);
+        playChord (i, duration, window, midiMessages, s, hits > 1 ? (flags & StepAccent) : flags);
         return true;
     }
 
     int midRouteIndex = *gridsMidiRouteAtomic[i];
-    bool  sortedofirs_Bool = inMidiNoteList.size() > i;
-    if(*sortedOrFirstEmptySelectAtomic == true)
-        sortedofirs_Bool = true;
-    
-    if(sortedofirs_Bool)
+    MidiMessage it;
+    if (mode == PlayArp)   // the next held note in the lane's arp order
     {
-        MidiMessage it;
-        if(*sortedOrFirstEmptySelectAtomic == false)
-        {
-            it = inMidiNoteList[(size_t)i];
-        }
-        else
-        {
-            auto it1 = &inMidiNoteListVector.at(i);
-            it = *it1;
-            if(it1->getVelocity() == 0)
-                return true;
-        }
-        
-        
+        if (! myIsPlaying || ! nextArpNote (i, it)) return true;
+    }
+    else if (*sortedOrFirstEmptySelectAtomic == false)   // sorted: the lane's place among the held notes
+    {
+        if ((int) inMidiNoteList.size() <= i) return true;
+        it = inMidiNoteList[(size_t) i];
+    }
+    else   // first empty: the note that took this lane's slot
+    {
+        it = inMidiNoteListVector.at (i);
+        if (it.getVelocity() == 0) return true;
+    }
+    {
         it.setNoteNumber (pitchedNote (it.getNoteNumber() + (int) *octave[i] * octaveKeys(),
                                        getStepPitch (i, playStep[i])));
-        
-        auto midiNote = [&](const RealMidiNoteList& l){ return l.sentMidi.getNoteNumber() == it.getNoteNumber() && l.lineNo == midRouteIndex; };
-        auto it2 = std::find_if(inRealMidiNoteList.begin(), inRealMidiNoteList.end(),midiNote);
-        if(it2 != inRealMidiNoteList.end())
-        {
-            it2->sentMidi.setVelocity(0.0f);
-            it2->sentMidi.setChannel(it2->lineNo);
-            midiMessages.addEvent(it2->sentMidi, s);
-            //midiProcessor->sendMidiMessage(it2->sentMidi,it2->lineNo);
-           // midiProcessor->sendMidiBuffer(midiMessages,mySampleRate);
-            it2 = inRealMidiNoteList.erase(it2);
-        }
-        
+
         float velTmp = *gridsVelAtomic[i]/ 90.0f;
         velTmp = jlimit(0.0f,1.0f,velTmp*(float) stepVelAt (i, playStep[i])/ 127.0f);
         if(*GlobalInOrFixedAtomic == 0)
            it.setVelocity(velTmp);
-    
-        
-        
+        if (flags & StepAccent)
+            it.setVelocity (jmin (1.0f, it.getFloatVelocity() + accentBoost));
+
         if (myIsPlaying == false) return false;
         it.setChannel(midRouteIndex);
 
@@ -1191,8 +1189,48 @@ bool TugMidiSeqAudioProcessor::subComputrFunc(int i,juce::MidiBuffer& midiMessag
             ratchetDuration[i]  = duration;
             ratchetNote[i]      = it;
         }
-        emitLaneNote (i, it, duration, midiMessages, s);
+        // Slide: the note runs a moment into the lane's next hit (legato; glide
+        // on a mono synth), and the same note there ties instead of retriggering
+        const bool slide = (flags & StepSlide) && hits <= 1;
+        if (slide)
+            duration = samplesToNextHit (i) + slideOverlapSamples();
+        emitLaneNote (i, it, duration, midiMessages, s, slide);
     }
+    return true;
+}
+
+// Arp: the held notes (once each) in the lane's order, one per hit. A chord
+// pressed after an empty moment starts again from its first note.
+bool TugMidiSeqAudioProcessor::nextArpNote (int line, juce::MidiMessage& note)
+{
+    juce::MidiMessage held[maxArpNotes];
+    int count = 0;
+    for (const auto& m : inMidiNoteList)   // sorted low to high
+    {
+        if (count == maxArpNotes) break;
+        bool dup = false;
+        for (int k = 0; k < count; k++) dup |= held[k].getNoteNumber() == m.getNoteNumber();
+        if (! dup) held[count++] = m;
+    }
+    if (count == 0) { arpLastCount[line] = 0; return false; }
+
+    const int order = getArpOrder (line);
+    if (order == ArpAsPlayed)
+        std::sort (held, held + count, [] (const juce::MidiMessage& a, const juce::MidiMessage& b) { return a.getTimeStamp() < b.getTimeStamp(); });
+    if (arpLastCount[line] == 0) arpPos[line] = 0;
+    arpLastCount[line] = count;
+
+    const int pos = arpPos[line]++;
+    int idx = pos % count;
+    if (order == ArpDown) idx = count - 1 - pos % count;
+    else if (order == ArpUpDown && count > 1)   // 0 1 2 1 0 1 2 ...: the ends aren't repeated
+    {
+        const int period = 2 * count - 2, p = pos % period;
+        idx = p < count ? p : period - p;
+    }
+    else if (order == ArpRandom)
+        idx = juce::Random::getSystemRandom().nextInt (count);
+    note = held[idx];
     return true;
 }
 
@@ -1232,7 +1270,7 @@ int TugMidiSeqAudioProcessor::samplesToNextHit (int line) const
 // long for it is squeezed so every note is played and the last one still rings
 // a quarter of the note length, and the chord may ring past the note length
 // (never past the window) to give it that.
-void TugMidiSeqAudioProcessor::playChord (int line, int duration, int window, juce::MidiBuffer& midiMessages, int sample)
+void TugMidiSeqAudioProcessor::playChord (int line, int duration, int window, juce::MidiBuffer& midiMessages, int sample, int flags)
 {
     const int mode = getPlayMode (line);
     int notes[maxStrumNotes];
@@ -1240,6 +1278,7 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, int window, ju
     int count = 0;
 
     float laneVel = jlimit (0.0f, 1.0f, (*gridsVelAtomic[line] / 90.0f) * ((float) stepVelAt (line, playStep[line]) / 127.0f));
+    const float accent = (flags & StepAccent) ? accentBoost : 0.0f;
     for (const auto& held : inMidiNoteList)
     {
         if (count == maxStrumNotes) break;
@@ -1248,7 +1287,7 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, int window, ju
         for (int k = 0; k < count; k++) dup |= notes[k] == n;
         if (dup) continue;
         notes[count] = n;
-        velocities[count] = *GlobalInOrFixedAtomic == 0 ? laneVel : held.getFloatVelocity();
+        velocities[count] = jmin (1.0f, (*GlobalInOrFixedAtomic == 0 ? laneVel : held.getFloatVelocity()) + accent);
         count++;
     }
     if (count == 0) return;
@@ -1269,7 +1308,9 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, int window, ju
     window              = jmax (1, window - 1);   // a note-off lands a sample after its length, like the steps' notes
     const int  ring     = jlimit (1, window, duration / 4);
     const int  total    = jmin (spreadSamples * (count - 1), jmax (0, window - ring));
-    const int  end      = jmin (window, jmax (duration, total + ring));   // all notes stop here
+    // all notes stop here; with Slide they all run a moment into the next hit
+    const int  end      = (flags & StepSlide) ? window + 1 + slideOverlapSamples()
+                                              : jmin (window, jmax (duration, total + ring));
     strumSqueezed[line].store (count > 1 && total < spreadSamples * (count - 1), std::memory_order_relaxed);
     const float gap     = count > 1 ? (float) total / (float) (count - 1) : 0.0f;
     const int  shape    = getStrumShape (line);
@@ -1297,7 +1338,7 @@ void TugMidiSeqAudioProcessor::playChord (int line, int duration, int window, ju
 
         const int length = jmax (1, end - delay);
         if (delay == 0)
-            emitLaneNote (line, note, length, midiMessages, sample);
+            emitLaneNote (line, note, length, midiMessages, sample, (flags & StepSlide) != 0);
         else
             strumQueue[line][strumCount[line]++] = { delay, length, note };
     }
@@ -1317,11 +1358,20 @@ void TugMidiSeqAudioProcessor::tickStrum (int line, juce::MidiBuffer& midiMessag
 // Sends one note for lane `line` (cutting the same note still sounding on the
 // same channel; other lanes' channels are left alone) and books its note-off.
 void TugMidiSeqAudioProcessor::emitLaneNote (int line, juce::MidiMessage note, int durationSamples,
-                                             juce::MidiBuffer& midiMessages, int sample)
+                                             juce::MidiBuffer& midiMessages, int sample, bool slide)
 {
     auto same = [&] (const RealMidiNoteList& l) { return l.sentMidi.getNoteNumber() == note.getNoteNumber()
                                                          && l.lineNo == note.getChannel(); };
     auto sounding = std::find_if (inRealMidiNoteList.begin(), inRealMidiNoteList.end(), same);
+    if (sounding != inRealMidiNoteList.end() && sounding->slide)
+    {
+        // a slide into the same note: a tie, the note just goes on
+        sounding->durationsample = jmax (0, durationSamples);
+        sounding->slide = slide;
+        lastOutNote[line] = note.getNoteNumber();
+        midiState[line] = true;
+        return;
+    }
     if (sounding != inRealMidiNoteList.end())
     {
         sounding->sentMidi.setVelocity (0.0f);
@@ -1338,6 +1388,7 @@ void TugMidiSeqAudioProcessor::emitLaneNote (int line, juce::MidiMessage note, i
     tmp.sentMidi = note;
     tmp.lineNo = note.getChannel();
     tmp.durationsample = jmax (0, durationSamples);
+    tmp.slide = slide;
     inRealMidiNoteList.push_back (tmp);
     midiState[line] = true;
 }
@@ -1425,6 +1476,7 @@ void TugMidiSeqAudioProcessor::midiHandling(juce::MidiBuffer& midiMessages, int 
             if (std::count_if (inMidiNoteList.begin(), inMidiNoteList.end(), sameNote) >= physHeld[noteNumber])
                 continue;
 
+            currentMessage.setTimeStamp (arrivalCounter += 1.0);   // the order keys came in, for As Played arps
             inMidiNoteList.push_back(currentMessage);
             auto comp = [](const MidiMessage &l1, const MidiMessage &l2){ return l1.getNoteNumber() < l2.getNoteNumber(); };
             std::sort(inMidiNoteList.begin(), inMidiNoteList.end(), comp);
@@ -1558,7 +1610,7 @@ namespace
     // A per-step value that isn't a parameter (condition or ratchet).
     struct StepValueAction : juce::UndoableAction
     {
-        enum Field { Cond, Ratchet, Pitch };
+        enum Field { Cond, Ratchet, Pitch, Flags };
         StepValueAction (TugMidiSeqAudioProcessor& p, Field f, int l, int s, int from, int to)
             : proc (p), field (f), line (l), step (s), oldValue (from), newValue (to) {}
         // the host is told once per edit / undo, not per step (see notifyStateChanged)
@@ -1570,7 +1622,8 @@ namespace
         {
             if      (field == Cond)    proc.setStepCond (line, step, v);
             else if (field == Ratchet) proc.setStepRatchet (line, step, v);
-            else                       proc.setStepPitch (line, step, v);
+            else if (field == Pitch)   proc.setStepPitch (line, step, v);
+            else                       proc.setStepFlags (line, step, v);
         }
 
         TugMidiSeqAudioProcessor& proc;
@@ -1584,14 +1637,14 @@ namespace
     {
         bool  valid = false;
         float cells[numOfStep] = {}, vels[numOfStep] = {};
-        int   conds[numOfStep] = {}, ratchets[numOfStep] = {}, pitches[numOfStep] = {};
+        int   conds[numOfStep] = {}, ratchets[numOfStep] = {}, pitches[numOfStep] = {}, flags[numOfStep] = {};
         std::map<juce::String, float> settings;   // base name -> value
     };
     LaneClipboard laneClipboard;
 
     // per-lane settings a copy carries (not the MIDI channel: that's routing)
     const int copiedSettings[] = { GRIDNUM, SPEEED, DUR, OCTAVE, VEL, EVENT, GRIDSHUFFLE, GRIDDELAY, DIRECTION, MUTATE, PLAYMODE, SPREAD,
-                                   STRUMSHAPE, STRUMTENSION, STRUMVEL, STRUMHUMAN, STRUMSYNC, STRUMDIV };
+                                   STRUMSHAPE, STRUMTENSION, STRUMVEL, STRUMHUMAN, STRUMSYNC, STRUMDIV, ARPORDER };
 
     juce::String cellID (int base, int line, int step)
     {
@@ -1624,6 +1677,14 @@ void TugMidiSeqAudioProcessor::setStepPitchUndoable (int line, int step, int off
         undoManager.perform (new StepValueAction (*this, StepValueAction::Pitch, line, step, old, offset));
 }
 
+void TugMidiSeqAudioProcessor::setStepFlagsUndoable (int line, int step, int flags)
+{
+    const int old = getStepFlags (line, step);
+    flags = jlimit (0, stepFlagsMax, flags);
+    if (old != flags)
+        undoManager.perform (new StepValueAction (*this, StepValueAction::Flags, line, step, old, flags));
+}
+
 // Step conditions aren't parameters, so the host doesn't see them change on
 // its own: without this it wouldn't mark the project as modified.
 void TugMidiSeqAudioProcessor::notifyStateChanged()
@@ -1646,6 +1707,7 @@ void TugMidiSeqAudioProcessor::copyLane (int line)
         laneClipboard.conds[s] = getStepCond (line, s);
         laneClipboard.ratchets[s] = getStepRatchet (line, s);
         laneClipboard.pitches[s] = getStepPitch (line, s);
+        laneClipboard.flags[s] = getStepFlags (line, s);
     }
     for (int base : copiedSettings)
         laneClipboard.settings[valueTreeNames[base]] = paramValue (valueTreeState, valueTreeNames[base] + juce::String (line));
@@ -1668,6 +1730,7 @@ void TugMidiSeqAudioProcessor::pasteLane (int line)
             setStepCondUndoable (line, s, laneClipboard.conds[s]);
             setStepRatchetUndoable (line, s, laneClipboard.ratchets[s]);
             setStepPitchUndoable (line, s, laneClipboard.pitches[s]);
+            setStepFlagsUndoable (line, s, laneClipboard.flags[s]);
         }
     });
     notifyStateChanged();
@@ -1679,7 +1742,7 @@ void TugMidiSeqAudioProcessor::rotateLaneSteps (int line, int delta)
 {
     const int n = jlimit (1, numOfStep, (int) *numOfGrid[line]);
     float cells[numOfStep], vels[numOfStep];
-    int conds[numOfStep], ratchets[numOfStep], pitches[numOfStep];
+    int conds[numOfStep], ratchets[numOfStep], pitches[numOfStep], flags[numOfStep];
     for (int s = 0; s < n; s++)
     {
         cells[s] = paramValue (valueTreeState, cellID (BLOCK, line, s));
@@ -1687,6 +1750,7 @@ void TugMidiSeqAudioProcessor::rotateLaneSteps (int line, int delta)
         conds[s] = getStepCond (line, s);
         ratchets[s] = getStepRatchet (line, s);
         pitches[s] = getStepPitch (line, s);
+        flags[s] = getStepFlags (line, s);
     }
     for (int s = 0; s < n; s++)
     {
@@ -1696,6 +1760,7 @@ void TugMidiSeqAudioProcessor::rotateLaneSteps (int line, int delta)
         setStepCondUndoable (line, s, conds[from]);
         setStepRatchetUndoable (line, s, ratchets[from]);
         setStepPitchUndoable (line, s, pitches[from]);
+        setStepFlagsUndoable (line, s, flags[from]);
     }
 }
 
@@ -1736,6 +1801,7 @@ void TugMidiSeqAudioProcessor::clearLane (int line)
             setStepCondUndoable (line, s, CondNone);
             setStepRatchetUndoable (line, s, 1);
             setStepPitchUndoable (line, s, 0);
+            setStepFlagsUndoable (line, s, 0);
         }
     });
     notifyStateChanged();
@@ -2390,6 +2456,7 @@ void TugMidiSeqAudioProcessor::writeStepDataTo (juce::ValueTree& state) const
     write ("stepConds",    [this] (int i, int j) { return getStepCond (i, j); });
     write ("stepRatchets", [this] (int i, int j) { return getStepRatchet (i, j); });
     write ("stepPitches",  [this] (int i, int j) { return getStepPitch (i, j); });
+    write ("stepFlags",    [this] (int i, int j) { return getStepFlags (i, j); });
 }
 
 void TugMidiSeqAudioProcessor::readStepDataFrom (const juce::ValueTree& state)
@@ -2409,6 +2476,7 @@ void TugMidiSeqAudioProcessor::readStepDataFrom (const juce::ValueTree& state)
     read ("stepConds",    [this] (int i, int j, int v) { setStepCond (i, j, v); });
     read ("stepRatchets", [this] (int i, int j, int v) { setStepRatchet (i, j, v); });
     read ("stepPitches",  [this] (int i, int j, int v) { setStepPitch (i, j, v); });
+    read ("stepFlags",    [this] (int i, int j, int v) { setStepFlags (i, j, v); });
 }
 
 //==============================================================================
@@ -2425,6 +2493,7 @@ void TugMidiSeqAudioProcessor::resetSlots()
                 stepCond[s][i][j].store (CondNone);
                 stepRatchet[s][i][j].store (1);
                 stepPitch[s][i][j].store (0);
+                stepFlags[s][i][j].store (0);
             }
 }
 
@@ -2523,13 +2592,13 @@ void TugMidiSeqAudioProcessor::syncPadsToActiveSlots()
     }
 }
 
-// one slot's step data, five values per step: cell, velocity, condition, ratchet, pitch
+// one slot's step data, six values per step: cell, velocity, condition, ratchet, pitch, flags
 void TugMidiSeqAudioProcessor::snapshotSlot (int slot, std::vector<int>& out) const
 {
     out.clear();
     for (int i = 0; i < numOfLine; i++)
         for (int j = 0; j < numOfStep; j++)
-            for (auto* a : { &slotCell, &slotVel, &stepCond, &stepRatchet, &stepPitch })
+            for (auto* a : { &slotCell, &slotVel, &stepCond, &stepRatchet, &stepPitch, &stepFlags })
                 out.push_back ((*a)[slot][i][j].load());
 }
 
@@ -2539,7 +2608,7 @@ void TugMidiSeqAudioProcessor::restoreSlot (int slot, const std::vector<int>& da
     for (int i = 0; i < numOfLine; i++)
     {
         for (int j = 0; j < numOfStep; j++)
-            for (auto* a : { &slotCell, &slotVel, &stepCond, &stepRatchet, &stepPitch })
+            for (auto* a : { &slotCell, &slotVel, &stepCond, &stepRatchet, &stepPitch, &stepFlags })
                 (*a)[slot][i][j].store (data[k++]);
         if (getActiveSlot (i) == slot)
             mirrorDirty[i].store (true);
@@ -2580,9 +2649,9 @@ void TugMidiSeqAudioProcessor::clearSlot (int slot)
     std::vector<int> before, after;
     snapshotSlot (slot, before);
     after = before;
-    for (size_t k = 0; k < after.size(); k += 5)
+    for (size_t k = 0; k < after.size(); k += 6)   // the values per step, as snapshotSlot lays them out
     {
-        after[k] = 0; after[k + 1] = 100; after[k + 2] = CondNone; after[k + 3] = 1; after[k + 4] = 0;
+        after[k] = 0; after[k + 1] = 100; after[k + 2] = CondNone; after[k + 3] = 1; after[k + 4] = 0; after[k + 5] = 0;
     }
     flushToUndo();
     undoManager.beginNewTransaction();
@@ -2600,11 +2669,11 @@ void TugMidiSeqAudioProcessor::writeSlotsTo (juce::ValueTree& state) const
         actives.add (juce::String (getActiveSlot (i)));
     node.setProperty ("active", actives.joinIntoString (","), nullptr);
 
-    const char* kinds[] = { "cells", "vels", "conds", "ratchets", "pitches" };
-    const std::atomic<int> (*arrays[])[numOfLine][numOfStep] = { slotCell, slotVel, stepCond, stepRatchet, stepPitch };
+    const char* kinds[] = { "cells", "vels", "conds", "ratchets", "pitches", "flags" };
+    const std::atomic<int> (*arrays[])[numOfLine][numOfStep] = { slotCell, slotVel, stepCond, stepRatchet, stepPitch, stepFlags };
     for (int s = 0; s < numSlots; s++)
         for (int i = 0; i < numOfLine; i++)
-            for (int k = 0; k < 5; k++)
+            for (int k = 0; k < 6; k++)
             {
                 juce::StringArray values;
                 for (int j = 0; j < numOfStep; j++)
@@ -2619,12 +2688,12 @@ bool TugMidiSeqAudioProcessor::readSlotsFrom (const juce::ValueTree& state)
     const auto node = state.getChildWithName ("patternSlots");
     if (! node.isValid()) return false;
 
-    const char* kinds[] = { "cells", "vels", "conds", "ratchets", "pitches" };
-    std::atomic<int> (*arrays[])[numOfLine][numOfStep] = { slotCell, slotVel, stepCond, stepRatchet, stepPitch };
-    const int lo[] = { 0, 0, 0, 1, -maxStepPitch }, hi[] = { 2, 127, NumTrigConds - 1, maxRatchet, maxStepPitch };
+    const char* kinds[] = { "cells", "vels", "conds", "ratchets", "pitches", "flags" };
+    std::atomic<int> (*arrays[])[numOfLine][numOfStep] = { slotCell, slotVel, stepCond, stepRatchet, stepPitch, stepFlags };
+    const int lo[] = { 0, 0, 0, 1, -maxStepPitch, 0 }, hi[] = { 2, 127, NumTrigConds - 1, maxRatchet, maxStepPitch, stepFlagsMax };
     for (int s = 0; s < numSlots; s++)
         for (int i = 0; i < numOfLine; i++)
-            for (int k = 0; k < 5; k++)
+            for (int k = 0; k < 6; k++)
             {
                 const auto key = juce::Identifier (juce::String (kinds[k]) + "_" + juce::String (s) + "_" + juce::String (i));
                 if (! node.hasProperty (key)) continue;

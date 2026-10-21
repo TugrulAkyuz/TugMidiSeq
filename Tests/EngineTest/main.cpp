@@ -469,6 +469,81 @@ static void testTuning()
 }
 
 //==============================================================================
+static void testArpSlideAccent()
+{
+    std::cout << "Arp / slide / accent\n";
+    const char* names[] = { "Up", "Down", "Up/Down", "Random", "As Played" };
+    const std::vector<int> expect[] = { { 60, 64, 67, 60, 64, 67 }, { 67, 64, 60, 67, 64, 60 },
+                                        { 60, 64, 67, 64, 60, 64 }, {}, { 67, 60, 64, 67, 60, 64 } };
+    for (int order = 0; order < 5; order++)
+    {
+        Rig r;
+        r.param ("PlayMode0", (float) PlayArp);
+        r.param ("ArpOrder0", (float) order);
+        for (int s = 0; s < 6; s++) r.step (0, s);
+        r.hold ({ 67, 60, 64 });   // pressed in this order
+        r.stop(); r.play (Rig::bar / 2);
+        auto n = r.notes (0, 0, 6 * 6001);
+        bool ok = n.size() == 6;
+        if (order == ArpRandom)
+            for (int x : n) ok = ok && (x == 60 || x == 64 || x == 67);
+        else
+            ok = ok && n == expect[order];
+        CHECK (ok, String ("arp ") + names[order] + ": one held note per step " + str (n));
+    }
+    {
+        Rig r;
+        r.param ("PlayMode0", (float) PlayArp);
+        for (int s = 0; s < 8; s++) r.step (0, s);
+        r.hold ({ 60, 64 });
+        r.in (r.ph.pos + 3, MidiMessage::noteOn (1, 60, (uint8) 100));   // a copy of a held note
+        r.stop(); r.play (Rig::bar / 2);
+        CHECK (r.notes (0, 0, 4 * 6001) == std::vector<int> ({ 60, 64, 60, 64 }), "arp: a note held twice is played once per round");
+    }
+    {
+        Rig r;
+        r.step (0, 0); r.step (0, 1);
+        r.p->setStepFlags (0, 0, StepAccent);
+        r.hold ({ 60 });
+        r.stop(); r.play (Rig::bar / 4);
+        CHECK (r.out.size() >= 2 && r.out[0].vel == 127 && r.out[1].vel == 100,
+               "accent lifts the step's velocity (" + String (r.out.size() >= 2 ? r.out[0].vel : -1) + " vs " + String (r.out.size() >= 2 ? r.out[1].vel : -1) + ")");
+    }
+    {
+        Rig r;
+        r.step (0, 0); r.step (0, 4);
+        r.p->setStepFlags (0, 0, StepSlide);
+        r.p->setStepPitch (0, 4, 2);
+        r.hold ({ 60 });
+        r.stop(); r.play (Rig::bar / 2);
+        const auto off = r.offAfter (0, 60, r.playStart) - r.playStart;
+        CHECK (r.notes (0, 0, Rig::bar / 2) == std::vector<int> ({ 60, 62 }) && off > 24004 && off < 24004 + 400,
+               "slide: the note runs just past the next hit (legato), note-off at " + String (off));
+    }
+    {
+        Rig r;
+        r.step (0, 0); r.step (0, 4);
+        r.p->setStepFlags (0, 0, StepSlide);
+        r.hold ({ 60 });
+        r.stop(); r.play (Rig::bar / 2);
+        const auto off = r.offAfter (0, 60, r.playStart) - r.playStart;
+        CHECK (r.onsets (0, 0, Rig::bar / 2) == std::vector<int> ({ 0 }) && off > 24004 + 5000,
+               "slide into the same note ties: no new note-on, it ends after the next step " + str (r.onsets (0, 0, Rig::bar / 2)) + ", off at " + String (off));
+    }
+    {
+        Rig r;
+        r.p->setStepFlags (2, 5, StepAccent | StepSlide);
+        r.param ("ArpOrder3", (float) ArpAsPlayed);
+        MemoryBlock state;
+        r.p->getStateInformation (state);
+        TugMidiSeqAudioProcessor restored;
+        restored.setStateInformation (state.getData(), (int) state.getSize());
+        CHECK (restored.getStepFlags (2, 5) == (StepAccent | StepSlide) && restored.getArpOrder (3) == ArpAsPlayed,
+               "the project keeps step flags and the arp order");
+    }
+}
+
+//==============================================================================
 static void testScales()
 {
     std::cout << "Scales\n";
@@ -1257,6 +1332,7 @@ int main (int argc, char** argv)
     testConditions();
     testStepTools();
     testScales();
+    testArpSlideAccent();
     testTuning();
     testLanes();
     testStrum();

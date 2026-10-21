@@ -28,11 +28,11 @@ const juce::StringArray channelNames =  {"off","1","2","3","4","5","6","7","8","
 
 const juce::StringArray valueTreeNames = 
 {
-    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread","Mute","StrumShape","StrumTension","StrumVel","StrumHuman","patternSlot","StrumSync","StrumDiv"
+    "block","Speed","Dur","GridNum","Octave","Vel","GlobalRestncBar","GlobalInOrFixedVel","inBuiltSynth","sortedOrFirstEmptySelect","Event","Shuffle","gridshuffle","griddelay","velGridButton","gridMidiRoute","channon","latch","Direction","fill","scaleKey","scaleType","Mutate","PlayMode","Spread","Mute","StrumShape","StrumTension","StrumVel","StrumHuman","patternSlot","StrumSync","StrumDiv","ArpOrder"
 };
 enum valueTreeNamesEnum
 {
-    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD,MUTE,STRUMSHAPE,STRUMTENSION,STRUMVEL,STRUMHUMAN,PATTERNSLOT,STRUMSYNC,STRUMDIV
+    BLOCK,SPEEED,DUR,GRIDNUM,OCTAVE,VEL,GLOBALRESTBAR,GLOABLINORFIXVEL,INBUILTSYNTH,SORTEDORFIRST,EVENT,SHUFFLE,GRIDSHUFFLE,GRIDDELAY,VELGRIDBUTTON,GRIDMIDIROUTE,CHANNON,LATCH,DIRECTION,FILL,SCALEKEY,SCALETYPE,MUTATE,PLAYMODE,SPREAD,MUTE,STRUMSHAPE,STRUMTENSION,STRUMVEL,STRUMHUMAN,PATTERNSLOT,STRUMSYNC,STRUMDIV,ARPORDER
 };
 
 // Lane play direction. Time still runs forward (shuffle, delay and note
@@ -46,8 +46,14 @@ constexpr char directionKeys[] = { 'F', 'R', 'P', 'X' };   // keyboard shortcuts
 // strum's direction and its width: + strums up (low to high), - strums down,
 // the size is the milliseconds between notes, and 0 plays the chord at once.
 // Strum Up/Down alternates on every hit, starting the way the sign says.
-enum LanePlayMode { PlayVoice = 0, PlayStrum, PlayStrumUpDown };
-const juce::StringArray playModeNames = { "Voice", "Strum", "Strum Up/Down" };
+// Appended only: the index is what projects and presets store.
+enum LanePlayMode { PlayVoice = 0, PlayStrum, PlayStrumUpDown, PlayArp };
+const juce::StringArray playModeNames = { "Voice", "Strum", "Strum Up/Down", "Arp" };
+
+// Arp lanes: one held note per hit, in this order (ArpOrder<lane>).
+enum ArpOrder { ArpUp = 0, ArpDown, ArpUpDown, ArpRandom, ArpAsPlayed };
+const juce::StringArray arpOrderNames = { "Up", "Down", "Up/Down", "Random", "As Played" };
+constexpr int maxArpNotes = 32;
 constexpr int maxStrumNotes = 16;
 constexpr int maxStrumMs = 250;
 
@@ -119,6 +125,14 @@ const juce::String stepRatchetKey = "ratchet";
 // degrees while a scale is set. Stored like the ratchets; preset key pitch<lane><step>.
 constexpr int maxStepPitch = 24;
 const juce::String stepPitchKey = "pitch";
+
+// Step flags, bits: Accent (louder) and Slide (the note runs into the next hit,
+// legato; into the same note it's a tie). Stored like the ratchets; preset key
+// flags<lane><step>.
+enum StepFlag { StepAccent = 1, StepSlide = 2 };
+constexpr int stepFlagsMax = StepAccent | StepSlide;
+const juce::String stepFlagsKey = "flags";
+constexpr float accentBoost = 0.3f;   // added to the step's velocity (0..1)
 
 // Scale lock (global): every lane's output note is snapped to Key + Scale.
 // Index 0 is "Off". Each entry lists the scale's pitch classes from the key.
@@ -246,6 +260,8 @@ public:
     int stepCond[numOfLine][numOfStep] = {};
     int stepRatchet[numOfLine][numOfStep];   // 1..maxRatchet, set to 1 in the constructor
     int stepPitch[numOfLine][numOfStep] = {};
+    int stepFlags[numOfLine][numOfStep] = {};
+    int arpOrder[numOfLine] = {};
     int scaleKey = 0, scaleType = 0;
     int direction[numOfLine] = {};
     int mutate[numOfLine] = {};
@@ -609,6 +625,7 @@ public:
                 setStepCond (i, j, CondNone);
                 setStepRatchet (i, j, 1);
                 setStepPitch (i, j, 0);
+                setStepFlags (i, j, 0);
             }
     }
 
@@ -632,6 +649,17 @@ public:
         stepPitch[getActiveSlot (line)][line][step].store (jlimit (-maxStepPitch, maxStepPitch, offset), std::memory_order_relaxed);
     }
     void setStepPitchUndoable (int line, int step, int offset);
+
+    int getStepFlags (int line, int step) const
+    {
+        return stepFlags[getActiveSlot (line)][line][step].load (std::memory_order_relaxed);
+    }
+    void setStepFlags (int line, int step, int flags)
+    {
+        stepFlags[getActiveSlot (line)][line][step].store (jlimit (0, stepFlagsMax, flags), std::memory_order_relaxed);
+    }
+    void setStepFlagsUndoable (int line, int step, int flags);
+    int  getArpOrder (int line) const { return (int) *gridsArpOrderAtomic[line]; }
 
     // scale lock
     int  getScaleKey() const  { return (int) *scaleKeyAtomic; }
@@ -1028,7 +1056,7 @@ private:
     StrumNote strumQueue[numOfLine][maxStrumNotes];
     int  strumCount[numOfLine] = {};
     bool strumFlipped[numOfLine] = {};   // Strum Up/Down: next hit goes against the sign
-    void playChord (int line, int duration, int window, juce::MidiBuffer& midiMessages, int sample);
+    void playChord (int line, int duration, int window, juce::MidiBuffer& midiMessages, int sample, int flags = 0);
     int  samplesToNextHit (int line) const;
     void tickStrum (int line, juce::MidiBuffer& midiMessages, int sample);
     uint32_t mutateMask[numOfLine] = {};                // audio thread
@@ -1059,6 +1087,12 @@ private:
     std::atomic<int> stepCond[numSlots][numOfLine][numOfStep];
     std::atomic<int> stepRatchet[numSlots][numOfLine][numOfStep];
     std::atomic<int> stepPitch[numSlots][numOfLine][numOfStep];
+    std::atomic<int> stepFlags[numSlots][numOfLine][numOfStep];
+    std::atomic<float>* gridsArpOrderAtomic[numOfLine] = {};
+    int arpPos[numOfLine] = {}, arpLastCount[numOfLine] = {};   // audio thread
+    double arrivalCounter = 0;   // stamps held notes in the order they came (As Played)
+    bool nextArpNote (int line, juce::MidiMessage& note);
+    int  slideOverlapSamples() const { return juce::jmax (1, (int) (mySampleRate * 0.005)); }
     std::atomic<int> slotCell[numSlots][numOfLine][numOfStep];   // 0 off, 1 on, 2 event
     std::atomic<int> slotVel[numSlots][numOfLine][numOfStep];    // 0..127
     std::atomic<int> activeSlot[numOfLine];
@@ -1105,7 +1139,8 @@ private:
     int ratchetLeft[numOfLine] = {}, ratchetCountdown[numOfLine] = {}, ratchetInterval[numOfLine] = {};
     int ratchetDuration[numOfLine] = {};
     juce::MidiMessage ratchetNote[numOfLine];
-    void emitLaneNote (int line, juce::MidiMessage note, int durationSamples, juce::MidiBuffer& midiMessages, int sample);
+    int ratchetFlags[numOfLine] = {};   // a chord's repeats keep the step's accent
+    void emitLaneNote (int line, juce::MidiMessage note, int durationSamples, juce::MidiBuffer& midiMessages, int sample, bool slide = false);
     int  loopCount[numOfLine] = {};
     int  lastStep[numOfLine] = {};
     bool lastCondResult[numOfLine] = {};
@@ -1148,6 +1183,7 @@ private:
         juce::MidiMessage sentMidi;
         int durationsample;
         int lineNo;
+        bool slide = false;   // runs into the next hit: the same note there ties instead of retriggering
     };
     std::vector<RealMidiNoteList> inRealMidiNoteList;
     int preset_idex = 0;
