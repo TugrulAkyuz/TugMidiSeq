@@ -291,7 +291,14 @@ void Grids::paint (juce::Graphics& g)
 
     // chord / strum lanes: stacked note bars left of the lane number, staggered for strums
     const int play = audioProcessor.getPlayMode (myLine);
-    if (play != PlayVoice)
+    if (play == PlayArp)
+    {
+        g.setColour (colourarray[myLine].withAlpha (0.95f));
+        const float x = 4.5f, y = (float) myLineLabel.getBounds().getCentreY() - 5.0f;
+        for (int k = 0; k < 3; k++)   // three notes one after another, rising
+            g.fillRect (x + (float) k * 2.0f, y + (float) (2 - k) * 4.0f, 2.0f, 2.0f);
+    }
+    else if (play != PlayVoice)
     {
         g.setColour (colourarray[myLine].withAlpha (0.95f));
         const float x = 4.5f, y = (float) myLineLabel.getBounds().getCentreY() - 5.0f;
@@ -392,7 +399,7 @@ void Grids::mouseDown (const juce::MouseEvent& e)
 void Grids::showLaneMenu()
 {
     enum { dirBase = 10, euclidId = 20, copyId = 30, pasteId, shiftLeftId = 40, shiftRightId, clearId, shiftAllLeftId, shiftAllRightId,
-           mutateBase = 100, mutateResetId = 300, playBase = 400, muteId = 500, soloId, strumShapeId = 600 };
+           mutateBase = 100, mutateResetId = 300, playBase = 400, muteId = 500, soloId, strumShapeId = 600, arpBase = 700 };
     static const int mutateAmounts[] = { 0, 5, 10, 25, 50, 100 };
 
     const int dir = audioProcessor.getDirection (myLine);
@@ -422,9 +429,14 @@ void Grids::showLaneMenu()
     for (int p = 0; p < playModeNames.size(); p++)
         m.addItem (playBase + p, p == PlayVoice ? juce::String ("Voice  (its own note of the chord)")
                                  : p == PlayStrum ? juce::String ("Chord / Strum  (STRM knob: 0 chord, + up, - down)")
-                                                  : juce::String ("Strum Up/Down  (alternates, starts by the knob's sign)"),
+                                 : p == PlayStrumUpDown ? juce::String ("Strum Up/Down  (alternates, starts by the knob's sign)")
+                                                        : juce::String ("Arp  (one held note per step, in the order below)"),
                    true, p == play);
     m.addItem (strumShapeId, "Strum shape...  (or right-click STRM)", play == PlayStrum || play == PlayStrumUpDown);
+    m.addSectionHeader ("Arp order");
+    const int arpOrder = audioProcessor.getArpOrder (myLine);
+    for (int o = 0; o < arpOrderNames.size(); o++)
+        m.addItem (arpBase + o, arpOrderNames[o], play == PlayArp, o == arpOrder);
     m.addSectionHeader ("Direction  (" + ShortcutText::upDown + " cycles, " + ShortcutText::shift + " + key: all lanes)");
     for (int d = 0; d < directionNames.size(); d++)
     {
@@ -480,6 +492,7 @@ void Grids::showLaneMenu()
                          else if (r >= mutateBase && r <= mutateBase + 100)      p.setLaneMutate (line, r - mutateBase);
                          else if (r == mutateResetId) p.requestMutationReset (line);
                          else if (r >= playBase && r < playBase + playModeNames.size()) p.setLanePlayMode (line, r - playBase);
+                         else if (r >= arpBase && r < arpBase + arpOrderNames.size())   p.setLaneArpOrder (line, r - arpBase);
                          else if (r == copyId)       p.copyLane (line);
                          else if (r == pasteId)      p.pasteLane (line);
                          else if (r == shiftLeftId)  p.shiftLane (line, -1);
@@ -1115,7 +1128,7 @@ void MultiStateButton::hideValuePopup()
 
 void MultiStateButton::showStepMenu()
 {
-    enum { ratchetBase = 100, resetPitchId = 200, clearLaneId = 1000 };   // condition items use id = condition + 1
+    enum { ratchetBase = 100, resetPitchId = 200, accentId = 300, slideId, clearLaneId = 1000 };   // condition items use id = condition + 1
 
     const int current = audioProcesor.getStepCond (myLine, myStep);
     const int ratchet = audioProcesor.getStepRatchet (myLine, myStep);
@@ -1133,6 +1146,9 @@ void MultiStateButton::showStepMenu()
     m.addItem (resetPitchId, pitch == 0 ? juce::String ("Pitch  0   (alt+drag to change)")
                                         : "Reset pitch  (" + juce::String (pitch > 0 ? "+" : "") + juce::String (pitch) + ")",
                pitch != 0);
+    const int flags = audioProcesor.getStepFlags (myLine, myStep);
+    m.addItem (accentId, "Accent   louder", true, (flags & StepAccent) != 0);
+    m.addItem (slideId,  "Slide    runs into the next hit (legato, ties the same note)", true, (flags & StepSlide) != 0);
     m.addSectionHeader ("Condition");
     item (m, CondNone, "Always");
     m.addSeparator();
@@ -1168,7 +1184,12 @@ void MultiStateButton::showStepMenu()
                      {
                          if (safe == nullptr || result == 0) return;
                          auto& p = safe->audioProcesor;
-                         if (result == resetPitchId)
+                         if (result == accentId || result == slideId)
+                         {
+                             const int bit = result == accentId ? StepAccent : StepSlide;
+                             p.undoableEdit ([&] { p.setStepFlagsUndoable (safe->myLine, safe->myStep, p.getStepFlags (safe->myLine, safe->myStep) ^ bit); });
+                         }
+                         else if (result == resetPitchId)
                          {
                              p.undoableEdit ([&] { p.setStepPitchUndoable (safe->myLine, safe->myStep, 0); });
                          }

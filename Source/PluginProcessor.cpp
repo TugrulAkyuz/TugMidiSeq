@@ -1844,6 +1844,11 @@ void TugMidiSeqAudioProcessor::setLanePlayMode (int line, int mode)
     undoableEdit ([&] { setParamValue (valueTreeNames[PLAYMODE] + juce::String (line), (float) mode); });
 }
 
+void TugMidiSeqAudioProcessor::setLaneArpOrder (int line, int order)
+{
+    undoableEdit ([&] { setParamValue (valueTreeNames[ARPORDER] + juce::String (line), (float) order); });
+}
+
 // Audio thread, once per completed loop of the lane.
 void TugMidiSeqAudioProcessor::mutateLane (int line)
 {

@@ -517,6 +517,7 @@ public:
     // the last strum had to be squeezed to end before the lane's next hit
     bool  isStrumSqueezed (int line) const   { return strumSqueezed[line].load (std::memory_order_relaxed); }
     void setLanePlayMode (int line, int mode);   // one undo step
+    void setLaneArpOrder (int line, int order);  // one undo step
     void setLaneMutate (int line, int percent);   // one undo step
     void requestMutationReset (int line)     { mutateResetRequest[line].store (true); }
     bool isStepMutated (int line, int step) const

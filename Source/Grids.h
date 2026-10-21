@@ -406,6 +406,25 @@ public:
         if (cond != CondNone)
             drawCondTag (g, bottom, cond, active);
 
+        // Accent: a bar down the left edge. Slide: a chevron on the right edge,
+        // pointing into the next pad. Dark on a lit pad, faint on an unlit one.
+        const int flags = audioProcesor.getStepFlags (myLine, myStep);
+        if (flags != 0)
+        {
+            g.setColour (active ? Theme::screen.withAlpha (0.8f) : Theme::accentBright.withAlpha (0.45f));
+            if (flags & StepAccent)
+                g.fillRoundedRectangle (b.getX() + 1.5f, b.getY() + 2.5f, 2.0f, b.getHeight() - 5.0f, 1.0f);
+            if (flags & StepSlide)
+            {
+                const float cx = b.getRight() - 4.0f, cy = b.getCentreY(), h = jmin (4.0f, b.getHeight() * 0.25f);
+                juce::Path chevron;
+                chevron.startNewSubPath (cx - 2.0f, cy - h);
+                chevron.lineTo (cx + 1.0f, cy);
+                chevron.lineTo (cx - 2.0f, cy + h);
+                g.strokePath (chevron, juce::PathStrokeType (1.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            }
+        }
+
         // flipped by Mutate for now: a dashed frame (the written state is unchanged)
         if (mutated)
         {
@@ -813,9 +832,11 @@ private:
         // the box shows the lane's note, or ALL (+ strum direction) for a
         // lane that plays every held note, styled by where the note comes from
         const int play = audioProcessor.getPlayMode (myLine);
-        // ALL lanes: 1000 + 0 chord, 1 strum up, 2 strum down, 3 up/down
+        // ALL lanes: 1000 + 0 chord, 1 strum up, 2 strum down, 3 up/down;
+        // arp lanes: 1000 + 10 + the arp order
         const int spread = audioProcessor.getStrumDirection (myLine);
-        const int allKind = play == PlayStrumUpDown ? 3
+        const int allKind = play == PlayArp ? 10 + audioProcessor.getArpOrder (myLine)
+                          : play == PlayStrumUpDown ? 3
                           : play == PlayStrum && spread > 0 ? 1
                           : play == PlayStrum && spread < 0 ? 2 : 0;
         const int midi = play == PlayVoice ? audioProcessor.getMidi (myLine)
@@ -873,7 +894,13 @@ private:
             const juce::String arrows[] = { "", juce::CharPointer_UTF8 ("\xe2\x86\x91"),       // ↑
                                             juce::CharPointer_UTF8 ("\xe2\x86\x93"),            // ↓
                                             juce::CharPointer_UTF8 ("\xe2\x86\x95") };          // ↕
-            text = "ALL" + arrows[jlimit (0, 3, m - 1000)];
+            if (m >= 1010)   // an arp: its order
+            {
+                const juce::String orders[] = { arrows[1], arrows[2], arrows[3], "?", juce::CharPointer_UTF8 ("\xe2\x86\x92") };   // ↑ ↓ ↕ ? →
+                text = "ARP" + orders[jlimit (0, 4, m - 1010)];
+            }
+            else
+                text = "ALL" + arrows[jlimit (0, 3, m - 1000)];
         }
         else if (m >= 0)
         {
