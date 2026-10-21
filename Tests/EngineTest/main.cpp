@@ -1008,6 +1008,58 @@ static void testPatternSlots()
 }
 
 //==============================================================================
+static void testPatternChain()
+{
+    std::cout << "Pattern chain\n";
+    // slot A plays 60, B 62, C 64 on lane 1's first step, once per bar
+    auto build = [] (Rig& r)
+    {
+        for (int slot = 0; slot < 3; slot++)
+        {
+            r.p->requestSlot (slot); r.stop (512); r.p->mirrorActiveSlots();
+            r.step (0, 0);
+            r.p->setStepPitch (0, 0, slot * 2);
+        }
+        r.p->requestSlot (0); r.stop (512); r.p->mirrorActiveSlots();
+    };
+    auto perBar = [] (Rig& r, int bars)
+    {
+        std::vector<int> v;
+        for (int b = 0; b < bars; b++)
+        {
+            auto n = r.notes (0, (int64) b * Rig::bar, (int64) (b + 1) * Rig::bar);
+            v.push_back (n.size() == 1 ? n[0] : -(int) n.size());
+        }
+        return v;
+    };
+    {
+        Rig r;
+        build (r);
+        for (int k : { 0, 1, 0, 2 }) r.p->setChainEntry (r.p->getChainLength(), k);   // A B A C
+        r.p->setChainOn (true);
+        r.hold ({ 60 });
+        r.stop(); r.play (5 * Rig::bar);
+        CHECK (perBar (r, 5) == std::vector<int> ({ 60, 62, 60, 64, 60 }), "chain A B A C, a bar each, then round again " + str (perBar (r, 5)));
+        r.stop();
+        CHECK (r.p->getRequestedSlot() == 0 && r.p->getChainPosition() == 0, "stopped: back on the first entry");
+        r.p->setChainBars (2);
+        r.out.clear();
+        r.play (4 * Rig::bar);
+        CHECK (perBar (r, 4) == std::vector<int> ({ 60, 60, 62, 62 }), "two bars per entry " + str (perBar (r, 4)));
+        r.p->requestSlot (2);
+        CHECK (! r.p->isChainOn() && r.p->getRequestedSlot() == 2, "picking a slot by hand turns the chain off");
+
+        r.p->setChainOn (true);
+        MemoryBlock state;
+        r.p->getStateInformation (state);
+        TugMidiSeqAudioProcessor restored;
+        restored.setStateInformation (state.getData(), (int) state.getSize());
+        CHECK (restored.isChainOn() && restored.getChainLength() == 4 && restored.getChainEntry (3) == 2 && restored.getChainBars() == 2,
+               "the project keeps the chain");
+    }
+}
+
+//==============================================================================
 static void testStateAndExport()
 {
     std::cout << "State / presets / MIDI export\n";
@@ -1252,6 +1304,14 @@ static void testPresetLibrary()
         const auto names = programNames (*r.p);
         CHECK (names == StringArray ({ "B", "C", "Old One", "Old Two", "D", "A", "O1", "O2", "plain" }),
                "menu order " + names.joinIntoString (","));
+
+        // renamed in the Finder / Explorer: the menu picks it up when it opens
+        CHECK (! r.p->rescanPresetsIfChanged(), "nothing changed on disk: no rescan");
+        lib.getChildFile ("A.json").moveFileTo (lib.getChildFile ("Arp Bass.json"));
+        CHECK (r.p->rescanPresetsIfChanged() && programNames (*r.p).contains ("Arp Bass") && ! programNames (*r.p).contains ("A"),
+               "a file renamed outside the plugin is picked up");
+        lib.getChildFile ("Arp Bass.json").moveFileTo (lib.getChildFile ("A.json"));
+        r.p->rescanPresets();
         CHECK (r.p->presetCategory (programIndex (*r.p, "B")) == "Bass/Dark" && r.p->presetCategory (programIndex (*r.p, "C")) == "Bass"
                && r.p->presetCategory (programIndex (*r.p, "A")).isEmpty(), "categories are the folders, as deep as they go");
 
@@ -1339,6 +1399,7 @@ int main (int argc, char** argv)
     testStrumTiming();
     testEditsAndUndo();
     testPatternSlots();
+    testPatternChain();
     testStateAndExport();
     testEditor();
     testPresetLibrary();

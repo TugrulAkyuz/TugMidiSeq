@@ -79,6 +79,7 @@ public:
     // panel again with the result. The chooser lives here: the panel is closed.
     void chooseTuningFile (bool kbm);
     std::unique_ptr<juce::Component> makeTuningPanel (const juce::String& loadError = {});   // what the Tuning button opens
+    static std::unique_ptr<juce::Component> makeChainPanel (TugMidiSeqAudioProcessor&);       // the slot menu's Chain...
 
     void paint (juce::Graphics&) override;
     void resized() override;

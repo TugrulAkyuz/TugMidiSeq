@@ -363,6 +363,8 @@ GlobalPanel::GlobalPanel(TugMidiSeqAudioProcessor& p ): audioProcessor (p) , vel
     // NB: onChange / delete handlers are assigned unconditionally — even when
     // the plugin opens with no presets, ones added later (folder pick, Save)
     // must still load on click.
+    // presets renamed or added in the Finder / Explorer show up when the menu opens
+    presetCombo.onBeforePopup = [this] { if (audioProcessor.rescanPresetsIfChanged()) refreshPresetList(); };
     presetCombo.onChange = [this]
     {
         if(presetCombo.getNumItems() == 0) return;

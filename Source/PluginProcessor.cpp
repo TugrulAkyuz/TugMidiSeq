@@ -281,6 +281,8 @@ valueTreeState(*this, &undoManager)
         gridsArpOrderAtomic[j] = valueTreeState.getRawParameterValue (arpId);
     }
 
+    for (auto& e : chainEntries) e.store (-1);
+
     // C++17: std::atomic members start uninitialised
     for (int i = 0; i < numOfLine; i++)
     {
@@ -630,7 +632,9 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     midiMessagesStack.addEvents(midiMessages, 0, buffer.getNumSamples(), 0);
     playHead->getCurrentPosition(positionInfo);
     // pattern slots: while stopped a lane moves to the requested slot at once
-    const int wantedSlot = getRequestedSlot();
+    if (! positionInfo.isPlaying)
+        chainStep (ChainStopped);   // a stopped chain waits on its first entry
+    int wantedSlot = getRequestedSlot();
     if (! positionInfo.isPlaying)
         for (int i = 0; i < numOfLine; i++)
             if (getActiveSlot (i) != wantedSlot)
@@ -661,6 +665,7 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         
         if (myIsPlaying == false &&  positionInfo.isPlaying == true ) // stop to start
         {
+            chainStep (ChainPlayStart);
             measureBar = *globalResyncBar-1;  // resync var number
             measureSample = (int)(4*mySampleRate/myBps)-1; // mBps Beat per second  ---> 1 bar  numof sample
             prevppq = ppq + 1.0;   // the first sample starts a bar
@@ -739,6 +744,8 @@ void TugMidiSeqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
             //measureSample %= (int)ceil((double)(4*mySampleRate)/myBps);
             if(measureSample == 0)
             {
+                chainStep (ChainBar);
+                wantedSlot = getRequestedSlot();
                 measureBar++;
                 measureBar %= (int)(*globalResyncBar);
                 if(measureBar == 0)
@@ -895,6 +902,7 @@ void TugMidiSeqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     writeStepDataTo (state);
     writeSlotsTo (state);
     writeTuningTo (state);
+    writeChainTo (state);
     std::unique_ptr<XmlElement> xml (state.createXml());
     copyXmlToBinary (*xml, destData);
    
@@ -920,6 +928,7 @@ void TugMidiSeqAudioProcessor::setStateInformation (const void* data, int sizeIn
 
             readStepDataFrom (restored);
             readTuningFrom (restored);
+            readChainFrom (restored);
             valueTreeState.replaceState (restored);
 
             // Force every parameter to reflect the restored value-tree value.
@@ -2519,7 +2528,95 @@ void TugMidiSeqAudioProcessor::cellParamChanged (int line, int step, bool veloci
 
 void TugMidiSeqAudioProcessor::requestSlot (int slot)
 {
+    if (isChainOn())
+        setChainOn (false);
     setParamValue (valueTreeNames[PATTERNSLOT], (float) jlimit (0, numSlots - 1, slot));
+}
+
+//==============================================================================
+// Pattern chain
+
+int TugMidiSeqAudioProcessor::getChainLength() const
+{
+    int n = 0;
+    while (n < maxChainLength && getChainEntry (n) >= 0) ++n;
+    return n;
+}
+
+void TugMidiSeqAudioProcessor::setChainEntry (int index, int slot)
+{
+    if (index < 0 || index >= maxChainLength) return;
+    chainEntries[index].store (slot < 0 ? -1 : jlimit (0, numSlots - 1, slot));
+    notifyStateChanged();
+}
+
+void TugMidiSeqAudioProcessor::setChainOn (bool on)
+{
+    if (on && ! chainOn.load()) chainRestart.store (true);   // from its first entry at the next bar
+    chainOn.store (on);
+    if (! on)   // the slot parameter rules again now, not at the next block
+    {
+        chainSlot.store (-1);
+        chainPosition.store (-1);
+    }
+    notifyStateChanged();
+}
+
+void TugMidiSeqAudioProcessor::setChainBars (int bars)
+{
+    chainBars.store (jlimit (1, 64, bars));
+    notifyStateChanged();
+}
+
+// Audio thread: where the chain stands, published through chainSlot (what
+// getRequestedSlot returns) and chainPosition (for the panel).
+void TugMidiSeqAudioProcessor::chainStep (ChainEvent event)
+{
+    const int length = getChainLength();
+    if (! chainOn.load() || length == 0)
+    {
+        chainSlot.store (-1);
+        chainPosition.store (-1);
+        return;
+    }
+    if (event != ChainBar || chainRestart.exchange (false))
+    {
+        chainIndex = 0;
+        chainBarCount = 0;
+        chainSkipBar = event == ChainPlayStart;   // play starts on a bar line: that one is the first entry's
+    }
+    else if (chainSkipBar)
+        chainSkipBar = false;
+    else if (++chainBarCount >= chainBars.load())
+    {
+        chainBarCount = 0;
+        ++chainIndex;
+    }
+    chainIndex %= length;   // (the chain may have got shorter)
+    chainSlot.store (getChainEntry (chainIndex));
+    chainPosition.store (chainIndex);
+}
+
+void TugMidiSeqAudioProcessor::writeChainTo (juce::ValueTree& state) const
+{
+    auto node = state.getOrCreateChildWithName ("chain", nullptr);
+    juce::StringArray entries;
+    for (int i = 0; i < maxChainLength; i++)
+        entries.add (juce::String (getChainEntry (i)));
+    node.setProperty ("entries", entries.joinIntoString (","), nullptr);
+    node.setProperty ("bars", getChainBars(), nullptr);
+    node.setProperty ("on", isChainOn(), nullptr);
+}
+
+void TugMidiSeqAudioProcessor::readChainFrom (const juce::ValueTree& state)
+{
+    const auto node = state.getChildWithName ("chain");   // older projects: no chain
+    const auto entries = juce::StringArray::fromTokens (node.getProperty ("entries").toString(), ",", "");
+    for (int i = 0; i < maxChainLength; i++)
+        chainEntries[i].store (i < entries.size() ? jlimit (-1, numSlots - 1, entries[i].getIntValue()) : -1);
+    chainBars.store (jlimit (1, 64, (int) node.getProperty ("bars", 1)));
+    chainOn.store ((bool) node.getProperty ("on", false));
+    chainRestart.store (true);
 }
 
 bool TugMidiSeqAudioProcessor::isSlotEmpty (int slot) const

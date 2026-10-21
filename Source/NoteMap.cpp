@@ -651,6 +651,125 @@ void NoteMap::paint (juce::Graphics& g)
 }
 
 //==============================================================================
+//==============================================================================
+// The pattern chain: up to 16 entries, clicked through A B C D and empty (the
+// chain ends at the first empty one), how many bars each plays, and On.
+// Mouse only, so it works in hosts that keep the typing to themselves.
+class ChainPanel : public juce::Component, private juce::Timer
+{
+public:
+    explicit ChainPanel (TugMidiSeqAudioProcessor& p) : proc (p)
+    {
+        auto style = [this] (juce::TextButton& b, const juce::String& text)
+        {
+            b.setButtonText (text);
+            b.setColour (juce::TextButton::buttonColourId, Theme::surfaceAlt);
+            b.setColour (juce::TextButton::buttonOnColourId, Theme::accent);
+            b.setColour (juce::TextButton::textColourOffId, Theme::textSecondary);
+            b.setColour (juce::TextButton::textColourOnId, Theme::screen);
+            b.setColour (juce::ComboBox::outlineColourId, Theme::hairline);
+            b.setMouseCursor (juce::MouseCursor::NormalCursor);
+            b.setWantsKeyboardFocus (false);
+            addAndMakeVisible (b);
+        };
+        style (onButton, "Chain on");
+        onButton.onClick = [this] { proc.setChainOn (! proc.isChainOn()); refresh(); };
+        for (int k = 0; k < 4; k++)
+        {
+            style (barButtons[k], juce::String (barChoices[k]));
+            barButtons[k].onClick = [this, k] { proc.setChainBars (barChoices[k]); refresh(); };
+        }
+        style (clearButton, "Clear");
+        clearButton.onClick = [this]
+        {
+            for (int i = 0; i < TugMidiSeqAudioProcessor::maxChainLength; i++) proc.setChainEntry (i, -1);
+            refresh();
+        };
+        setSize (cellsX * 2 + TugMidiSeqAudioProcessor::maxChainLength * cellStep - 2, 150);
+        refresh();
+        startTimerHz (15);   // the entry playing now
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        g.fillAll (Theme::section);
+        auto b = getLocalBounds().reduced (cellsX, 10);
+        Theme::drawCaption (g, "PATTERN CHAIN", b.removeFromTop (14), juce::Justification::centredLeft, Theme::accentBright, 10.5f);
+
+        const int length = proc.getChainLength(), position = proc.isChainOn() ? proc.getChainPosition() : -1;
+        for (int i = 0; i < TugMidiSeqAudioProcessor::maxChainLength; i++)
+        {
+            const auto r = cellBounds (i);
+            const int slot = proc.getChainEntry (i);
+            const bool inChain = i < length;
+            Theme::drawRaisedPanel (g, r, Theme::radSm, i == position ? Theme::accent : slot >= 0 && inChain ? Theme::surfaceAlt : Theme::well);
+            g.setColour (i == position ? Theme::screen : inChain ? Theme::textPrimary : Theme::textDisabled);
+            g.setFont (Theme::labelFont (11.0f));
+            g.drawText (slot >= 0 ? slotNames[slot] : juce::String (juce::CharPointer_UTF8 ("\xc2\xb7")), r, juce::Justification::centred);
+        }
+
+        g.setColour (Theme::textDim);
+        g.setFont (Theme::labelFont (10.5f));
+        g.drawFittedText ("Click: A B C D or empty; the chain stops at the first empty one. Right-click empties. "
+                          "Picking a slot by hand turns it off.",
+                          juce::Rectangle<int> (cellsX, 64, getWidth() - 2 * cellsX, 30), juce::Justification::topLeft, 2, 0.9f);
+        g.setColour (Theme::textSecondary);
+        g.drawText ("Bars each", barButtons[0].getX() - 70, barButtons[0].getY(), 66, barButtons[0].getHeight(), juce::Justification::centredRight);
+    }
+
+    void resized() override
+    {
+        auto row = getLocalBounds().reduced (cellsX, 10).removeFromBottom (24);
+        onButton.setBounds (row.removeFromLeft (80));
+        clearButton.setBounds (row.removeFromRight (56));
+        row.removeFromRight (10);
+        for (int k = 3; k >= 0; k--)
+        {
+            barButtons[k].setBounds (row.removeFromRight (30));
+            row.removeFromRight (3);
+        }
+    }
+
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        for (int i = 0; i < TugMidiSeqAudioProcessor::maxChainLength; i++)
+            if (cellBounds (i).contains (e.position))
+            {
+                const int slot = proc.getChainEntry (i);
+                proc.setChainEntry (i, e.mods.isPopupMenu() ? -1 : slot >= numSlots - 1 ? -1 : slot + 1);   // empty -> A -> ... -> D -> empty
+                refresh();
+                return;
+            }
+    }
+
+private:
+    static constexpr int cellsX = 12, cellStep = 22;
+    static constexpr int barChoices[4] = { 1, 2, 4, 8 };
+
+    juce::Rectangle<float> cellBounds (int i) const
+    {
+        return { (float) (cellsX + i * cellStep), 30.0f, (float) (cellStep - 2), 26.0f };
+    }
+
+    void timerCallback() override { repaint(); }
+
+    void refresh()
+    {
+        onButton.setToggleState (proc.isChainOn(), juce::dontSendNotification);
+        for (int k = 0; k < 4; k++)
+            barButtons[k].setToggleState (proc.getChainBars() == barChoices[k], juce::dontSendNotification);
+        repaint();
+    }
+
+    TugMidiSeqAudioProcessor& proc;
+    juce::TextButton onButton, clearButton, barButtons[4];
+};
+
+std::unique_ptr<juce::Component> NoteMap::makeChainPanel (TugMidiSeqAudioProcessor& p)
+{
+    return std::make_unique<ChainPanel> (p);
+}
+
 int SlotSelector::slotAt (juce::Point<float> p) const
 {
     return juce::jlimit (0, numSlots - 1, (int) (p.x / ((float) getWidth() / (float) numSlots)));
@@ -681,6 +800,11 @@ void SlotSelector::paint (juce::Graphics& g)
         const auto text = lit ? Theme::screen : proc.isSlotEmpty (s) ? Theme::textDisabled : Theme::textPrimary;
         Theme::drawCaption (g, slotNames[s], b.toNearestInt(), juce::Justification::centred, text, 11.0f);
     }
+    if (proc.isChainOn())   // a chain picks the slots: a line under them
+    {
+        g.setColour (Theme::accentBright);
+        g.fillRoundedRectangle (2.0f, (float) getHeight() - 1.5f, (float) getWidth() - 4.0f, 1.5f, 0.75f);
+    }
 }
 
 void SlotSelector::mouseDown (const juce::MouseEvent& e)
@@ -695,7 +819,7 @@ void SlotSelector::mouseDown (const juce::MouseEvent& e)
 
 void SlotSelector::showMenu (int slot)
 {
-    enum { copyBase = 100, clearId = 1 };
+    enum { copyBase = 100, clearId = 1, chainId, chainOnId };
     juce::PopupMenu copyTo;
     for (int s = 0; s < numSlots; s++)
         if (s != slot)
@@ -706,12 +830,17 @@ void SlotSelector::showMenu (int slot)
     m.addSectionHeader ("Pattern slot " + slotNames[slot]);
     m.addSubMenu ("Copy " + slotNames[slot] + " to", copyTo, ! proc.isSlotEmpty (slot));
     m.addItem (clearId, "Clear " + slotNames[slot], ! proc.isSlotEmpty (slot));
+    m.addSectionHeader ("Pattern chain");
+    m.addItem (chainId, "Chain...  (play the slots in a sequence)");
+    m.addItem (chainOnId, "Chain on", proc.getChainLength() > 0, proc.isChainOn());
     m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
                      [this, slot, safe = juce::Component::SafePointer<SlotSelector> (this)] (int id)
                      {
                          if (safe == nullptr || id == 0) return;
-                         if (id == clearId) proc.clearSlot (slot);
-                         else               proc.copySlot (slot, id - copyBase);
+                         if (id == clearId)        proc.clearSlot (slot);
+                         else if (id == chainId)   launchCallOut (NoteMap::makeChainPanel (proc), *this);
+                         else if (id == chainOnId) proc.setChainOn (! proc.isChainOn());
+                         else                      proc.copySlot (slot, id - copyBase);
                          repaint();
                      });
 }

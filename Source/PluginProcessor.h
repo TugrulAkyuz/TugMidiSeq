@@ -469,6 +469,8 @@ public:
     juce::PropertiesFile* settings();   // the user settings, none while testing
     void setPresetFolder (const juce::File& dir);   // persists the choice and rescans
     void rescanPresets();
+    bool rescanPresetsIfChanged();   // only when files were renamed, added or removed outside the plugin
+    juce::int64 presetFilesHash = 0;
     // "Bass/Dark" for a preset in a sub-folder of the library, "" at its root (index 1-based)
     juce::String presetCategory (int index) const;
     juce::File presetFileFor (const juce::String& name, const juce::String& category) const;
@@ -594,9 +596,26 @@ public:
     // (mirrorActiveSlots). Everything that reads a step goes through the
     // lane's active slot.
     int  getActiveSlot (int line) const { return activeSlot[line].load (std::memory_order_relaxed); }
-    int  getRequestedSlot() const       { return jlimit (0, numSlots - 1, (int) *patternSlotAtomic); }
+    int  getRequestedSlot() const   // the chain's entry while a chain plays, else the Pattern Slot parameter
+    {
+        const int chained = chainSlot.load (std::memory_order_relaxed);
+        return chained >= 0 ? chained : jlimit (0, numSlots - 1, (int) *patternSlotAtomic);
+    }
     bool isLaneWaitingForSlot (int line) const { return getActiveSlot (line) != getRequestedSlot(); }
-    void requestSlot (int slot);          // message thread
+    void requestSlot (int slot);          // message thread (turns a chain off: the user picked a slot)
+
+    // Pattern chain (song mode): while on, the requested slot follows the chain,
+    // each entry for chainBars bars, wrapping; lanes still switch when their
+    // own loop comes round. Edited on the message thread, saved with the project.
+    static constexpr int maxChainLength = 16;
+    void setChainEntry (int index, int slot);   // slot -1: the chain ends before this entry
+    int  getChainEntry (int index) const  { return chainEntries[index].load (std::memory_order_relaxed); }
+    int  getChainLength() const;
+    void setChainOn (bool on);
+    bool isChainOn() const                { return chainOn.load(); }
+    void setChainBars (int bars);
+    int  getChainBars() const             { return chainBars.load(); }
+    int  getChainPosition() const         { return chainPosition.load (std::memory_order_relaxed); }   // -1 when off
     bool isSlotEmpty (int slot) const;
     void copySlot (int from, int to);     // message thread, one undo step
     void clearSlot (int slot);            // message thread, one undo step
@@ -1099,6 +1118,15 @@ private:
     std::atomic<int> activeSlot[numOfLine];
     std::atomic<bool> mirrorDirty[numOfLine];
     std::atomic<float> *patternSlotAtomic = nullptr;
+    std::atomic<int>  chainEntries[maxChainLength];
+    std::atomic<bool> chainOn { false }, chainRestart { false };
+    std::atomic<int>  chainBars { 1 }, chainSlot { -1 }, chainPosition { -1 };
+    int  chainIndex = 0, chainBarCount = 0;   // audio thread
+    bool chainSkipBar = false;
+    enum ChainEvent { ChainStopped, ChainPlayStart, ChainBar };
+    void chainStep (ChainEvent);              // audio thread
+    void writeChainTo (juce::ValueTree& state) const;
+    void readChainFrom (const juce::ValueTree& state);
     std::atomic<int> mirroredSlot[numOfLine];   // the slot the pad parameters hold
     void syncPadsToActiveSlots();               // on the calling thread, see setStateInformation
     bool mirroring = false;              // message thread: mirrorActiveSlots is writing them

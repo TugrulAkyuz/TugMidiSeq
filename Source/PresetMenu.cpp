@@ -626,10 +626,32 @@ juce::File TugMidiSeqAudioProcessor::defaultPresetFolder()
    #endif
 }
 
+namespace
+{
+    juce::int64 presetFilesSignature (const juce::Array<juce::File>& files)
+    {
+        juce::String s;
+        for (auto& f : files)
+            s << f.getFullPathName() << '|' << f.getLastModificationTime().toMilliseconds() << '\n';
+        return s.hashCode64();
+    }
+}
+
+bool TugMidiSeqAudioProcessor::rescanPresetsIfChanged()
+{
+    juce::Array<juce::File> files;
+    collectPresetFiles (presetFolder, files);
+    if (presetFilesSignature (files) == presetFilesHash)
+        return false;
+    rescanPresets();
+    return true;
+}
+
 void TugMidiSeqAudioProcessor::rescanPresets()
 {
     juce::Array<juce::File> files;
     collectPresetFiles (presetFolder, files);
+    presetFilesHash = presetFilesSignature (files);
     std::vector<TugMidiSeqProgram> found;
     for (auto& f : files)
     {

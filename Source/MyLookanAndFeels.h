@@ -391,8 +391,12 @@ public:
     // Note-value boxes open as a grid instead of a 24-row list: one column per
     // kind (dotted / straight / triplet), one row per length. Items keep their
     // ids, so the selection (and any parameter attachment) is unaffected.
+    std::function<void()> onBeforePopup;   // e.g. refresh the items first
+
     void showPopup() override
     {
+        if (onBeforePopup)
+            onBeforePopup();
         if (! NoteValue::isNoteValueBox (*this))
         {
             juce::ComboBox::showPopup();
