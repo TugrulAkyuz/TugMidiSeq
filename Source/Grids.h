@@ -808,7 +808,9 @@ private:
     bool laidOutBackward = false;
     int step;
     int myLine;
-    int myMidiNote;
+    // what the note box shows (note * 4 + source); nothing yet at first, or a
+    // reopened editor could find an old value here and never fill the box
+    int myMidiNote = std::numeric_limits<int>::min();
     void timerCallback() override
     {
         repaint();
