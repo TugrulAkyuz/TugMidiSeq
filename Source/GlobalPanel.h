@@ -309,6 +309,7 @@ class GlobalPanel   : public juce::Component , juce::Timer  , ChangeListener
     void refreshPresetList();
     void showSaveDialog();
     juce::Component::SafePointer<juce::AlertWindow> saveDialog;
+    std::unique_ptr<juce::ToggleButton> saveAllSlots;   // in the Save dialog, which doesn't own it
     void showFolderMenu();
 private:
     int myMeasure;

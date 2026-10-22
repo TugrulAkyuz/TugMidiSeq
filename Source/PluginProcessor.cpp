@@ -532,6 +532,22 @@ void TugMidiSeqAudioProcessor::loadPreset (int index)
     setParamValue(valueTreeNames[SCALEKEY],       prog.scaleKey);
     setParamValue(valueTreeNames[SCALETYPE],      prog.scaleType);
 
+    // A full preset brings back all four slots (undoable from the GUI, as copy
+    // and clear are) and its chain; a plain one stays in the current slot.
+    if (prog.fullSlots)
+    {
+        for (int s = 0; s < numSlots; s++)
+        {
+            if (undoable) restoreSlotUndoable (s, prog.slotData[s]);
+            else          restoreSlot (s, prog.slotData[s]);
+        }
+        for (int i = 0; i < maxChainLength; i++)
+            setChainEntry (i, i < (int) prog.chain.size() ? prog.chain[(size_t) i] : -1);
+        setChainBars (prog.chainBars);
+        setParamValue (valueTreeNames[PATTERNSLOT], (float) prog.currentSlot);
+        setChainOn (prog.chainOn && ! prog.chain.empty());
+    }
+
     myGridChangeListener.sendChangeMessage();
 
     // tell the host, which shows the preset's name (a host that chose it already knows)
@@ -2732,6 +2748,13 @@ namespace
         int slot;
         std::vector<int> before, after;
     };
+}
+
+void TugMidiSeqAudioProcessor::restoreSlotUndoable (int slot, std::vector<int> data)
+{
+    std::vector<int> before;
+    snapshotSlot (slot, before);
+    undoManager.perform (new SlotDataAction (*this, slot, std::move (before), std::move (data)));
 }
 
 void TugMidiSeqAudioProcessor::copySlot (int from, int to)

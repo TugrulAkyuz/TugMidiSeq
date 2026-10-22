@@ -242,6 +242,24 @@ var TugMidiSeqAudioProcessor::presetToVar(const TugMidiSeqProgram& prg)
     newObj.getDynamicObject()->setProperty(valueTreeNames[SCALEKEY],  prg.scaleKey);
     newObj.getDynamicObject()->setProperty(valueTreeNames[SCALETYPE], prg.scaleType);
 
+    if (prg.fullSlots)   // all four slots and the chain (older versions ignore these)
+    {
+        auto join = [] (const std::vector<int>& v)
+        {
+            juce::StringArray a;
+            for (int x : v) a.add (juce::String (x));
+            return a.joinIntoString (",");
+        };
+        juce::Array<var> slots;
+        for (int s = 0; s < numSlots; s++)
+            slots.add (join (prg.slotData[s]));
+        newObj.getDynamicObject()->setProperty ("allSlots", slots);
+        newObj.getDynamicObject()->setProperty ("chain", join (prg.chain));
+        newObj.getDynamicObject()->setProperty ("chainBars", prg.chainBars);
+        newObj.getDynamicObject()->setProperty ("chainOn", prg.chainOn);
+        newObj.getDynamicObject()->setProperty ("currentSlot", prg.currentSlot);
+    }
+
     return newObj;
 }
 
@@ -412,13 +430,34 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::varToPreset(const var& preset)
     if (preset.hasProperty(valueTreeNames[SCALETYPE]))
         p.scaleType = jlimit(0, scaleTypeNames.size() - 1, (int) preset.getProperty(valueTreeNames[SCALETYPE], var()));
 
+    if (auto* slots = preset.getProperty ("allSlots", var()).getArray(); slots != nullptr && slots->size() == numSlots)
+    {
+        // six values per step, as snapshotSlot lays them out; anything else is ignored
+        const int lo[] = { 0, 0, 0, 1, -maxStepPitch, 0 }, hi[] = { 2, 127, NumTrigConds - 1, maxRatchet, maxStepPitch, stepFlagsMax };
+        bool ok = true;
+        for (int s = 0; s < numSlots && ok; s++)
+        {
+            const auto values = juce::StringArray::fromTokens ((*slots)[s].toString(), ",", "");
+            ok = values.size() == numOfLine * numOfStep * 6;
+            for (int k = 0; ok && k < values.size(); k++)
+                p.slotData[s].push_back (jlimit (lo[k % 6], hi[k % 6], values[k].getIntValue()));
+        }
+        p.fullSlots = ok;
+        for (auto& e : juce::StringArray::fromTokens (preset.getProperty ("chain", var()).toString(), ",", ""))
+            if (e.isNotEmpty() && (int) p.chain.size() < 16)
+                p.chain.push_back (jlimit (0, numSlots - 1, e.getIntValue()));
+        p.chainBars   = jlimit (1, 64, (int) preset.getProperty ("chainBars", 1));
+        p.chainOn     = (bool) preset.getProperty ("chainOn", false);
+        p.currentSlot = jlimit (0, numSlots - 1, (int) preset.getProperty ("currentSlot", 0));
+    }
+
     return p;
 }
 
 
 
 // The current pattern and settings as a preset (not written anywhere).
-TugMidiSeqProgram TugMidiSeqAudioProcessor::captureCurrentProgram (const juce::String& preset_name)
+TugMidiSeqProgram TugMidiSeqAudioProcessor::captureCurrentProgram (const juce::String& preset_name, bool allSlots)
 {
     String strName;
     juce::String  tmp_s;
@@ -537,6 +576,17 @@ TugMidiSeqProgram TugMidiSeqAudioProcessor::captureCurrentProgram (const juce::S
     paramProg.scaleKey  = (int) *valueTreeState.getRawParameterValue(valueTreeNames[SCALEKEY]);
     paramProg.scaleType = (int) *valueTreeState.getRawParameterValue(valueTreeNames[SCALETYPE]);
     
+    if (allSlots)
+    {
+        paramProg.fullSlots = true;
+        for (int s = 0; s < numSlots; s++)
+            snapshotSlot (s, paramProg.slotData[s]);
+        for (int i = 0; i < getChainLength(); i++)
+            paramProg.chain.push_back (getChainEntry (i));
+        paramProg.chainBars   = getChainBars();
+        paramProg.chainOn     = isChainOn();
+        paramProg.currentSlot = jlimit (0, numSlots - 1, (int) *patternSlotAtomic);
+    }
     return paramProg;
 }
 
@@ -711,11 +761,20 @@ juce::File TugMidiSeqAudioProcessor::presetFileFor (const juce::String& name, co
     return folder.getChildFile (legal + ".json");
 }
 
-juce::File TugMidiSeqAudioProcessor::savePresetAs (const juce::String& name, const juce::String& category)
+bool TugMidiSeqAudioProcessor::hasMoreThanOneSlot() const
+{
+    const int current = jlimit (0, numSlots - 1, (int) *patternSlotAtomic);
+    for (int s = 0; s < numSlots; s++)
+        if (s != current && ! isSlotEmpty (s))
+            return true;
+    return getChainLength() > 0;
+}
+
+juce::File TugMidiSeqAudioProcessor::savePresetAs (const juce::String& name, const juce::String& category, bool allSlots)
 {
     const auto file = presetFileFor (name, category);
     file.getParentDirectory().createDirectory();
-    auto prog = captureCurrentProgram (file.getFileNameWithoutExtension());
+    auto prog = captureCurrentProgram (file.getFileNameWithoutExtension(), allSlots);
     juce::Array<juce::var> one;
     one.add (presetToVar (prog));
     auto* root = new juce::DynamicObject();

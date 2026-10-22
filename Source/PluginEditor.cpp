@@ -311,7 +311,8 @@ namespace
 
         w.heading ("Pattern chain");
         w.text ("Right-click a slot, Chain...: up to 16 slots played in turn, one, two, four or eight bars "
-                "each, round and round. Song mode for the four patterns.");
+                "each, round and round. Song mode for the four patterns. Tick \"All four slots and the chain\" "
+                "when you save a preset and it brings back the whole song: one preset per song for a live set.");
 
         w.heading ("Also");
         w.text ("Save preset opens inside the plugin window, so typing a name works in Ableton. Presets renamed "

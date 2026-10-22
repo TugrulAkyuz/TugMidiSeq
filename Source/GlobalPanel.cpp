@@ -559,6 +559,14 @@ void GlobalPanel::showSaveDialog()
     aw->setColour (AlertWindow::backgroundColourId, Theme::panel);
     aw->addTextEditor ("name", curr > 0 ? audioProcessor.presetName (curr) : juce::String ("My Preset"), "Name");
     aw->addTextEditor ("folder", audioProcessor.presetCategory (curr), "Folder");
+    // a full preset: all four slots and the chain, for a set that's one song per preset
+    saveAllSlots = std::make_unique<juce::ToggleButton>();   // no name: the dialog would print it as a label too
+    saveAllSlots->setButtonText ("All four slots and the chain");
+    saveAllSlots->setColour (juce::ToggleButton::textColourId, Theme::textPrimary);
+    saveAllSlots->setColour (juce::ToggleButton::tickColourId, Theme::accentBright);
+    saveAllSlots->setToggleState (audioProcessor.hasMoreThanOneSlot(), juce::dontSendNotification);
+    saveAllSlots->setSize (300, 24);
+    aw->addCustomComponent (saveAllSlots.get());
     aw->addButton ("Save", 1, KeyPress (KeyPress::returnKey));
     aw->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
 
@@ -580,11 +588,12 @@ void GlobalPanel::showSaveDialog()
     {
         if (r != 1) return;
         const auto name = aw->getTextEditorContents ("name"), folder = aw->getTextEditorContents ("folder");
+        const bool allSlots = saveAllSlots != nullptr && saveAllSlots->getToggleState();
         juce::Component::SafePointer<GlobalPanel> safe (this);
-        auto save = [safe, name, folder]
+        auto save = [safe, name, folder, allSlots]
         {
             if (safe == nullptr) return;
-            safe->audioProcessor.savePresetAs (name, folder);
+            safe->audioProcessor.savePresetAs (name, folder, allSlots);
             safe->refreshPresetList();
         };
         const auto file = audioProcessor.presetFileFor (name, folder);

@@ -262,6 +262,13 @@ public:
     int stepPitch[numOfLine][numOfStep] = {};
     int stepFlags[numOfLine][numOfStep] = {};
     int arpOrder[numOfLine] = {};
+    // A full preset also holds all four slots (as snapshotSlot lays them out)
+    // and the pattern chain; a plain one is the current slot only.
+    bool fullSlots = false;
+    std::vector<int> slotData[numSlots];
+    std::vector<int> chain;   // slots, in order
+    int chainBars = 1, currentSlot = 0;
+    bool chainOn = false;
     int scaleKey = 0, scaleType = 0;
     int direction[numOfLine] = {};
     int mutate[numOfLine] = {};
@@ -474,10 +481,11 @@ public:
     // "Bass/Dark" for a preset in a sub-folder of the library, "" at its root (index 1-based)
     juce::String presetCategory (int index) const;
     juce::File presetFileFor (const juce::String& name, const juce::String& category) const;
-    juce::File savePresetAs (const juce::String& name, const juce::String& category);   // writes, rescans, selects it
+    juce::File savePresetAs (const juce::String& name, const juce::String& category, bool allSlots = false);   // writes, rescans, selects it
+    bool hasMoreThanOneSlot() const;   // another slot holds steps, or a chain is set: worth a full preset
     bool deleteCurrentPreset();
     juce::File getCurrentPresetFile() const;
-    TugMidiSeqProgram captureCurrentProgram (const juce::String& name);
+    TugMidiSeqProgram captureCurrentProgram (const juce::String& name, bool allSlots = false);
     void migrateLegacyPresetsIfNeeded();
     
     juce::AudioProcessorValueTreeState valueTreeState;
@@ -1136,6 +1144,7 @@ private:
     bool readSlotsFrom (const juce::ValueTree& state);
     void snapshotSlot (int slot, std::vector<int>& out) const;
     void restoreSlot (int slot, const std::vector<int>& data);
+    void restoreSlotUndoable (int slot, std::vector<int> data);   // inside the caller's undo step
     void resetSlots();
 
     // writes each pad parameter's change into the lane's active slot

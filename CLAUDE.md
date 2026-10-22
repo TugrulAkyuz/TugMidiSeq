@@ -55,6 +55,7 @@ A preset library like TugPhonon's / 2RuleSynth's. Presets are **not** stored in 
 - Files are written as `{"Presets": [ one preset ]}`, the layout older versions read; a file with several entries (the old format) lists each, a plain preset object loads too.
 - The old bundle, `TugMidiSeqPresets.json` in the default folder, is split once into `Legacy/<name>.json` (`migrateLegacyPresetsIfNeeded`, marker `.legacy-split`) and left as it was; it is never listed itself.
 - `TugMidiSeqProgram` (in `PluginProcessor.h`) is the plain-struct snapshot; `presetToVar` / `varToPreset` convert it, newer fields read with `hasProperty` guards.
+- A preset is the current slot. Saved with "All four slots and the chain" (the Save dialog's toggle, ticked by default when `hasMoreThanOneSlot`) it is a *full* preset: `allSlots` (four `snapshotSlot` lists), `chain`, `chainBars`, `chainOn`, `currentSlot`; `loadPreset` restores every slot (`restoreSlotUndoable`, one undo step with the rest) and the chain. Older versions ignore these keys and load the current slot.
 - `TUGMIDISEQ_TEST_ROOT` moves the library to a scratch folder and turns the settings file off; the tests set it.
 
 ### Editor / GUI (`PluginEditor.{h,cpp}` + panels)

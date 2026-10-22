@@ -3,6 +3,7 @@
 - **Arp lanes.** A new play mode: the lane plays the held notes one per step, Up, Down, Up/Down, Random or As Played. Five lanes can run five different arps, each with its own speed, length and direction.
 - **Slide and Accent.** Right-click a pad. Accent plays the step louder; Slide runs its note into the next hit for legato and glide on mono synths, and ties when the next note is the same, 303 style.
 - **Pattern chain.** Right-click a slot button, Chain...: play up to 16 slots in turn, 1, 2, 4 or 8 bars each. Picking a slot by hand turns the chain off.
+- **Song presets.** Tick "All four slots and the chain" when saving: the preset brings back all four patterns and the chain, so a live set can be one preset per song. Without it a preset is the current pattern, as before.
 - **Typing preset names in Ableton.** The Save dialog now opens inside the plugin window; in Live the letters used to go to Live instead.
 - **Presets renamed or added outside the plugin** show up when the preset menu opens.
 

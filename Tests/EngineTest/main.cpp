@@ -1057,6 +1057,39 @@ static void testPatternChain()
         CHECK (restored.isChainOn() && restored.getChainLength() == 4 && restored.getChainEntry (3) == 2 && restored.getChainBars() == 2,
                "the project keeps the chain");
     }
+    {   // a full preset carries all four slots and the chain; a plain one only the current slot
+        Rig r;
+        build (r);   // A: 60, B: 62, C: 64 on lane 1's first step
+        for (int k : { 0, 1, 2 }) r.p->setChainEntry (r.p->getChainLength(), k);
+        r.p->setChainBars (2);
+        r.p->setChainOn (true);
+        CHECK (r.p->hasMoreThanOneSlot(), "other slots hold steps: the Save dialog offers all four");
+        r.p->savePresetAs ("Song Full", "Live", true);
+        r.p->savePresetAs ("Song Plain", "Live", false);
+
+        // wipe it: every slot empty, no chain
+        r.p->setChainOn (false);
+        for (int k = 0; k < TugMidiSeqAudioProcessor::maxChainLength; k++) r.p->setChainEntry (k, -1);
+        for (int slot = 0; slot < 3; slot++) r.p->clearSlot (slot);
+        r.p->requestSlot (0); r.stop (512); r.p->mirrorActiveSlots();
+
+        auto indexOf = [&r] (const String& n) { for (int i = 1; i <= r.p->numPresets(); i++) if (r.p->presetName (i) == n) return i; return -1; };
+        r.p->loadPreset (indexOf ("Song Plain"));
+        CHECK (! r.p->isSlotEmpty (0) && r.p->isSlotEmpty (1) && r.p->isSlotEmpty (2) && r.p->getChainLength() == 0,
+               "a plain preset fills the current slot only");
+
+        r.p->loadPreset (indexOf ("Song Full"));
+        CHECK (! r.p->isSlotEmpty (1) && ! r.p->isSlotEmpty (2) && r.p->getChainLength() == 3 && r.p->getChainEntry (2) == 2
+                 && r.p->getChainBars() == 2 && r.p->isChainOn(),
+               "a full preset brings back every slot and the chain");
+        r.out.clear();
+        r.hold ({ 60 });
+        r.stop(); r.play (6 * Rig::bar);
+        CHECK (perBar (r, 6) == std::vector<int> ({ 60, 60, 62, 62, 64, 64 }), "and plays it " + str (perBar (r, 6)));
+        r.stop();
+        r.p->undo();
+        CHECK (r.p->isSlotEmpty (1) && r.p->isSlotEmpty (2), "loading it is one undo step for the slots");
+    }
 }
 
 //==============================================================================
